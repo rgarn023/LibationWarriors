@@ -1,5 +1,6 @@
 extends Control
 
+@onready var safe_root: Control = %SafeRoot
 @onready var title: Label = %Title
 @onready var subtitle: Label = %Subtitle
 @onready var btn_scan: Button = %BtnScan
@@ -11,6 +12,7 @@ extends Control
 
 
 func _ready() -> void:
+	SafeArea.register(safe_root)
 	UITheme.style_button(btn_scan, true)
 	UITheme.style_button(btn_collection)
 	UITheme.style_button(btn_party)
@@ -38,7 +40,7 @@ func _populate_showcase() -> void:
 			continue
 		var tr := TextureRect.new()
 		tr.texture = tex
-		tr.custom_minimum_size = Vector2(64, 64)
+		tr.custom_minimum_size = Vector2(72, 96)
 		tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		tr.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST

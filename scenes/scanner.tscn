@@ -16,89 +16,110 @@ layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
+mouse_filter = 2
 color = Color(0.07, 0.06, 0.1, 1)
 
-[node name="Scroll" type="ScrollContainer" parent="."]
+[node name="SafeRoot" type="Control" parent="."]
+unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 20.0
-offset_top = 24.0
-offset_right = -20.0
-offset_bottom = -20.0
+grow_horizontal = 2
+grow_vertical = 2
 
-[node name="VBox" type="VBoxContainer" parent="Scroll"]
+[node name="Scroll" type="ScrollContainer" parent="SafeRoot"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+horizontal_scroll_mode = 0
+
+[node name="VBox" type="VBoxContainer" parent="SafeRoot/Scroll"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_constants/separation = 10
+theme_override_constants/separation = 12
 
-[node name="Header" type="Label" parent="Scroll/VBox"]
+[node name="Header" type="Label" parent="SafeRoot/Scroll/VBox"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.85, 0.62, 0.22, 1)
 theme_override_font_sizes/font_size = 28
 text = "Bottle Scanner"
 horizontal_alignment = 1
 
-[node name="Hint" type="Label" parent="Scroll/VBox"]
+[node name="CameraHint" type="Label" parent="SafeRoot/Scroll/VBox"]
+unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.7, 0.65, 0.58, 1)
 theme_override_font_sizes/font_size = 14
-text = "Enter the barcode. Pick the beverage type. Brands and logos are never saved."
+text = "Point your camera at the bottle UPC."
 autowrap_mode = 3
+horizontal_alignment = 1
 
-[node name="BarcodeInput" type="LineEdit" parent="Scroll/VBox"]
+[node name="BtnCamera" type="Button" parent="SafeRoot/Scroll/VBox"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 48)
+custom_minimum_size = Vector2(0, 64)
 layout_mode = 2
-placeholder_text = "Barcode / UPC"
+text = "Scan with Camera"
+
+[node name="BarcodeInput" type="LineEdit" parent="SafeRoot/Scroll/VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 52)
+layout_mode = 2
+placeholder_text = "Or type barcode / UPC"
 alignment = 1
 
-[node name="CategoryOption" type="OptionButton" parent="Scroll/VBox"]
+[node name="CategoryOption" type="OptionButton" parent="SafeRoot/Scroll/VBox"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 48)
+custom_minimum_size = Vector2(0, 52)
 layout_mode = 2
 
-[node name="BtnLookup" type="Button" parent="Scroll/VBox"]
+[node name="BtnLookup" type="Button" parent="SafeRoot/Scroll/VBox"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 52)
 layout_mode = 2
 text = "Hint Category (no brands)"
 
-[node name="BtnScan" type="Button" parent="Scroll/VBox"]
+[node name="BtnScan" type="Button" parent="SafeRoot/Scroll/VBox"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 56)
 layout_mode = 2
 text = "Summon Warrior"
 
-[node name="StatusLabel" type="Label" parent="Scroll/VBox"]
+[node name="StatusLabel" type="Label" parent="SafeRoot/Scroll/VBox"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.75, 0.7, 0.6, 1)
 theme_override_font_sizes/font_size = 14
 autowrap_mode = 3
 
-[node name="ResultPanel" type="PanelContainer" parent="Scroll/VBox"]
+[node name="ResultPanel" type="PanelContainer" parent="SafeRoot/Scroll/VBox"]
 unique_name_in_owner = true
 layout_mode = 2
 
-[node name="ResultVBox" type="VBoxContainer" parent="Scroll/VBox/ResultPanel"]
+[node name="ResultVBox" type="VBoxContainer" parent="SafeRoot/Scroll/VBox/ResultPanel"]
 layout_mode = 2
-theme_override_constants/separation = 6
+theme_override_constants/separation = 8
 
-[node name="ResultSprite" type="TextureRect" parent="Scroll/VBox/ResultPanel/ResultVBox"]
+[node name="ResultSprite" type="TextureRect" parent="SafeRoot/Scroll/VBox/ResultPanel/ResultVBox"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(128, 128)
+custom_minimum_size = Vector2(144, 192)
 layout_mode = 2
+size_flags_horizontal = 4
 expand_mode = 1
 stretch_mode = 5
 
-[node name="ResultName" type="Label" parent="Scroll/VBox/ResultPanel/ResultVBox"]
+[node name="ResultName" type="Label" parent="SafeRoot/Scroll/VBox/ResultPanel/ResultVBox"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.95, 0.92, 0.85, 1)
 theme_override_font_sizes/font_size = 22
 horizontal_alignment = 1
+autowrap_mode = 3
 
-[node name="ResultFaction" type="Label" parent="Scroll/VBox/ResultPanel/ResultVBox"]
+[node name="ResultFaction" type="Label" parent="SafeRoot/Scroll/VBox/ResultPanel/ResultVBox"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.85, 0.62, 0.22, 1)
@@ -106,7 +127,7 @@ theme_override_font_sizes/font_size = 14
 horizontal_alignment = 1
 autowrap_mode = 3
 
-[node name="ResultStats" type="Label" parent="Scroll/VBox/ResultPanel/ResultVBox"]
+[node name="ResultStats" type="Label" parent="SafeRoot/Scroll/VBox/ResultPanel/ResultVBox"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.8, 0.76, 0.7, 1)
@@ -114,21 +135,26 @@ theme_override_font_sizes/font_size = 14
 horizontal_alignment = 1
 autowrap_mode = 3
 
-[node name="DemoHeader" type="Label" parent="Scroll/VBox"]
+[node name="DemoHeader" type="Label" parent="SafeRoot/Scroll/VBox"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.85, 0.62, 0.22, 1)
 theme_override_font_sizes/font_size = 18
 text = "Demo Bottles"
 
-[node name="DemoBox" type="VBoxContainer" parent="Scroll/VBox"]
+[node name="DemoBox" type="VBoxContainer" parent="SafeRoot/Scroll/VBox"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_constants/separation = 6
+theme_override_constants/separation = 8
 
-[node name="BtnBack" type="Button" parent="Scroll/VBox"]
+[node name="BtnBack" type="Button" parent="SafeRoot/Scroll/VBox"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 56)
 layout_mode = 2
 text = "Back"
+
+[node name="BottomPad" type="Control" parent="SafeRoot/Scroll/VBox"]
+custom_minimum_size = Vector2(0, 12)
+layout_mode = 2
 
 [node name="HTTPRequest" type="HTTPRequest" parent="."]
 unique_name_in_owner = true

@@ -43,12 +43,16 @@ https://github.com/rgarn023/LibationWarriors/blob/cursor/libation-warriors-game-
 
 | | |
 |---|---|
-| File | `export/LibationWarriors.apk` (~55 MB) |
+| File | `export/LibationWarriors.apk` |
 | Package | `com.libationwarriors.game` |
-| Version | 1.0.0 (debug-signed) |
+| Version | 1.1.0 (debug-signed) |
 | Min Android | API 24 |
 
-Install on a phone/emulator, then allow installs from unknown sources if prompted.
+### Mobile notes
+
+- UI uses safe-area margins so text/buttons clear notches, punch-hole cameras, and gesture bars.
+- **Scan with Camera** opens Google ML Kit Code Scanner for bottle UPCs (Play Services required).
+- Brands/logos are never shown or stored.
 
 ### Rebuild
 

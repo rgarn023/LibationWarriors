@@ -16,27 +16,35 @@ layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
+mouse_filter = 2
 color = Color(0.07, 0.06, 0.1, 1)
 
-[node name="VBox" type="VBoxContainer" parent="."]
+[node name="SafeRoot" type="Control" parent="."]
+unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 20.0
-offset_top = 24.0
-offset_right = -20.0
-offset_bottom = -20.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBox" type="VBoxContainer" parent="SafeRoot"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
 theme_override_constants/separation = 10
 
-[node name="Header" type="Label" parent="VBox"]
+[node name="Header" type="Label" parent="SafeRoot/VBox"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.85, 0.62, 0.22, 1)
 theme_override_font_sizes/font_size = 28
 text = "Collection"
 horizontal_alignment = 1
 
-[node name="EmptyLabel" type="Label" parent="VBox"]
+[node name="EmptyLabel" type="Label" parent="SafeRoot/VBox"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.65, 0.6, 0.55, 1)
@@ -44,45 +52,48 @@ text = "No warriors yet. Scan a bottle to begin."
 horizontal_alignment = 1
 autowrap_mode = 3
 
-[node name="Scroll" type="ScrollContainer" parent="VBox"]
+[node name="Scroll" type="ScrollContainer" parent="SafeRoot/VBox"]
 layout_mode = 2
 size_flags_vertical = 3
-custom_minimum_size = Vector2(0, 220)
+custom_minimum_size = Vector2(0, 200)
 
-[node name="List" type="VBoxContainer" parent="VBox/Scroll"]
+[node name="List" type="VBoxContainer" parent="SafeRoot/VBox/Scroll"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_constants/separation = 6
+theme_override_constants/separation = 8
 
-[node name="DetailPanel" type="PanelContainer" parent="VBox"]
+[node name="DetailPanel" type="PanelContainer" parent="SafeRoot/VBox"]
 unique_name_in_owner = true
 layout_mode = 2
 
-[node name="DetailV" type="VBoxContainer" parent="VBox/DetailPanel"]
+[node name="DetailV" type="VBoxContainer" parent="SafeRoot/VBox/DetailPanel"]
 layout_mode = 2
 
-[node name="DetailSprite" type="TextureRect" parent="VBox/DetailPanel/DetailV"]
+[node name="DetailSprite" type="TextureRect" parent="SafeRoot/VBox/DetailPanel/DetailV"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(96, 96)
+custom_minimum_size = Vector2(120, 160)
 layout_mode = 2
+size_flags_horizontal = 4
 expand_mode = 1
 stretch_mode = 5
 
-[node name="DetailName" type="Label" parent="VBox/DetailPanel/DetailV"]
+[node name="DetailName" type="Label" parent="SafeRoot/VBox/DetailPanel/DetailV"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_font_sizes/font_size = 20
 theme_override_colors/font_color = Color(0.95, 0.92, 0.85, 1)
+autowrap_mode = 3
 
-[node name="DetailInfo" type="Label" parent="VBox/DetailPanel/DetailV"]
+[node name="DetailInfo" type="Label" parent="SafeRoot/VBox/DetailPanel/DetailV"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_font_sizes/font_size = 14
 theme_override_colors/font_color = Color(0.8, 0.76, 0.7, 1)
 autowrap_mode = 3
 
-[node name="BtnBack" type="Button" parent="VBox"]
+[node name="BtnBack" type="Button" parent="SafeRoot/VBox"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 56)
 layout_mode = 2
 text = "Back"

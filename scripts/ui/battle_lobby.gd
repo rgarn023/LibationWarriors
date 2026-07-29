@@ -1,5 +1,6 @@
 extends Control
 
+@onready var safe_root: Control = %SafeRoot
 @onready var status_label: Label = %StatusLabel
 @onready var address_input: LineEdit = %AddressInput
 @onready var port_input: LineEdit = %PortInput
@@ -12,6 +13,7 @@ extends Control
 
 
 func _ready() -> void:
+	SafeArea.register(safe_root)
 	UITheme.style_button(btn_local, true)
 	UITheme.style_button(btn_host)
 	UITheme.style_button(btn_join)

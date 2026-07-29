@@ -5,7 +5,7 @@ config_version=5
 
 config/name="Libation Warriors"
 config/description="Scan bottles to summon unique 16-bit libation warriors. Collect, form parties of three, and battle locally or online."
-config/version="1.0.0"
+config/version="1.1.0"
 run/main_scene="res://scenes/main_menu.tscn"
 config/features=PackedStringArray("4.7", "Mobile")
 config/icon="res://assets/sprites/pirate_preview.png"
@@ -17,6 +17,8 @@ WarriorFactory="*res://scripts/autoload/warrior_factory.gd"
 FactionData="*res://scripts/autoload/faction_data.gd"
 SaveSystem="*res://scripts/autoload/save_system.gd"
 NetworkManager="*res://scripts/autoload/network_manager.gd"
+SafeArea="*res://scripts/autoload/safe_area.gd"
+UpcScanner="*res://scripts/autoload/upc_scanner.gd"
 
 [display]
 
@@ -48,3 +50,7 @@ environment/defaults/default_clear_color=Color(0.08, 0.07, 0.12, 1)
 permissions/camera=true
 permissions/internet=true
 permissions/access_network_state=true
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/upc_scanner/plugin.cfg")

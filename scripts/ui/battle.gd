@@ -3,6 +3,7 @@ extends Control
 
 enum Action { REGULAR, SPECIAL, DEFEND }
 
+@onready var safe_root: Control = %SafeRoot
 @onready var log_label: RichTextLabel = %BattleLog
 @onready var player_row: HBoxContainer = %PlayerRow
 @onready var enemy_row: HBoxContainer = %EnemyRow
@@ -25,6 +26,7 @@ var enemy_panels: Array[PanelContainer] = []
 
 
 func _ready() -> void:
+	SafeArea.register(safe_root)
 	UITheme.style_button(btn_regular, true)
 	UITheme.style_button(btn_special)
 	UITheme.style_button(btn_defend)
@@ -83,11 +85,11 @@ func _make_fighter_panel(w: Warrior, is_enemy: bool, index: int) -> PanelContain
 	panel.add_child(v)
 	var tr := TextureRect.new()
 	tr.texture = UITheme.load_texture(w.preview_path())
-	tr.custom_minimum_size = Vector2(72, 72)
+	tr.custom_minimum_size = Vector2(64, 88)
 	tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	tr.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	tr.modulate = Color(w.tint_primary.r * 0.4 + 0.6, w.tint_primary.g * 0.4 + 0.6, w.tint_primary.b * 0.4 + 0.6, 1)
+	tr.modulate = Color(w.tint_primary.r * 0.35 + 0.65, w.tint_primary.g * 0.35 + 0.65, w.tint_primary.b * 0.35 + 0.65, 1)
 	v.add_child(tr)
 	var name_l := Label.new()
 	name_l.text = w.name

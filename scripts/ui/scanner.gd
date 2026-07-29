@@ -1,8 +1,7 @@
 extends Control
-## Barcode entry + beverage category selection. No brand names are shown or stored.
-## Camera permission is requested on Android; scanning uses manual entry for reliability,
-## with optional Open Food Facts category hints that strip brand fields.
+## Bottle UPC scanner: camera scan on Android + manual entry. Brands never stored.
 
+@onready var safe_root: Control = %SafeRoot
 @onready var barcode_input: LineEdit = %BarcodeInput
 @onready var category_option: OptionButton = %CategoryOption
 @onready var status_label: Label = %StatusLabel
@@ -11,32 +10,49 @@ extends Control
 @onready var result_faction: Label = %ResultFaction
 @onready var result_stats: Label = %ResultStats
 @onready var result_sprite: TextureRect = %ResultSprite
+@onready var btn_camera: Button = %BtnCamera
 @onready var btn_scan: Button = %BtnScan
 @onready var btn_lookup: Button = %BtnLookup
 @onready var btn_back: Button = %BtnBack
 @onready var demo_box: VBoxContainer = %DemoBox
 @onready var http: HTTPRequest = %HTTPRequest
+@onready var camera_hint: Label = %CameraHint
 
-var _pending_barcode := ""
 var _categories: Array = []
 
 
 func _ready() -> void:
+	SafeArea.register(safe_root)
+	UITheme.style_button(btn_camera, true)
 	UITheme.style_button(btn_scan, true)
 	UITheme.style_button(btn_lookup)
 	UITheme.style_button(btn_back)
 	UITheme.style_panel(result_panel)
 	result_panel.visible = false
-	status_label.text = "Enter a barcode from any bottle. Brands are never stored."
 	_populate_categories()
 	_populate_demos()
+	btn_camera.pressed.connect(_on_camera_pressed)
 	btn_scan.pressed.connect(_on_scan_pressed)
 	btn_lookup.pressed.connect(_on_lookup_pressed)
 	btn_back.pressed.connect(func(): get_tree().change_scene_to_file("res://scenes/main_menu.tscn"))
 	http.request_completed.connect(_on_http_completed)
+	UpcScanner.barcode_scanned.connect(_on_camera_barcode)
+	UpcScanner.scan_cancelled.connect(func(): status_label.text = "Camera scan cancelled.")
+	UpcScanner.scan_failed.connect(func(reason: String): status_label.text = "Scan failed: %s" % reason)
+	_update_camera_ui()
 	if OS.has_feature("android"):
-		# Camera permission for future live scanning plugins; entry works without it.
 		OS.request_permissions()
+
+
+func _update_camera_ui() -> void:
+	if UpcScanner.can_scan_camera():
+		btn_camera.disabled = false
+		camera_hint.text = "Point your camera at the bottle UPC. Brands are never saved."
+		status_label.text = "Tap Scan with Camera, or type a barcode."
+	else:
+		btn_camera.disabled = false  # still attempt; shows clear error if missing
+		camera_hint.text = "On Android APK builds, Scan with Camera opens the UPC scanner. Desktop uses manual entry / demos."
+		status_label.text = "Enter a barcode or use a demo bottle. Brands are never stored."
 
 
 func _populate_categories() -> void:
@@ -67,7 +83,7 @@ func _populate_demos() -> void:
 		var b := Button.new()
 		b.text = d.label
 		UITheme.style_button(b)
-		b.custom_minimum_size = Vector2(0, 44)
+		b.custom_minimum_size = Vector2(0, 48)
 		b.add_theme_font_size_override("font_size", 16)
 		var code: String = d.code
 		var cat: int = d.cat
@@ -93,10 +109,23 @@ func _selected_category() -> int:
 	return int(_categories[idx])
 
 
+func _on_camera_pressed() -> void:
+	status_label.text = "Opening camera UPC scanner..."
+	UpcScanner.start_camera_scan()
+
+
+func _on_camera_barcode(code: String) -> void:
+	var clean := code.strip_edges()
+	barcode_input.text = clean
+	status_label.text = "UPC captured. Confirm beverage type, then Summon Warrior."
+	# Best-effort category hint without showing brands.
+	_pending_lookup(clean)
+
+
 func _on_scan_pressed() -> void:
 	var code := barcode_input.text.strip_edges()
 	if code.is_empty():
-		status_label.text = "Enter a barcode first."
+		status_label.text = "Scan or enter a barcode first."
 		return
 	_summon(code, _selected_category())
 
@@ -104,38 +133,38 @@ func _on_scan_pressed() -> void:
 func _on_lookup_pressed() -> void:
 	var code := barcode_input.text.strip_edges()
 	if code.is_empty():
-		status_label.text = "Enter a barcode to look up category hints."
+		status_label.text = "Enter or scan a barcode first."
 		return
-	_pending_barcode = code
+	_pending_lookup(code)
+
+
+func _pending_lookup(code: String) -> void:
 	status_label.text = "Looking up beverage category (brands hidden)..."
-	var url := "https://world.openfoodfacts.org/api/v2/product/%s.json?fields=categories_tags,categories,product_name,generic_name,labels_tags" % code.uri_encode()
+	var url := "https://world.openfoodfacts.org/api/v2/product/%s.json?fields=categories_tags,categories,generic_name,labels_tags" % code.uri_encode()
 	var err := http.request(url)
 	if err != OK:
-		status_label.text = "Lookup failed to start. Pick a category manually."
+		status_label.text = "Lookup failed to start. Pick a category manually, then Summon."
 
 
 func _on_http_completed(_result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
 	if response_code != 200:
-		status_label.text = "No category hint found. Choose the beverage type manually."
+		status_label.text = "No category hint found. Choose the beverage type, then Summon."
 		return
 	var parsed = JSON.parse_string(body.get_string_from_utf8())
 	if typeof(parsed) != TYPE_DICTIONARY:
 		status_label.text = "Lookup parse error. Choose category manually."
 		return
 	var product: Dictionary = parsed.get("product", {})
-	# Build keyword blob WITHOUT using product_name as display text.
 	var blob := ""
 	blob += str(product.get("categories", "")) + " "
-	var tags: Array = product.get("categories_tags", [])
-	for t in tags:
+	for t in product.get("categories_tags", []):
 		blob += str(t) + " "
 	blob += str(product.get("generic_name", "")) + " "
-	var labels: Array = product.get("labels_tags", [])
-	for t in labels:
+	for t in product.get("labels_tags", []):
 		blob += str(t) + " "
 	var cat := WarriorFactory.classify_from_keywords(blob)
 	if cat < 0:
-		status_label.text = "Could not classify beverage. Select type manually, then Summon."
+		status_label.text = "Could not classify beverage. Select type, then Summon."
 		return
 	_select_category(cat)
 	status_label.text = "Category hint: %s → %s. Tap Summon Warrior." % [
@@ -176,9 +205,10 @@ func _show_result(warrior: Warrior, duplicate: bool) -> void:
 	var tex := UITheme.load_texture(warrior.preview_path())
 	result_sprite.texture = tex
 	result_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	result_sprite.custom_minimum_size = Vector2(144, 192)
 	result_sprite.modulate = Color(
-		warrior.tint_primary.r * 0.4 + 0.6,
-		warrior.tint_primary.g * 0.4 + 0.6,
-		warrior.tint_primary.b * 0.4 + 0.6,
+		warrior.tint_primary.r * 0.35 + 0.65,
+		warrior.tint_primary.g * 0.35 + 0.65,
+		warrior.tint_primary.b * 0.35 + 0.65,
 		1.0
 	)

@@ -1,5 +1,6 @@
 extends Control
 
+@onready var safe_root: Control = %SafeRoot
 @onready var list: VBoxContainer = %List
 @onready var detail_panel: PanelContainer = %DetailPanel
 @onready var detail_name: Label = %DetailName
@@ -12,6 +13,7 @@ var _selected: Warrior = null
 
 
 func _ready() -> void:
+	SafeArea.register(safe_root)
 	UITheme.style_button(btn_back)
 	UITheme.style_panel(detail_panel)
 	btn_back.pressed.connect(func(): get_tree().change_scene_to_file("res://scenes/main_menu.tscn"))
@@ -49,4 +51,5 @@ func _show_detail(w: Warrior) -> void:
 	]
 	detail_sprite.texture = UITheme.load_texture(w.preview_path())
 	detail_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	detail_sprite.modulate = Color(w.tint_primary.r * 0.4 + 0.6, w.tint_primary.g * 0.4 + 0.6, w.tint_primary.b * 0.4 + 0.6, 1)
+	detail_sprite.custom_minimum_size = Vector2(120, 160)
+	detail_sprite.modulate = Color(w.tint_primary.r * 0.35 + 0.65, w.tint_primary.g * 0.35 + 0.65, w.tint_primary.b * 0.35 + 0.65, 1)

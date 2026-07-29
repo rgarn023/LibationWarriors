@@ -1,5 +1,6 @@
 extends Control
 
+@onready var safe_root: Control = %SafeRoot
 @onready var slots: VBoxContainer = %Slots
 @onready var picker: VBoxContainer = %Picker
 @onready var status_label: Label = %StatusLabel
@@ -11,6 +12,7 @@ var _slot_buttons: Array[Button] = []
 
 
 func _ready() -> void:
+	SafeArea.register(safe_root)
 	UITheme.style_button(btn_back)
 	UITheme.style_button(btn_clear)
 	btn_back.pressed.connect(func(): get_tree().change_scene_to_file("res://scenes/main_menu.tscn"))
