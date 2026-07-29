@@ -33,13 +33,22 @@ Godot **4.7.1** mobile game: scan bottle barcodes to summon unique 16-bit **Liba
 - Online lobby (host/join via IP + ENet)
 - Authentic 32×32 16-bit style sprites for all 16 factions
 
-## Android APK
+## Download Android APK
 
-Built APK path after export:
+**Direct download (this branch):**  
+https://github.com/rgarn023/LibationWarriors/raw/cursor/libation-warriors-game-0762/export/LibationWarriors.apk
 
-`export/LibationWarriors.apk`
+**Browse file on GitHub:**  
+https://github.com/rgarn023/LibationWarriors/blob/cursor/libation-warriors-game-0762/export/LibationWarriors.apk
 
-Package id: `com.libationwarriors.game`
+| | |
+|---|---|
+| File | `export/LibationWarriors.apk` (~55 MB) |
+| Package | `com.libationwarriors.game` |
+| Version | 1.0.0 (debug-signed) |
+| Min Android | API 24 |
+
+Install on a phone/emulator, then allow installs from unknown sources if prompted.
 
 ### Rebuild
 
