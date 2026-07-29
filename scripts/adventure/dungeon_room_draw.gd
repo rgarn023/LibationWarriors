@@ -13,6 +13,7 @@ var doors: Dictionary = {}
 var locked_dirs: Dictionary = {}
 var kind: String = "empty"
 var torch_phase: float = 0.0
+var door_gap_tiles: int = 3
 var _base_img: Image
 var _needs_full_bake: bool = true
 
@@ -72,10 +73,10 @@ func _bake() -> void:
 	_paint_wall_row(img, 0, (room_h - 1) * tile, rw, tile, "s")
 	_paint_wall_col(img, 0, 0, tile, rh, "w")
 	_paint_wall_col(img, (room_w - 1) * tile, 0, tile, rh, "e")
-	# Pillars
-	for p in [Vector2i(int(tile * 2.8), int(tile * 2.5)), Vector2i(int(tile * 12.5), int(tile * 2.5)), Vector2i(int(tile * 2.8), int(tile * 7.2)), Vector2i(int(tile * 12.5), int(tile * 7.2))]:
+	# Pillars (clear of door lanes)
+	for p in [Vector2i(int(tile * 3.2), int(tile * 3.0)), Vector2i(int(tile * 12.0), int(tile * 3.0)), Vector2i(int(tile * 3.2), int(tile * 7.0)), Vector2i(int(tile * 12.0), int(tile * 7.0))]:
 		_fill(img, p.x, p.y - 2, 10, 3, accent_c)
-		_fill(img, p.x, p.y, 10, 18, wall_c.darkened(0.05))
+		_fill(img, p.x, p.y, 10, 16, wall_c.darkened(0.05))
 		_fill(img, p.x + 1, p.y + 2, 3, 12, wall_c.lightened(0.15))
 	# Banners
 	for bx in [tile * 5, tile * 10]:
@@ -83,19 +84,24 @@ func _bake() -> void:
 		_fill(img, bx - 5, int(tile * 1.35), 12, 16, accent_c.darkened(0.05))
 		_fill(img, bx - 5, int(tile * 1.35) + 5, 12, 3, accent_c.lightened(0.2))
 	_paint_theme_props(img)
-	# Door arrows
+	# Bright doorway markers
+	var gap := door_gap_tiles * tile
 	for d in doors.keys():
 		if locked_dirs.get(str(d), false) or locked_dirs.get(d, false):
 			continue
 		match str(d):
 			"n":
-				_fill(img, int(rw * 0.5) - 4, tile + 2, 8, 5, accent_c.lightened(0.35))
+				_fill(img, int(rw * 0.5) - gap / 2, tile, gap, 4, accent_c.lightened(0.45))
+				_fill(img, int(rw * 0.5) - 5, tile + 5, 10, 6, Color(1, 0.95, 0.55, 1))
 			"s":
-				_fill(img, int(rw * 0.5) - 4, (room_h - 1) * tile - 7, 8, 5, accent_c.lightened(0.35))
+				_fill(img, int(rw * 0.5) - gap / 2, (room_h - 1) * tile - 4, gap, 4, accent_c.lightened(0.45))
+				_fill(img, int(rw * 0.5) - 5, (room_h - 1) * tile - 11, 10, 6, Color(1, 0.95, 0.55, 1))
 			"w":
-				_fill(img, tile + 2, int(rh * 0.5) - 4, 5, 8, accent_c.lightened(0.35))
+				_fill(img, tile, int(rh * 0.5) - gap / 2, 4, gap, accent_c.lightened(0.45))
+				_fill(img, tile + 5, int(rh * 0.5) - 5, 6, 10, Color(1, 0.95, 0.55, 1))
 			"e":
-				_fill(img, (room_w - 1) * tile - 7, int(rh * 0.5) - 4, 5, 8, accent_c.lightened(0.35))
+				_fill(img, (room_w - 1) * tile - 4, int(rh * 0.5) - gap / 2, 4, gap, accent_c.lightened(0.45))
+				_fill(img, (room_w - 1) * tile - 11, int(rh * 0.5) - 5, 6, 10, Color(1, 0.95, 0.55, 1))
 	if kind == "boss":
 		_fill(img, int(tile * 4.5), int(tile * 1.55), tile * 7, 12, Color(0.55, 0.15, 0.18, 1))
 		_fill(img, int(rw * 0.5) - 4, int(tile * 1.7), 8, 8, Color(0.9, 0.85, 0.75))
@@ -125,34 +131,35 @@ func _paint_torches(img: Image) -> void:
 func _paint_wall_row(img: Image, x: int, y: int, w: int, h: int, dir: String) -> void:
 	var has := doors.has(dir) or doors.has(StringName(dir))
 	var locked: bool = locked_dirs.get(dir, false) or locked_dirs.get(str(dir), false)
+	var gap := door_gap_tiles * tile
 	if not has or locked:
 		_fill_wall(img, x, y, w, h)
 		if locked and has:
-			_fill(img, x + int(w * 0.5) - tile, y, tile * 2, h, Color(0.65, 0.55, 0.2))
+			_fill(img, x + int(w * 0.5) - gap / 2, y, gap, h, Color(0.65, 0.55, 0.2))
 		return
-	var gap_x := x + int(w * 0.5) - tile
+	var gap_x := x + int(w * 0.5) - gap / 2
 	_fill_wall(img, x, y, gap_x - x, h)
-	_fill_wall(img, gap_x + tile * 2, y, x + w - (gap_x + tile * 2), h)
+	_fill_wall(img, gap_x + gap, y, x + w - (gap_x + gap), h)
 	_fill(img, gap_x - 2, y, 2, h, accent_c)
-	_fill(img, gap_x + tile * 2, y, 2, h, accent_c)
-	# Door threshold
-	_fill(img, gap_x, y, tile * 2, h, floor_c.lightened(0.08))
+	_fill(img, gap_x + gap, y, 2, h, accent_c)
+	_fill(img, gap_x, y, gap, h, floor_c.lightened(0.12))
 
 
 func _paint_wall_col(img: Image, x: int, y: int, w: int, h: int, dir: String) -> void:
 	var has := doors.has(dir) or doors.has(StringName(dir))
 	var locked: bool = locked_dirs.get(dir, false) or locked_dirs.get(str(dir), false)
+	var gap := door_gap_tiles * tile
 	if not has or locked:
 		_fill_wall(img, x, y, w, h)
 		if locked and has:
-			_fill(img, x, y + int(h * 0.5) - tile, w, tile * 2, Color(0.65, 0.55, 0.2))
+			_fill(img, x, y + int(h * 0.5) - gap / 2, w, gap, Color(0.65, 0.55, 0.2))
 		return
-	var gap_y := y + int(h * 0.5) - tile
+	var gap_y := y + int(h * 0.5) - gap / 2
 	_fill_wall(img, x, y, w, gap_y - y)
-	_fill_wall(img, x, gap_y + tile * 2, w, y + h - (gap_y + tile * 2))
+	_fill_wall(img, x, gap_y + gap, w, y + h - (gap_y + gap))
 	_fill(img, x, gap_y - 2, w, 2, accent_c)
-	_fill(img, x, gap_y + tile * 2, w, 2, accent_c)
-	_fill(img, x, gap_y, w, tile * 2, floor_c.lightened(0.08))
+	_fill(img, x, gap_y + gap, w, 2, accent_c)
+	_fill(img, x, gap_y, w, gap, floor_c.lightened(0.12))
 
 
 func _fill_wall(img: Image, x: int, y: int, w: int, h: int) -> void:

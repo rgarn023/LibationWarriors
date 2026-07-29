@@ -5,6 +5,8 @@ extends Node2D
 const TILE := 16
 const ROOM_W := 16
 const ROOM_H := 11
+const DOOR_GAP := 3 ## tiles wide — wide enough for the player body
+const OPPOSITE := {"n": "s", "s": "n", "w": "e", "e": "w"}
 const ENEMY_SCRIPT := preload("res://scripts/adventure/dungeon_enemy.gd")
 const ROOM_DRAW_SCRIPT := preload("res://scripts/adventure/dungeon_room_draw.gd")
 const WEAPON_SCRIPT := preload("res://scripts/adventure/dungeon_weapon.gd")
@@ -51,6 +53,8 @@ var _cam: Camera2D
 var _attack_anim_t: float = 0.0
 var _attack_anim_special: bool = false
 var _door_dirs: Array = []
+var _exits: Array = [] ## {dir, target, locked, mouth: Rect2}
+var _retreat_dir: String = "" ## door that leads back the way you came
 var _room_art: Node2D
 var _controls_wired: bool = false
 var _weapon_profile: Dictionary = {}
@@ -234,20 +238,27 @@ func _set_player_frame(frame: int) -> void:
 
 
 func _clamp_player_in_room() -> void:
+	## Keep player inside floor, but open door mouths fully so exits are reachable.
 	var min_x := TILE + 6.0
 	var max_x := (ROOM_W - 1) * TILE - 6.0
 	var min_y := TILE + 6.0
 	var max_y := (ROOM_H - 1) * TILE - 6.0
+	var gap := float(DOOR_GAP * TILE)
+	var cx := ROOM_W * TILE * 0.5
+	var cy := ROOM_H * TILE * 0.5
 	for d in _door_dirs:
 		match str(d):
 			"n":
-				min_y = TILE + 1.0
+				min_y = 2.0
+				# Only relax X near the door mouth
+				if absf(player.position.x - cx) <= gap * 0.5 + 4.0:
+					min_y = 2.0
 			"s":
-				max_y = (ROOM_H - 1) * TILE - 1.0
+				max_y = float(ROOM_H * TILE) - 2.0
 			"w":
-				min_x = TILE + 1.0
+				min_x = 2.0
 			"e":
-				max_x = (ROOM_W - 1) * TILE - 1.0
+				max_x = float(ROOM_W * TILE) - 2.0
 	player.position.x = clampf(player.position.x, min_x, max_x)
 	player.position.y = clampf(player.position.y, min_y, max_y)
 
@@ -258,6 +269,7 @@ func _build_room(room_id: int, spawn: Vector2) -> void:
 	_enemies.clear()
 	_pickups.clear()
 	_door_dirs.clear()
+	_exits.clear()
 	_room_art = null
 	_current_id = room_id
 	_dungeon["current_room"] = room_id
@@ -266,16 +278,23 @@ func _build_room(room_id: int, spawn: Vector2) -> void:
 	var floor_c: Color = _as_color(_theme.get("floor", Color(0.2, 0.2, 0.22)))
 	var wall_c: Color = _as_color(_theme.get("wall", Color(0.35, 0.32, 0.3)))
 	var accent_c: Color = _as_color(_theme.get("accent", Color(0.7, 0.55, 0.35)))
-	var doors: Dictionary = room.get("doors", {})
+	var doors := _normalize_doors(room.get("doors", {}))
+	room["doors"] = doors
 	var locked: Dictionary = {}
 	for d in doors.keys():
 		var tid := int(doors[d])
 		var to_boss := tid == int(_dungeon.get("boss_id", -1))
 		var needs_key := to_boss and not bool(_dungeon.get("has_key", false))
 		if needs_key:
-			locked[str(d)] = true
+			locked[d] = true
 		else:
-			_door_dirs.append(str(d))
+			_door_dirs.append(d)
+		_exits.append({
+			"dir": d,
+			"target": tid,
+			"locked": needs_key,
+			"mouth": _door_mouth_rect(d),
+		})
 
 	var kind: String = str(room.get("kind", "empty"))
 	_room_art = ROOM_DRAW_SCRIPT.new()
@@ -295,7 +314,6 @@ func _build_room(room_id: int, spawn: Vector2) -> void:
 
 	_add_wall_colliders(doors, locked)
 	_add_pillar_colliders()
-	_add_door_triggers(doors)
 
 	var cleared: bool = bool(room.get("cleared", false))
 	var looted: bool = bool(room.get("looted", false))
@@ -306,21 +324,57 @@ func _build_room(room_id: int, spawn: Vector2) -> void:
 	if (kind == "enemy" or kind == "boss") and not cleared:
 		var wrap: Dictionary = room.get("enemy", {})
 		var wdict: Dictionary = wrap.get("warrior", wrap)
-		if not wdict.is_empty():
-			if kind == "boss":
-				_spawn_enemy(wdict, true, Vector2(ROOM_W * TILE * 0.5, ROOM_H * TILE * 0.5))
-			else:
-				_spawn_enemy(wdict, false, Vector2(ROOM_W * TILE * 0.55, ROOM_H * TILE * 0.5))
-				if randf() < 0.4:
-					_spawn_enemy(_clone_enemy_dict(wdict, 1), false, Vector2(ROOM_W * TILE * 0.38, ROOM_H * TILE * 0.62))
+		if wdict.is_empty():
+			room["cleared"] = true
+			cleared = true
+		elif kind == "boss":
+			_spawn_enemy(wdict, true, Vector2(ROOM_W * TILE * 0.5, ROOM_H * TILE * 0.5))
+		else:
+			_spawn_enemy(wdict, false, Vector2(ROOM_W * TILE * 0.55, ROOM_H * TILE * 0.5))
+			if randf() < 0.4:
+				_spawn_enemy(_clone_enemy_dict(wdict, 1), false, Vector2(ROOM_W * TILE * 0.38, ROOM_H * TILE * 0.62))
 
 	player.position = spawn
 	player.z_index = 20
+	_rooms[room_id] = room
+	_dungeon["rooms"] = _rooms
 	GameState.adventure_dungeon = _dungeon
-	_door_cooldown = 0.35
+	_door_cooldown = 0.25
 	_update_hud()
-	if _door_dirs.size() > 0 and (cleared or kind == "empty" or kind == "start" or kind == "treasure" or kind == "key"):
-		_show_message("Exits open")
+	if _door_dirs.size() > 0:
+		if cleared or _room_allows_free_exit(kind):
+			_show_message("Walk into a doorway to leave")
+		elif _retreat_dir != "":
+			_show_message("Fight — or retreat the way you came")
+
+
+func _normalize_doors(raw) -> Dictionary:
+	var out := {}
+	if raw is Dictionary:
+		for k in raw.keys():
+			out[str(k)] = int(raw[k])
+	return out
+
+
+func _door_mouth_rect(dir: String) -> Rect2:
+	## Generous zone just inside / on the doorway — position check, not Area2D.
+	var gap := float(DOOR_GAP * TILE)
+	var cx := ROOM_W * TILE * 0.5
+	var cy := ROOM_H * TILE * 0.5
+	match dir:
+		"n":
+			return Rect2(cx - gap * 0.5, 0.0, gap, float(TILE) + 22.0)
+		"s":
+			return Rect2(cx - gap * 0.5, float((ROOM_H - 1) * TILE) - 22.0, gap, float(TILE) + 22.0)
+		"w":
+			return Rect2(0.0, cy - gap * 0.5, float(TILE) + 22.0, gap)
+		"e":
+			return Rect2(float((ROOM_W - 1) * TILE) - 22.0, cy - gap * 0.5, float(TILE) + 22.0, gap)
+	return Rect2()
+
+
+func _room_allows_free_exit(kind: String) -> bool:
+	return kind in ["empty", "start", "treasure", "key"]
 
 
 func _as_color(value) -> Color:
@@ -378,70 +432,38 @@ func _wall_segment_colliders(full: Rect2, solid: bool, gap_pos: Vector2, gap_siz
 
 
 func _add_wall_colliders(doors: Dictionary, locked: Dictionary) -> void:
+	var gap := float(DOOR_GAP * TILE)
+	var half := gap * 0.5
 	_wall_segment_colliders(
 		Rect2(0, 0, ROOM_W * TILE, TILE),
-		not doors.has("n") or locked.get("n", false),
-		Vector2(ROOM_W * TILE * 0.5 - TILE, 0),
-		Vector2(TILE * 2, TILE)
+		not doors.has("n") or bool(locked.get("n", false)),
+		Vector2(ROOM_W * TILE * 0.5 - half, 0),
+		Vector2(gap, TILE)
 	)
 	_wall_segment_colliders(
 		Rect2(0, (ROOM_H - 1) * TILE, ROOM_W * TILE, TILE),
-		not doors.has("s") or locked.get("s", false),
-		Vector2(ROOM_W * TILE * 0.5 - TILE, (ROOM_H - 1) * TILE),
-		Vector2(TILE * 2, TILE)
+		not doors.has("s") or bool(locked.get("s", false)),
+		Vector2(ROOM_W * TILE * 0.5 - half, (ROOM_H - 1) * TILE),
+		Vector2(gap, TILE)
 	)
 	_wall_segment_colliders(
 		Rect2(0, 0, TILE, ROOM_H * TILE),
-		not doors.has("w") or locked.get("w", false),
-		Vector2(0, ROOM_H * TILE * 0.5 - TILE),
-		Vector2(TILE, TILE * 2)
+		not doors.has("w") or bool(locked.get("w", false)),
+		Vector2(0, ROOM_H * TILE * 0.5 - half),
+		Vector2(TILE, gap)
 	)
 	_wall_segment_colliders(
 		Rect2((ROOM_W - 1) * TILE, 0, TILE, ROOM_H * TILE),
-		not doors.has("e") or locked.get("e", false),
-		Vector2((ROOM_W - 1) * TILE, ROOM_H * TILE * 0.5 - TILE),
-		Vector2(TILE, TILE * 2)
+		not doors.has("e") or bool(locked.get("e", false)),
+		Vector2((ROOM_W - 1) * TILE, ROOM_H * TILE * 0.5 - half),
+		Vector2(TILE, gap)
 	)
 
 
 func _add_pillar_colliders() -> void:
-	for p in [Vector2(TILE * 2.8, TILE * 2.5), Vector2(TILE * 12.5, TILE * 2.5), Vector2(TILE * 2.8, TILE * 7.2), Vector2(TILE * 12.5, TILE * 7.2)]:
-		_add_wall_rect_collider(Rect2(p.x, p.y, 10, 18))
-
-
-func _add_door_triggers(doors: Dictionary) -> void:
-	for dir_name in doors.keys():
-		var target_id: int = int(doors[dir_name])
-		var to_boss := int(target_id) == int(_dungeon.get("boss_id", -1))
-		var needs_key := to_boss and not bool(_dungeon.get("has_key", false))
-		var door_area := Area2D.new()
-		door_area.name = "Door_%s" % dir_name
-		door_area.set_meta("dir", dir_name)
-		door_area.set_meta("target", target_id)
-		door_area.set_meta("to_boss", to_boss)
-		door_area.set_meta("locked", needs_key)
-		door_area.collision_layer = 0
-		door_area.collision_mask = 4
-		door_area.monitoring = true
-		door_area.monitorable = true
-		var cs := CollisionShape2D.new()
-		var rs := RectangleShape2D.new()
-		match str(dir_name):
-			"n":
-				door_area.position = Vector2(ROOM_W * TILE * 0.5, TILE + 10)
-				rs.size = Vector2(TILE * 2.2, 18)
-			"s":
-				door_area.position = Vector2(ROOM_W * TILE * 0.5, (ROOM_H - 1) * TILE - 10)
-				rs.size = Vector2(TILE * 2.2, 18)
-			"w":
-				door_area.position = Vector2(TILE + 10, ROOM_H * TILE * 0.5)
-				rs.size = Vector2(18, TILE * 2.2)
-			"e":
-				door_area.position = Vector2((ROOM_W - 1) * TILE - 10, ROOM_H * TILE * 0.5)
-				rs.size = Vector2(18, TILE * 2.2)
-		cs.shape = rs
-		door_area.add_child(cs)
-		world.add_child(door_area)
+	## Keep pillars away from door lanes
+	for p in [Vector2(TILE * 3.2, TILE * 3.0), Vector2(TILE * 12.0, TILE * 3.0), Vector2(TILE * 3.2, TILE * 7.0), Vector2(TILE * 12.0, TILE * 7.0)]:
+		_add_wall_rect_collider(Rect2(p.x, p.y, 10, 16))
 
 
 func _box(color: Color, size: Vector2, pos: Vector2, parent: Node = null) -> Node2D:
@@ -710,8 +732,8 @@ func _do_facing_melee(is_special: bool, profile: Dictionary, col: Color) -> void
 		var to_e: Vector2 = e.position - player.position
 		if to_e.length() > hit_r + 8.0:
 			continue
-		# Must be in the facing cone
-		if to_e != Vector2.ZERO and _facing.dot(to_e.normalized()) < 0.35:
+		# Must be roughly in the facing cone (forgiving)
+		if to_e != Vector2.ZERO and _facing.dot(to_e.normalized()) < 0.1:
 			continue
 		if e.position.distance_to(center) > hit_r and to_e.length() > reach * 0.7:
 			continue
@@ -723,9 +745,7 @@ func _do_facing_melee(is_special: bool, profile: Dictionary, col: Color) -> void
 		COMBAT_FX.spawn_hit_spark(world, e.position, col)
 
 
-func _check_doors() -> void:
-	if _transitioning:
-		return
+func _living_enemy_count() -> int:
 	var live := 0
 	var kept: Array = []
 	for e in _enemies:
@@ -733,57 +753,65 @@ func _check_doors() -> void:
 			live += 1
 			kept.append(e)
 	_enemies = kept
-	for child in world.get_children():
-		if not (child is Area2D and str(child.name).begins_with("Door_")):
-			continue
-		var area := child as Area2D
-		if not _near_door(area):
-			continue
-		if bool(area.get_meta("locked", false)):
+	return live
+
+
+func _check_doors() -> void:
+	if _transitioning:
+		return
+	var room: Dictionary = _rooms[_current_id]
+	var kind := str(room.get("kind", "empty"))
+	var cleared := bool(room.get("cleared", false))
+	var live := _living_enemy_count()
+	if live == 0 and (kind == "enemy" or kind == "boss") and not cleared:
+		room["cleared"] = true
+		room["enemy"] = {}
+		_rooms[_current_id] = room
+		_dungeon["rooms"] = _rooms
+		cleared = true
+	for exit in _exits:
+		var mouth: Rect2 = exit["mouth"]
+		if not mouth.has_point(player.position):
+			# Also accept if close to mouth center (lenient)
+			if player.position.distance_to(mouth.get_center()) > 18.0:
+				continue
+		var dir := str(exit["dir"])
+		if bool(exit.get("locked", false)):
 			_show_message("Locked. Find the dungeon key.")
+			_door_cooldown = 0.45
+			return
+		var free := cleared or _room_allows_free_exit(kind) or live == 0
+		var retreat := dir == _retreat_dir and _retreat_dir != ""
+		if not free and not retreat:
+			_show_message("Defeat enemies — or retreat the way you came")
 			_door_cooldown = 0.4
 			return
-		if live > 0:
-			_show_message("Defeat the enemies first!")
-			_door_cooldown = 0.35
-			return
-		_enter_room(int(area.get_meta("target")), str(area.get_meta("dir")))
+		_enter_room(int(exit["target"]), dir)
 		return
-
-
-func _near_door(area: Area2D) -> bool:
-	if _body_overlaps(area):
-		return true
-	return player.position.distance_to(area.position) <= 16.0
-
-
-func _body_overlaps(area: Area2D) -> bool:
-	for body in area.get_overlapping_bodies():
-		if body == player:
-			return true
-	return false
 
 
 func _enter_room(target_id: int, from_dir: String) -> void:
 	_transitioning = true
-	_door_cooldown = 0.55
+	_door_cooldown = 0.4
+	# Entering through `from_dir` of the old room → appear at opposite wall; retreat is that opposite.
+	_retreat_dir = str(OPPOSITE.get(from_dir, ""))
 	var spawn := Vector2(ROOM_W * TILE * 0.5, ROOM_H * TILE * 0.5)
 	match from_dir:
 		"n":
-			spawn = Vector2(ROOM_W * TILE * 0.5, (ROOM_H - 2.5) * TILE)
+			spawn = Vector2(ROOM_W * TILE * 0.5, (ROOM_H - 2.2) * TILE)
 		"s":
-			spawn = Vector2(ROOM_W * TILE * 0.5, 2.5 * TILE)
+			spawn = Vector2(ROOM_W * TILE * 0.5, 2.2 * TILE)
 		"w":
-			spawn = Vector2((ROOM_W - 2.5) * TILE, ROOM_H * TILE * 0.5)
+			spawn = Vector2((ROOM_W - 2.2) * TILE, ROOM_H * TILE * 0.5)
 		"e":
-			spawn = Vector2(2.5 * TILE, ROOM_H * TILE * 0.5)
+			spawn = Vector2(2.2 * TILE, ROOM_H * TILE * 0.5)
 	_build_room(target_id, spawn)
 	_transitioning = false
 	var room: Dictionary = _rooms[target_id]
 	if str(room.get("kind")) == "boss":
 		_show_message("%s awaits!" % str(_dungeon.get("boss_name", "Boss")))
 	else:
-		_show_message("Room %d" % (target_id + 1))
+		_show_message("Room %d — exits at glowing doorways" % (target_id + 1))
 
 
 func _update_hud() -> void:
