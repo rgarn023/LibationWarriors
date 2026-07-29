@@ -44,6 +44,9 @@ var _pickups: Array = []
 var _torch_nodes: Array = []
 var _torch_t: float = 0.0
 var _cam: Camera2D
+var _attack_anim_t: float = 0.0
+var _attack_anim_special: bool = false
+var _door_dirs: Array = [] ## open door dirs in current room
 
 
 func _ready() -> void:
@@ -158,17 +161,21 @@ func _physics_process(delta: float) -> void:
 	if Input.is_key_pressed(KEY_X) or Input.is_key_pressed(KEY_K):
 		_on_special()
 
-	if dir != Vector2.ZERO:
+	if dir != Vector2.ZERO and _attack_anim_t <= 0.0:
 		_facing = dir.normalized()
 		_anim_t += delta
 		if _anim_t >= 0.12:
 			_anim_t = 0.0
 			_anim_frame = (_anim_frame + 1) % 4
 			_set_player_frame(_anim_frame)
-	else:
+	elif _attack_anim_t <= 0.0:
 		_set_player_frame(0)
 
-	player.velocity = dir.normalized() * 98.0
+	if _attack_anim_t > 0.0:
+		_attack_anim_t -= delta
+		_animate_attack_pose()
+
+	player.velocity = dir.normalized() * (70.0 if _attack_anim_t > 0.0 else 98.0)
 	player.move_and_slide()
 	_clamp_player_in_room()
 	_check_enemy_contact()
@@ -176,6 +183,21 @@ func _physics_process(delta: float) -> void:
 	if _door_cooldown <= 0.0:
 		_check_doors()
 	_update_hud()
+
+
+func _animate_attack_pose() -> void:
+	## Lunge + flash while swinging.
+	var t := clampf(_attack_anim_t / 0.22, 0.0, 1.0)
+	var lunge := (1.0 - absf(t - 0.5) * 2.0) * (6.0 if _attack_anim_special else 4.0)
+	_player_sprite.offset = _facing * lunge
+	_player_sprite.rotation = _facing.x * 0.25 * (1.0 if _attack_anim_special else 0.15)
+	if _attack_anim_special:
+		_player_sprite.modulate = _warrior.tint_accent.lerp(_warrior.display_modulate(), 1.0 - t)
+	if _attack_anim_t <= 0.0:
+		_player_sprite.offset = Vector2.ZERO
+		_player_sprite.rotation = 0.0
+		_player_sprite.modulate = _warrior.display_modulate()
+		_player_sprite.modulate.a = 1.0
 
 
 func _set_player_frame(frame: int) -> void:
@@ -186,12 +208,21 @@ func _set_player_frame(frame: int) -> void:
 
 
 func _clamp_player_in_room() -> void:
-	## Keep player inside floor; door transit only via door areas.
+	## Keep player inside floor, but allow door mouths so exits are reachable.
 	var min_x := TILE + 6.0
 	var max_x := (ROOM_W - 1) * TILE - 6.0
 	var min_y := TILE + 6.0
 	var max_y := (ROOM_H - 1) * TILE - 6.0
-	# Allow slight overhang only inside active unlocked door corridors.
+	for d in _door_dirs:
+		match str(d):
+			"n":
+				min_y = TILE + 1.0
+			"s":
+				max_y = (ROOM_H - 1) * TILE - 1.0
+			"w":
+				min_x = TILE + 1.0
+			"e":
+				max_x = (ROOM_W - 1) * TILE - 1.0
 	player.position.x = clampf(player.position.x, min_x, max_x)
 	player.position.y = clampf(player.position.y, min_y, max_y)
 
@@ -202,6 +233,7 @@ func _build_room(room_id: int, spawn: Vector2) -> void:
 	_enemies.clear()
 	_pickups.clear()
 	_torch_nodes.clear()
+	_door_dirs.clear()
 	_current_id = room_id
 	_dungeon["current_room"] = room_id
 	var room: Dictionary = _rooms[room_id]
@@ -212,8 +244,15 @@ func _build_room(room_id: int, spawn: Vector2) -> void:
 
 	_draw_detailed_floor(floor_c, accent_c)
 	var doors: Dictionary = room.get("doors", {})
+	for d in doors.keys():
+		var tid := int(doors[d])
+		var to_boss := tid == int(_dungeon.get("boss_id", -1))
+		var needs_key := to_boss and not bool(_dungeon.get("has_key", false))
+		if not needs_key:
+			_door_dirs.append(str(d))
 	_add_walls_and_doors(wall_c, floor_c, accent_c, doors)
 	_draw_room_props(accent_c, wall_c, room)
+	_draw_theme_scenery(accent_c, wall_c, floor_c)
 
 	var kind: String = str(room.get("kind", "empty"))
 	var cleared: bool = bool(room.get("cleared", false))
@@ -229,15 +268,17 @@ func _build_room(room_id: int, spawn: Vector2) -> void:
 			if kind == "boss":
 				_spawn_enemy(wdict, true, Vector2(ROOM_W * TILE * 0.5, ROOM_H * TILE * 0.5))
 			else:
-				_spawn_enemy(wdict, false, Vector2(ROOM_W * TILE * 0.45, ROOM_H * TILE * 0.55))
-				if randf() < 0.55:
-					_spawn_enemy(_clone_enemy_dict(wdict, 1), false, Vector2(ROOM_W * TILE * 0.62, ROOM_H * TILE * 0.48))
+				_spawn_enemy(wdict, false, Vector2(ROOM_W * TILE * 0.55, ROOM_H * TILE * 0.5))
+				if randf() < 0.4:
+					_spawn_enemy(_clone_enemy_dict(wdict, 1), false, Vector2(ROOM_W * TILE * 0.38, ROOM_H * TILE * 0.62))
 
 	player.position = spawn
 	player.z_index = 20
 	GameState.adventure_dungeon = _dungeon
-	_door_cooldown = 0.45
+	_door_cooldown = 0.35
 	_update_hud()
+	if _door_dirs.size() > 0 and (cleared or kind == "empty" or kind == "start" or kind == "treasure" or kind == "key"):
+		_show_message("Exits open")
 
 
 func _as_color(value) -> Color:
@@ -259,41 +300,74 @@ func _clone_enemy_dict(src: Dictionary, seed_add: int) -> Dictionary:
 
 func _draw_detailed_floor(floor_c: Color, accent_c: Color) -> void:
 	var base := ColorRect.new()
-	base.color = floor_c
+	base.color = floor_c.darkened(0.08)
 	base.size = Vector2(ROOM_W * TILE, ROOM_H * TILE)
 	world.add_child(base)
-	# Tile checker + grit
+	# Stone tiles with mortar lines
 	for y in range(1, ROOM_H - 1):
 		for x in range(1, ROOM_W - 1):
 			var px := x * TILE
 			var py := y * TILE
 			var tile := ColorRect.new()
-			var shade := 0.0
-			if (x + y) % 2 == 0:
-				shade = 0.06
-			elif (x * 3 + y * 7) % 5 == 0:
-				shade = -0.05
-			tile.color = floor_c.lightened(shade) if shade > 0 else floor_c.darkened(-shade)
+			var n := (x * 17 + y * 31) % 6
+			var shade := [-0.08, -0.03, 0.0, 0.04, 0.07, -0.05][n]
+			tile.color = floor_c.lightened(shade) if shade >= 0.0 else floor_c.darkened(-shade)
 			tile.position = Vector2(px + 1, py + 1)
 			tile.size = Vector2(TILE - 2, TILE - 2)
 			world.add_child(tile)
-			if (x + y * 2) % 7 == 0:
+			# Mortar
+			var mortar := ColorRect.new()
+			mortar.color = floor_c.darkened(0.22)
+			mortar.position = Vector2(px, py)
+			mortar.size = Vector2(TILE, 1)
+			world.add_child(mortar)
+			# Speckle / grit
+			if n == 2 or n == 5:
+				var grit := ColorRect.new()
+				grit.color = floor_c.lightened(0.12)
+				grit.position = Vector2(px + 4 + (n % 3), py + 5)
+				grit.size = Vector2(2, 2)
+				world.add_child(grit)
+			if (x + y * 3) % 11 == 0:
 				var crack := ColorRect.new()
-				crack.color = floor_c.darkened(0.18)
-				crack.position = Vector2(px + 4, py + 7)
-				crack.size = Vector2(7, 2)
+				crack.color = floor_c.darkened(0.28)
+				crack.position = Vector2(px + 3, py + 8)
+				crack.size = Vector2(9, 1)
 				world.add_child(crack)
-	# Center runner / carpet
+			if (x * y) % 13 == 0:
+				var stain := ColorRect.new()
+				stain.color = Color(accent_c.r * 0.25, accent_c.g * 0.2, accent_c.b * 0.15, 0.35)
+				stain.position = Vector2(px + 2, py + 2)
+				stain.size = Vector2(8, 6)
+				world.add_child(stain)
+	# Inset carpet / ritual circle
 	var carpet := ColorRect.new()
-	carpet.color = Color(accent_c.r * 0.35, accent_c.g * 0.35, accent_c.b * 0.35, 0.55)
-	carpet.position = Vector2(TILE * 5, TILE * 3)
-	carpet.size = Vector2(TILE * 6, TILE * 5)
+	carpet.color = Color(accent_c.r * 0.28, accent_c.g * 0.28, accent_c.b * 0.3, 0.65)
+	carpet.position = Vector2(TILE * 4.5, TILE * 3)
+	carpet.size = Vector2(TILE * 7, TILE * 5)
 	world.add_child(carpet)
-	var carpet_edge := ColorRect.new()
-	carpet_edge.color = accent_c
-	carpet_edge.position = carpet.position
-	carpet_edge.size = Vector2(carpet.size.x, 2)
-	world.add_child(carpet_edge)
+	for edge in [
+		Rect2(carpet.position, Vector2(carpet.size.x, 2)),
+		Rect2(carpet.position + Vector2(0, carpet.size.y - 2), Vector2(carpet.size.x, 2)),
+		Rect2(carpet.position, Vector2(2, carpet.size.y)),
+		Rect2(carpet.position + Vector2(carpet.size.x - 2, 0), Vector2(2, carpet.size.y)),
+	]:
+		var e := ColorRect.new()
+		e.color = accent_c
+		e.position = edge.position
+		e.size = edge.size
+		world.add_child(e)
+	# Center emblem
+	var emblem := ColorRect.new()
+	emblem.color = accent_c.lightened(0.15)
+	emblem.position = Vector2(ROOM_W * TILE * 0.5 - 5, ROOM_H * TILE * 0.5 - 5)
+	emblem.size = Vector2(10, 10)
+	world.add_child(emblem)
+	var emblem_in := ColorRect.new()
+	emblem_in.color = floor_c
+	emblem_in.position = emblem.position + Vector2(2, 2)
+	emblem_in.size = Vector2(6, 6)
+	world.add_child(emblem_in)
 
 
 func _add_walls_and_doors(wall_c: Color, floor_c: Color, accent_c: Color, doors: Dictionary) -> void:
@@ -354,12 +428,28 @@ func _add_wall_rect(r: Rect2, wall_c: Color) -> void:
 	wall.position = r.position
 	wall.size = r.size
 	world.add_child(wall)
-	# Inner bevel
+	# Brick rows
+	var step := 8
+	var y := int(r.position.y)
+	while y < int(r.position.y + r.size.y):
+		var row := ColorRect.new()
+		row.color = wall_c.lightened(0.08 if (y / step) % 2 == 0 else -0.0)
+		if (y / step) % 2 != 0:
+			row.color = wall_c.darkened(0.08)
+		row.position = Vector2(r.position.x, y)
+		row.size = Vector2(r.size.x, 1)
+		world.add_child(row)
+		y += step
 	var bevel := ColorRect.new()
-	bevel.color = wall_c.lightened(0.15)
+	bevel.color = wall_c.lightened(0.18)
 	bevel.position = r.position + Vector2(1, 1)
 	bevel.size = Vector2(maxi(1, int(r.size.x) - 2), 2)
 	world.add_child(bevel)
+	var shade := ColorRect.new()
+	shade.color = wall_c.darkened(0.2)
+	shade.position = r.position + Vector2(0, maxf(0.0, r.size.y - 3))
+	shade.size = Vector2(r.size.x, mini(3.0, r.size.y))
+	world.add_child(shade)
 	var body := StaticBody2D.new()
 	body.collision_layer = 1
 	body.collision_mask = 0
@@ -413,35 +503,56 @@ func _add_locked_door_blocker(dir_name: String, accent_c: Color) -> void:
 
 
 func _add_door_trigger(dir_name: String, target_id: int, to_boss: bool, locked: bool, floor_c: Color, accent_c: Color) -> void:
-	# Floor gap visual
 	var gap := ColorRect.new()
-	gap.color = floor_c.lightened(0.08)
-	var frame := ColorRect.new()
-	frame.color = accent_c
+	gap.color = floor_c.lightened(0.1)
+	var frame_a := ColorRect.new()
+	frame_a.color = accent_c.darkened(0.15)
+	var frame_b := ColorRect.new()
+	frame_b.color = accent_c
+	var arrow := ColorRect.new()
+	arrow.color = accent_c.lightened(0.35)
 	match dir_name:
 		"n":
 			gap.position = Vector2(ROOM_W * TILE * 0.5 - TILE, 0)
 			gap.size = Vector2(TILE * 2, TILE)
-			frame.position = Vector2(ROOM_W * TILE * 0.5 - TILE, TILE - 3)
-			frame.size = Vector2(TILE * 2, 3)
+			frame_a.position = Vector2(ROOM_W * TILE * 0.5 - TILE - 2, 0)
+			frame_a.size = Vector2(2, TILE)
+			frame_b.position = Vector2(ROOM_W * TILE * 0.5 + TILE, 0)
+			frame_b.size = Vector2(2, TILE)
+			arrow.position = Vector2(ROOM_W * TILE * 0.5 - 3, TILE + 2)
+			arrow.size = Vector2(6, 4)
 		"s":
 			gap.position = Vector2(ROOM_W * TILE * 0.5 - TILE, (ROOM_H - 1) * TILE)
 			gap.size = Vector2(TILE * 2, TILE)
-			frame.position = Vector2(ROOM_W * TILE * 0.5 - TILE, (ROOM_H - 1) * TILE)
-			frame.size = Vector2(TILE * 2, 3)
+			frame_a.position = Vector2(ROOM_W * TILE * 0.5 - TILE - 2, (ROOM_H - 1) * TILE)
+			frame_a.size = Vector2(2, TILE)
+			frame_b.position = Vector2(ROOM_W * TILE * 0.5 + TILE, (ROOM_H - 1) * TILE)
+			frame_b.size = Vector2(2, TILE)
+			arrow.position = Vector2(ROOM_W * TILE * 0.5 - 3, (ROOM_H - 1) * TILE - 6)
+			arrow.size = Vector2(6, 4)
 		"w":
 			gap.position = Vector2(0, ROOM_H * TILE * 0.5 - TILE)
 			gap.size = Vector2(TILE, TILE * 2)
-			frame.position = Vector2(TILE - 3, ROOM_H * TILE * 0.5 - TILE)
-			frame.size = Vector2(3, TILE * 2)
+			frame_a.position = Vector2(0, ROOM_H * TILE * 0.5 - TILE - 2)
+			frame_a.size = Vector2(TILE, 2)
+			frame_b.position = Vector2(0, ROOM_H * TILE * 0.5 + TILE)
+			frame_b.size = Vector2(TILE, 2)
+			arrow.position = Vector2(TILE + 2, ROOM_H * TILE * 0.5 - 3)
+			arrow.size = Vector2(4, 6)
 		"e":
 			gap.position = Vector2((ROOM_W - 1) * TILE, ROOM_H * TILE * 0.5 - TILE)
 			gap.size = Vector2(TILE, TILE * 2)
-			frame.position = Vector2((ROOM_W - 1) * TILE, ROOM_H * TILE * 0.5 - TILE)
-			frame.size = Vector2(3, TILE * 2)
+			frame_a.position = Vector2((ROOM_W - 1) * TILE, ROOM_H * TILE * 0.5 - TILE - 2)
+			frame_a.size = Vector2(TILE, 2)
+			frame_b.position = Vector2((ROOM_W - 1) * TILE, ROOM_H * TILE * 0.5 + TILE)
+			frame_b.size = Vector2(TILE, 2)
+			arrow.position = Vector2((ROOM_W - 1) * TILE - 6, ROOM_H * TILE * 0.5 - 3)
+			arrow.size = Vector2(4, 6)
 	if not locked:
 		world.add_child(gap)
-		world.add_child(frame)
+		world.add_child(frame_a)
+		world.add_child(frame_b)
+		world.add_child(arrow)
 	var door_area := Area2D.new()
 	door_area.name = "Door_%s" % dir_name
 	door_area.set_meta("dir", dir_name)
@@ -451,59 +562,163 @@ func _add_door_trigger(dir_name: String, target_id: int, to_boss: bool, locked: 
 	door_area.collision_layer = 0
 	door_area.collision_mask = 4
 	door_area.monitoring = true
+	door_area.monitorable = true
 	var cs := CollisionShape2D.new()
 	var rs := RectangleShape2D.new()
-	# Place trigger just inside the room so player doesn't leave bounds first
+	# Large trigger zone well inside the room
 	match dir_name:
 		"n":
-			door_area.position = Vector2(ROOM_W * TILE * 0.5, TILE + 4)
-			rs.size = Vector2(TILE * 1.4, 8)
+			door_area.position = Vector2(ROOM_W * TILE * 0.5, TILE + 10)
+			rs.size = Vector2(TILE * 2.2, 18)
 		"s":
-			door_area.position = Vector2(ROOM_W * TILE * 0.5, (ROOM_H - 1) * TILE - 4)
-			rs.size = Vector2(TILE * 1.4, 8)
+			door_area.position = Vector2(ROOM_W * TILE * 0.5, (ROOM_H - 1) * TILE - 10)
+			rs.size = Vector2(TILE * 2.2, 18)
 		"w":
-			door_area.position = Vector2(TILE + 4, ROOM_H * TILE * 0.5)
-			rs.size = Vector2(8, TILE * 1.4)
+			door_area.position = Vector2(TILE + 10, ROOM_H * TILE * 0.5)
+			rs.size = Vector2(18, TILE * 2.2)
 		"e":
-			door_area.position = Vector2((ROOM_W - 1) * TILE - 4, ROOM_H * TILE * 0.5)
-			rs.size = Vector2(8, TILE * 1.4)
+			door_area.position = Vector2((ROOM_W - 1) * TILE - 10, ROOM_H * TILE * 0.5)
+			rs.size = Vector2(18, TILE * 2.2)
 	cs.shape = rs
 	door_area.add_child(cs)
 	world.add_child(door_area)
 
 
 func _draw_room_props(accent_c: Color, wall_c: Color, room: Dictionary) -> void:
-	# Pillars
-	for p in [Vector2(TILE * 3, TILE * 3), Vector2(TILE * 12, TILE * 3), Vector2(TILE * 3, TILE * 7), Vector2(TILE * 12, TILE * 7)]:
+	for p in [Vector2(TILE * 2.8, TILE * 2.5), Vector2(TILE * 12.5, TILE * 2.5), Vector2(TILE * 2.8, TILE * 7.2), Vector2(TILE * 12.5, TILE * 7.2)]:
 		_draw_pillar(p, wall_c, accent_c)
-	# Torches
-	for tp in [Vector2(TILE * 2.5, TILE * 1.4), Vector2(TILE * 13.2, TILE * 1.4)]:
+	for tp in [
+		Vector2(TILE * 2.2, TILE * 1.35), Vector2(TILE * 13.5, TILE * 1.35),
+		Vector2(TILE * 2.2, TILE * 8.6), Vector2(TILE * 13.5, TILE * 8.6),
+	]:
+		var bracket := ColorRect.new()
+		bracket.color = Color(0.32, 0.28, 0.22)
+		bracket.size = Vector2(8, 4)
+		bracket.position = tp + Vector2(-2, 7)
+		world.add_child(bracket)
 		var flame := ColorRect.new()
-		flame.color = Color(1.0, 0.65, 0.2, 0.9)
-		flame.size = Vector2(4, 6)
+		flame.color = Color(1.0, 0.62, 0.18, 0.95)
+		flame.size = Vector2(5, 7)
 		flame.position = tp
 		world.add_child(flame)
 		_torch_nodes.append(flame)
-		var bracket := ColorRect.new()
-		bracket.color = Color(0.35, 0.3, 0.25)
-		bracket.size = Vector2(6, 3)
-		bracket.position = tp + Vector2(-1, 6)
-		world.add_child(bracket)
-	# Rubble
-	for i in range(5):
+		var glow := ColorRect.new()
+		glow.color = Color(1.0, 0.55, 0.1, 0.18)
+		glow.size = Vector2(14, 14)
+		glow.position = tp + Vector2(-4, -3)
+		world.add_child(glow)
+	for i in range(8):
 		var r := ColorRect.new()
-		r.color = wall_c.darkened(0.1)
-		r.size = Vector2(3 + (i % 3), 2 + (i % 2))
-		r.position = Vector2(TILE * (4 + i), TILE * (8 + (i % 2)))
+		r.color = wall_c.darkened(0.05 + (i % 3) * 0.04)
+		r.size = Vector2(4 + (i % 4), 2 + (i % 3))
+		r.position = Vector2(TILE * (3.5 + (i % 5) * 1.6), TILE * (7.8 + (i % 3) * 0.4))
 		world.add_child(r)
-	# Room plaque
+	for bx in [TILE * 5.0, TILE * 10.0]:
+		var pole := ColorRect.new()
+		pole.color = Color(0.4, 0.35, 0.25)
+		pole.size = Vector2(2, 18)
+		pole.position = Vector2(bx, TILE * 1.2)
+		world.add_child(pole)
+		var cloth := ColorRect.new()
+		cloth.color = accent_c.darkened(0.1)
+		cloth.size = Vector2(12, 16)
+		cloth.position = Vector2(bx - 5, TILE * 1.35)
+		world.add_child(cloth)
+		var stripe := ColorRect.new()
+		stripe.color = accent_c.lightened(0.2)
+		stripe.size = Vector2(12, 3)
+		stripe.position = cloth.position + Vector2(0, 5)
+		world.add_child(stripe)
 	var kind := str(room.get("kind", "empty"))
 	if kind == "boss":
 		var banner := ColorRect.new()
-		banner.color = Color(0.45, 0.12, 0.15, 0.8)
-		banner.position = Vector2(TILE * 5, TILE * 1.6)
-		banner.size = Vector2(TILE * 6, 10)
+		banner.color = Color(0.42, 0.1, 0.12, 0.85)
+		banner.position = Vector2(TILE * 4.5, TILE * 1.55)
+		banner.size = Vector2(TILE * 7, 12)
 		world.add_child(banner)
+		var skull := ColorRect.new()
+		skull.color = Color(0.85, 0.8, 0.7)
+		skull.size = Vector2(8, 8)
+		skull.position = Vector2(ROOM_W * TILE * 0.5 - 4, TILE * 1.7)
+		world.add_child(skull)
+
+
+func _draw_theme_scenery(accent_c: Color, wall_c: Color, floor_c: Color) -> void:
+	var theme_name := str(_theme.get("name", "")).to_lower()
+	if "cave" in theme_name or "mine" in theme_name or "catacomb" in theme_name:
+		for i in range(6):
+			var rock := ColorRect.new()
+			rock.color = wall_c.lightened(0.05)
+			rock.size = Vector2(6 + i % 3, 10 + i % 5)
+			rock.position = Vector2(TILE * (3 + i * 1.7), TILE * 8.2 - (i % 2) * 4)
+			world.add_child(rock)
+			if i % 2 == 0:
+				var body := StaticBody2D.new()
+				body.position = rock.position + rock.size * 0.5
+				body.collision_layer = 1
+				var cs := CollisionShape2D.new()
+				var rs := RectangleShape2D.new()
+				rs.size = rock.size
+				cs.shape = rs
+				body.add_child(cs)
+				world.add_child(body)
+	elif "forest" in theme_name or "thorn" in theme_name:
+		for i in range(5):
+			var root := ColorRect.new()
+			root.color = Color(0.25, 0.4, 0.18)
+			root.size = Vector2(14, 3)
+			root.position = Vector2(TILE * (2.5 + i * 2.2), TILE * (3.5 + (i % 3)))
+			world.add_child(root)
+			var leaf := ColorRect.new()
+			leaf.color = accent_c
+			leaf.size = Vector2(5, 5)
+			leaf.position = root.position + Vector2(4, -4)
+			world.add_child(leaf)
+	elif "tower" in theme_name or "ruin" in theme_name or "ashen" in theme_name:
+		for wx in [TILE * 4.0, TILE * 11.0]:
+			var niche := ColorRect.new()
+			niche.color = floor_c.darkened(0.25)
+			niche.size = Vector2(14, 18)
+			niche.position = Vector2(wx, TILE * 1.15)
+			world.add_child(niche)
+			var pane := ColorRect.new()
+			pane.color = Color(accent_c.r, accent_c.g, accent_c.b, 0.35)
+			pane.size = Vector2(10, 12)
+			pane.position = niche.position + Vector2(2, 3)
+			world.add_child(pane)
+	elif "crypt" in theme_name or "keep" in theme_name:
+		for i in range(3):
+			var coffin := ColorRect.new()
+			coffin.color = wall_c.darkened(0.15)
+			coffin.size = Vector2(18, 8)
+			coffin.position = Vector2(TILE * (3.5 + i * 3.5), TILE * 7.6)
+			world.add_child(coffin)
+			var lid := ColorRect.new()
+			lid.color = accent_c.darkened(0.25)
+			lid.size = Vector2(18, 3)
+			lid.position = coffin.position + Vector2(0, -2)
+			world.add_child(lid)
+	else:
+		for i in range(4):
+			var crate := ColorRect.new()
+			crate.color = Color(0.42, 0.28, 0.14)
+			crate.size = Vector2(12, 12)
+			crate.position = Vector2(TILE * (3.2 + i * 2.5), TILE * 7.5)
+			world.add_child(crate)
+			var band := ColorRect.new()
+			band.color = Color(0.55, 0.45, 0.25)
+			band.size = Vector2(12, 2)
+			band.position = crate.position + Vector2(0, 5)
+			world.add_child(band)
+	for corner in [
+		Vector2(TILE, TILE), Vector2((ROOM_W - 3) * TILE, TILE),
+		Vector2(TILE, (ROOM_H - 3) * TILE), Vector2((ROOM_W - 3) * TILE, (ROOM_H - 3) * TILE),
+	]:
+		var v := ColorRect.new()
+		v.color = Color(0, 0, 0, 0.22)
+		v.position = corner
+		v.size = Vector2(TILE * 2, TILE * 2)
+		world.add_child(v)
 
 
 func _draw_pillar(pos: Vector2, wall_c: Color, accent_c: Color) -> void:
@@ -722,7 +937,9 @@ func _on_player_down() -> void:
 func _on_attack() -> void:
 	if _transitioning or _attack_cd > 0.0 or _warrior == null:
 		return
-	_attack_cd = 0.28
+	_attack_cd = 0.32
+	_attack_anim_t = 0.22
+	_attack_anim_special = false
 	_do_melee(false)
 
 
@@ -733,8 +950,10 @@ func _on_special() -> void:
 		_show_message("Not enough energy for %s!" % _warrior.special_move)
 		_update_hud()
 		return
-	_special_cd = 0.55
-	_attack_cd = 0.35
+	_special_cd = 0.6
+	_attack_cd = 0.4
+	_attack_anim_t = 0.28
+	_attack_anim_special = true
 	GameState.save_adventure_warrior(_warrior)
 	_show_message(_warrior.special_move + "!")
 	_do_melee(true)
@@ -742,56 +961,58 @@ func _on_special() -> void:
 
 
 func _do_melee(is_special: bool) -> void:
-	var reach := 22.0 if is_special else 16.0
-	var size := Vector2(28, 28) if is_special else Vector2(18, 18)
+	var reach := 24.0 if is_special else 17.0
 	var center := player.position + _facing * reach
-	# Swing visual
-	var slash := ColorRect.new()
-	slash.color = _warrior.tint_accent if is_special else Color(0.9, 0.9, 0.95, 0.85)
-	slash.size = size
-	slash.position = center - size * 0.5
-	slash.z_index = 25
-	world.add_child(slash)
-	get_tree().create_timer(0.12).timeout.connect(func():
-		if is_instance_valid(slash):
-			slash.queue_free()
-	)
+	var col := _warrior.tint_accent if is_special else Color(0.85, 0.88, 0.95)
+	CombatFx.spawn_slash(world, center, _facing, col, is_special)
 	var power := _warrior.special_power if is_special else _warrior.regular_power
 	for e in _enemies.duplicate():
 		if not is_instance_valid(e):
 			continue
-		if e.position.distance_to(center) <= (26.0 if is_special else 17.0):
+		var hit_r := 28.0 if is_special else 18.0
+		if e.position.distance_to(center) <= hit_r or e.position.distance_to(player.position) <= hit_r * 0.75:
 			var def := 10
 			if e.get("warrior") != null:
 				def = int(e.warrior.defense)
 			var dmg := _warrior.calc_damage(power, def, is_special)
 			e.call("take_hit", dmg, player.position)
+			CombatFx.spawn_hit_spark(world, e.position, col)
 
 
 func _check_doors() -> void:
 	if _transitioning:
 		return
-	# Must clear enemies before leaving (ALttP style), except already-cleared rooms
+	# Purge dead refs
 	var live := 0
+	var kept: Array = []
 	for e in _enemies:
 		if is_instance_valid(e) and e.call("is_alive_enemy"):
 			live += 1
+			kept.append(e)
+	_enemies = kept
 	for child in world.get_children():
 		if not (child is Area2D and str(child.name).begins_with("Door_")):
 			continue
 		var area := child as Area2D
-		if not _body_overlaps(area):
+		if not _near_door(area):
 			continue
 		if bool(area.get_meta("locked", false)):
 			_show_message("Locked. Find the dungeon key.")
-			_door_cooldown = 0.5
+			_door_cooldown = 0.4
 			return
 		if live > 0:
 			_show_message("Defeat the enemies first!")
-			_door_cooldown = 0.45
+			_door_cooldown = 0.35
 			return
 		_enter_room(int(area.get_meta("target")), str(area.get_meta("dir")))
 		return
+
+
+func _near_door(area: Area2D) -> bool:
+	if _body_overlaps(area):
+		return true
+	# Reliable distance fallback — clamp used to block overlap
+	return player.position.distance_to(area.position) <= 16.0
 
 
 func _body_overlaps(area: Area2D) -> bool:
