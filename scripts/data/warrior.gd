@@ -253,9 +253,29 @@ func variant_label() -> String:
 	]
 
 
+func weapon_profile() -> Dictionary:
+	return WeaponData.profile(faction)
+
+
+func prefers_ranged() -> bool:
+	var p := weapon_profile()
+	return str(p.get("style", "melee")) == "ranged"
+
+
+func can_ranged() -> bool:
+	return bool(weapon_profile().get("can_ranged", false))
+
+
 func display_modulate() -> Color:
-	## Near-neutral base sprite; clothing overlays carry packaging color.
-	return Color(0.96, 0.96, 0.97, 1.0)
+	## Soft packaging tint on the sprite itself (no blocky overlays).
+	var c := outfit_primary()
+	var blend := 0.28
+	return Color(
+		c.r * blend + (1.0 - blend),
+		c.g * blend + (1.0 - blend),
+		c.b * blend + (1.0 - blend),
+		1.0
+	)
 
 
 func outfit_primary() -> Color:

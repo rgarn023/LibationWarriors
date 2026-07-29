@@ -7,7 +7,8 @@ const ROOM_W := 16
 const ROOM_H := 11
 const ENEMY_SCRIPT := preload("res://scripts/adventure/dungeon_enemy.gd")
 const ROOM_DRAW_SCRIPT := preload("res://scripts/adventure/dungeon_room_draw.gd")
-const GEAR_SCRIPT := preload("res://scripts/adventure/warrior_gear.gd")
+const WEAPON_SCRIPT := preload("res://scripts/adventure/dungeon_weapon.gd")
+const PROJECTILE_SCRIPT := preload("res://scripts/adventure/dungeon_projectile.gd")
 const COMBAT_FX := preload("res://scripts/adventure/combat_fx.gd")
 
 @onready var world: Node2D = $World
@@ -40,7 +41,6 @@ var _anim_t: float = 0.0
 var _anim_frame: int = 0
 var _player_sprite: Sprite2D
 var _player_sheet: Texture2D
-var _player_gear: Node2D
 var _attack_cd: float = 0.0
 var _special_cd: float = 0.0
 var _hurt_invuln: float = 0.0
@@ -53,6 +53,7 @@ var _attack_anim_special: bool = false
 var _door_dirs: Array = []
 var _room_art: Node2D
 var _controls_wired: bool = false
+var _weapon_profile: Dictionary = {}
 
 
 func _ready() -> void:
@@ -121,11 +122,17 @@ func _setup_camera() -> void:
 func _setup_player() -> void:
 	player.collision_layer = 4
 	player.collision_mask = 1
+	player.add_to_group("dungeon_player")
+	_weapon_profile = _warrior.weapon_profile()
 	_player_sprite = player.get_node_or_null("Sprite") as Sprite2D
 	if _player_sprite == null:
 		_player_sprite = Sprite2D.new()
 		_player_sprite.name = "Sprite"
 		player.add_child(_player_sprite)
+	# Remove leftover outfit overlays from older builds
+	for child in player.get_children():
+		if str(child.name) == "OutfitGear":
+			child.queue_free()
 	_player_sprite.centered = true
 	_player_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_player_sprite.scale = Vector2(0.42, 0.42)
@@ -137,12 +144,6 @@ func _setup_player() -> void:
 	elif ResourceLoader.exists(_warrior.sprite_path()):
 		_player_sprite.texture = load(_warrior.sprite_path())
 	_player_sprite.modulate = _warrior.display_modulate()
-	if _player_gear and is_instance_valid(_player_gear):
-		_player_gear.queue_free()
-	_player_gear = GEAR_SCRIPT.new()
-	_player_gear.name = "OutfitGear"
-	player.add_child(_player_gear)
-	_player_gear.call("configure", _warrior, 0.42, true)
 	var col: CollisionShape2D = player.get_node_or_null("Collision")
 	if col and col.shape is RectangleShape2D:
 		(col.shape as RectangleShape2D).size = Vector2(10, 12)
@@ -189,7 +190,7 @@ func _physics_process(delta: float) -> void:
 		_on_special()
 
 	if dir != Vector2.ZERO and _attack_anim_t <= 0.0:
-		_facing = dir.normalized()
+		_facing = WeaponData.cardinal(dir)
 		_anim_t += delta
 		if _anim_t >= 0.12:
 			_anim_t = 0.0
@@ -214,12 +215,8 @@ func _physics_process(delta: float) -> void:
 
 func _animate_attack_pose() -> void:
 	var t := clampf(_attack_anim_t / 0.22, 0.0, 1.0)
-	var lunge := (1.0 - absf(t - 0.5) * 2.0) * (6.0 if _attack_anim_special else 4.0)
+	var lunge := (1.0 - absf(t - 0.5) * 2.0) * (5.0 if _attack_anim_special else 3.5)
 	_player_sprite.offset = _facing * lunge
-	_player_sprite.rotation = _facing.x * 0.25 * (1.0 if _attack_anim_special else 0.15)
-	if _player_gear:
-		_player_gear.position = _player_sprite.offset
-		_player_gear.rotation = _player_sprite.rotation
 	if _attack_anim_special:
 		_player_sprite.modulate = _warrior.outfit_accent().lerp(_warrior.display_modulate(), 1.0 - t)
 	if _attack_anim_t <= 0.0:
@@ -227,9 +224,6 @@ func _animate_attack_pose() -> void:
 		_player_sprite.rotation = 0.0
 		_player_sprite.modulate = _warrior.display_modulate()
 		_player_sprite.modulate.a = 1.0
-		if _player_gear:
-			_player_gear.position = Vector2.ZERO
-			_player_gear.rotation = 0.0
 
 
 func _set_player_frame(frame: int) -> void:
@@ -237,8 +231,6 @@ func _set_player_frame(frame: int) -> void:
 		return
 	_player_sprite.region_rect = Rect2(frame * 64, 0, 64, 80)
 	_player_sprite.flip_h = _facing.x < -0.2
-	if _player_gear:
-		_player_gear.scale.x = -1.0 if _facing.x < -0.2 else 1.0
 
 
 func _clamp_player_in_room() -> void:
@@ -497,7 +489,25 @@ func _spawn_enemy(wdict: Dictionary, boss: bool, pos: Vector2) -> void:
 	world.add_child(e)
 	e.call("setup", wdict, player, boss)
 	e.connect("died", _on_enemy_died)
+	if e.has_signal("damaged_player"):
+		e.connect("damaged_player", _on_enemy_damaged_player)
 	_enemies.append(e)
+
+
+func _on_enemy_damaged_player(amount: int, from_pos: Vector2) -> void:
+	if _hurt_invuln > 0.0 or _warrior == null:
+		return
+	_warrior.current_hp = maxi(0, _warrior.current_hp - amount)
+	_hurt_invuln = 0.75
+	_show_message("Hit for %d!" % amount)
+	GameState.save_adventure_warrior(_warrior)
+	if not _warrior.is_alive():
+		_on_player_down()
+	_update_hud()
+	# Small knock visual
+	var away := (player.position - from_pos).normalized()
+	if away != Vector2.ZERO:
+		player.position += away * 4.0
 
 
 func _open_chest(area: Area2D) -> void:
@@ -594,6 +604,7 @@ func _check_pickups() -> void:
 
 
 func _check_enemy_contact() -> void:
+	## Light bump damage only — main hurts come from facing weapon swings / projectiles.
 	if _hurt_invuln > 0.0:
 		return
 	for e in _enemies:
@@ -601,15 +612,9 @@ func _check_enemy_contact() -> void:
 			continue
 		if not e.call("is_alive_enemy"):
 			continue
-		if player.global_position.distance_to(e.global_position) < 16.0:
-			var dmg: int = int(e.get("contact_damage"))
-			_warrior.current_hp = maxi(0, _warrior.current_hp - dmg)
-			_hurt_invuln = 0.85
-			_show_message("Hit for %d!" % dmg)
-			GameState.save_adventure_warrior(_warrior)
-			if not _warrior.is_alive():
-				_on_player_down()
-			_update_hud()
+		if player.global_position.distance_to(e.global_position) < 11.0:
+			var dmg: int = maxi(2, int(e.get("contact_damage") * 0.35))
+			_on_enemy_damaged_player(dmg, e.global_position)
 			return
 
 
@@ -625,10 +630,11 @@ func _on_player_down() -> void:
 func _on_attack() -> void:
 	if _transitioning or _attack_cd > 0.0 or _warrior == null:
 		return
-	_attack_cd = 0.32
+	_facing = WeaponData.cardinal(_facing)
+	_attack_cd = 0.34
 	_attack_anim_t = 0.22
 	_attack_anim_special = false
-	_do_melee(false)
+	_perform_attack(false)
 
 
 func _on_special() -> void:
@@ -638,33 +644,83 @@ func _on_special() -> void:
 		_show_message("Not enough energy for %s!" % _warrior.special_move)
 		_update_hud()
 		return
-	_special_cd = 0.6
-	_attack_cd = 0.4
+	_facing = WeaponData.cardinal(_facing)
+	_special_cd = 0.65
+	_attack_cd = 0.42
 	_attack_anim_t = 0.28
 	_attack_anim_special = true
 	GameState.save_adventure_warrior(_warrior)
 	_show_message(_warrior.special_move + "!")
-	_do_melee(true)
+	_perform_attack(true)
 	_update_hud()
 
 
-func _do_melee(is_special: bool) -> void:
-	var reach := 24.0 if is_special else 17.0
+func _perform_attack(is_special: bool) -> void:
+	var profile := _weapon_profile if not _weapon_profile.is_empty() else _warrior.weapon_profile()
+	var shape := str(profile.get("shape", "sword"))
+	var col: Color = WeaponData.finish_color(profile.get("color", _warrior.outfit_accent()), _warrior.variant_weapon_style)
+	var use_ranged := false
+	if bool(profile.get("can_ranged", false)):
+		if str(profile.get("style", "")) == "ranged":
+			use_ranged = true
+		elif is_special:
+			use_ranged = true
+		elif str(profile.get("style", "")) == "hybrid" and _warrior.prefers_ranged():
+			use_ranged = true
+	# Spawn facing weapon pose
+	var wpn: Sprite2D = WEAPON_SCRIPT.new()
+	world.add_child(wpn)
+	wpn.call("play", player.position, _facing, shape, col, is_special)
+	if use_ranged:
+		_fire_player_projectile(is_special, profile, col)
+	else:
+		_do_facing_melee(is_special, profile, col)
+
+
+func _fire_player_projectile(is_special: bool, profile: Dictionary, col: Color) -> void:
+	var kind := str(profile.get("projectile", "bolt"))
+	var power := _warrior.special_power if is_special else _warrior.regular_power
+	var spd := 140.0 if is_special else 115.0
+	var proj: Area2D = PROJECTILE_SCRIPT.new()
+	world.add_child(proj)
+	var dmg := _warrior.calc_damage(power, 10, is_special)
+	# Damage recalculated on hit with real defense
+	proj.call("setup", player.position + _facing * 12.0, _facing, spd, dmg, "player", kind, col)
+	proj.hit_enemy.connect(func(enemy: Node, _amt: int, from_pos: Vector2):
+		if not is_instance_valid(enemy):
+			return
+		var def := 10
+		if enemy.get("warrior") != null:
+			def = int(enemy.warrior.defense)
+		var real := _warrior.calc_damage(power, def, is_special)
+		enemy.call("take_hit", real, from_pos)
+		COMBAT_FX.spawn_hit_spark(world, enemy.position, col)
+	)
+
+
+func _do_facing_melee(is_special: bool, profile: Dictionary, col: Color) -> void:
+	var reach: float = float(profile.get("melee_reach", 18.0)) * (1.25 if is_special else 1.0)
 	var center := player.position + _facing * reach
-	var col := _warrior.outfit_accent() if is_special else Color(0.85, 0.88, 0.95)
 	COMBAT_FX.spawn_slash(world, center, _facing, col, is_special)
 	var power := _warrior.special_power if is_special else _warrior.regular_power
+	var hit_r := reach * 0.85 + (6.0 if is_special else 2.0)
 	for e in _enemies.duplicate():
 		if not is_instance_valid(e):
 			continue
-		var hit_r := 28.0 if is_special else 18.0
-		if e.position.distance_to(center) <= hit_r or e.position.distance_to(player.position) <= hit_r * 0.75:
-			var def := 10
-			if e.get("warrior") != null:
-				def = int(e.warrior.defense)
-			var dmg := _warrior.calc_damage(power, def, is_special)
-			e.call("take_hit", dmg, player.position)
-			COMBAT_FX.spawn_hit_spark(world, e.position, col)
+		var to_e: Vector2 = e.position - player.position
+		if to_e.length() > hit_r + 8.0:
+			continue
+		# Must be in the facing cone
+		if to_e != Vector2.ZERO and _facing.dot(to_e.normalized()) < 0.35:
+			continue
+		if e.position.distance_to(center) > hit_r and to_e.length() > reach * 0.7:
+			continue
+		var def := 10
+		if e.get("warrior") != null:
+			def = int(e.warrior.defense)
+		var dmg := _warrior.calc_damage(power, def, is_special)
+		e.call("take_hit", dmg, player.position)
+		COMBAT_FX.spawn_hit_spark(world, e.position, col)
 
 
 func _check_doors() -> void:
@@ -740,7 +796,8 @@ func _update_hud() -> void:
 	level_label.text = "Lv.%d %s" % [_warrior.level, _warrior.name]
 	special_btn.disabled = not _warrior.can_special()
 	special_btn.text = "Special (%d)" % Warrior.SPECIAL_ENERGY_COST
-	attack_btn.text = "Attack"
+	var shape := str(_weapon_profile.get("shape", "Attack"))
+	attack_btn.text = shape.capitalize() if not _warrior.prefers_ranged() else "Shoot"
 
 
 func _show_message(msg: String) -> void:
