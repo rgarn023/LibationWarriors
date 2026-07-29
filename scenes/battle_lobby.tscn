@@ -1,0 +1,97 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/battle_lobby.gd" id="1"]
+
+[node name="BattleLobby" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1")
+
+[node name="BG" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0.07, 0.06, 0.1, 1)
+
+[node name="VBox" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 20.0
+offset_top = 24.0
+offset_right = -20.0
+offset_bottom = -20.0
+theme_override_constants/separation = 12
+
+[node name="Header" type="Label" parent="VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.85, 0.62, 0.22, 1)
+theme_override_font_sizes/font_size = 28
+text = "Battle Lobby"
+horizontal_alignment = 1
+
+[node name="PartySummary" type="Label" parent="VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.9, 0.88, 0.8, 1)
+theme_override_font_sizes/font_size = 15
+autowrap_mode = 3
+text = "Party: empty"
+
+[node name="StatusLabel" type="Label" parent="VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.75, 0.7, 0.6, 1)
+theme_override_font_sizes/font_size = 14
+autowrap_mode = 3
+text = "Choose Local or Online."
+
+[node name="BtnLocal" type="Button" parent="VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Play Locally"
+
+[node name="OnlineHeader" type="Label" parent="VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.85, 0.62, 0.22, 1)
+theme_override_font_sizes/font_size = 18
+text = "Search Online"
+
+[node name="AddressInput" type="LineEdit" parent="VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+placeholder_text = "Host IP address"
+
+[node name="PortInput" type="LineEdit" parent="VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+placeholder_text = "Port"
+text = "7777"
+
+[node name="BtnHost" type="Button" parent="VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Host Lobby"
+
+[node name="BtnJoin" type="Button" parent="VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Join Lobby"
+
+[node name="BtnReady" type="Button" parent="VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Send Party / Ready"
+
+[node name="BtnBack" type="Button" parent="VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Back"

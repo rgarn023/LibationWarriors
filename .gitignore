@@ -1,0 +1,15 @@
+# Ignore Godot editor cache
+.godot/
+.import/
+*.translation
+
+# Signing leftovers
+*.idsig
+*.keystore
+
+# OS / editor
+.DS_Store
+*~
+*.tmp
+
+local.properties
