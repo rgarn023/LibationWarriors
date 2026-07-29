@@ -5,7 +5,7 @@ config_version=5
 
 config/name="Libation Warriors"
 config/description="Scan bottles to summon unique 16-bit libation warriors. Collect, form parties of three, and battle locally or online."
-config/version="1.5.2"
+config/version="1.5.3"
 run/main_scene="res://scenes/main_menu.tscn"
 config/features=PackedStringArray("4.7", "Mobile")
 config/icon="res://assets/icons/app_icon.png"

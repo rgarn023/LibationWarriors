@@ -3,162 +3,126 @@ extends RefCounted
 ## Layered warrior portraits — variants dress the warrior (gear), not the background.
 
 const PATTERN_NAMES := ["Plainweave", "Striped", "Marbled", "Runed", "Speckled", "Banded"]
-const CREST_GLYPHS := ["·", "+", ")", "‡", "~"]
+const CREST_GLYPHS := ["·", "+", ")", "#", "~"]
+const GEAR_SCRIPT := preload("res://scripts/adventure/warrior_gear.gd")
 
 
 static func make_portrait(warrior: Warrior, size: Vector2 = Vector2(120, 150)) -> Control:
 	var root := Control.new()
 	root.custom_minimum_size = size
 	root.size = size
+	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# Keep size stable when parented under a bare Control (adventure PreviewHost).
+	root.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+	root.offset_right = size.x
+	root.offset_bottom = size.y
+
+	var w := size.x
+	var h := size.y
 
 	# Neutral frame — same for every warrior so outfit is the variation signal.
-	var bg := ColorRect.new()
-	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	bg.color = Color(0.12, 0.13, 0.16, 0.95)
-	root.add_child(bg)
+	_rect(root, Color(0.14, 0.15, 0.18, 1), 0, 0, w, h)
+	_rect(root, Color(0.09, 0.1, 0.12, 1), 0, h * 0.78, w, h * 0.22)
 
-	var floor_strip := ColorRect.new()
-	floor_strip.anchor_top = 0.78
-	floor_strip.anchor_bottom = 1.0
-	floor_strip.anchor_right = 1.0
-	floor_strip.offset_left = 0
-	floor_strip.offset_right = 0
-	floor_strip.offset_top = 0
-	floor_strip.offset_bottom = 0
-	floor_strip.color = Color(0.08, 0.09, 0.11, 1)
-	floor_strip.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(floor_strip)
+	var primary := warrior.outfit_primary()
+	var secondary := warrior.outfit_secondary()
+	var accent := warrior.outfit_accent()
 
+	# Cape behind the sprite
+	_rect(root, Color(secondary.r, secondary.g, secondary.b, 0.75), w * 0.06, h * 0.28, w * 0.2, h * 0.42)
+	_rect(root, Color(secondary.r, secondary.g, secondary.b, 0.75), w * 0.74, h * 0.28, w * 0.2, h * 0.42)
+
+	# Character art (explicit rect — anchors on zero-size parents hide TextureRect)
 	var tr := TextureRect.new()
-	tr.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	tr.offset_left = 10
-	tr.offset_top = 6
-	tr.offset_right = -10
-	tr.offset_bottom = -28
+	tr.position = Vector2(w * 0.12, h * 0.04)
+	tr.size = Vector2(w * 0.76, h * 0.72)
 	tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	tr.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	if ResourceLoader.exists(warrior.preview_path()):
-		tr.texture = load(warrior.preview_path())
+	tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var path := warrior.preview_path()
+	if ResourceLoader.exists(path):
+		tr.texture = load(path)
+	elif ResourceLoader.exists(warrior.sprite_path()):
+		tr.texture = load(warrior.sprite_path())
 	tr.modulate = warrior.display_modulate()
 	root.add_child(tr)
 
-	# Clothing layers (Control ColorRects over the sprite midsection)
-	_add_clothing_layers(root, warrior)
+	# Clothing overlays on top of the sprite (sash / armor / crest)
+	_add_clothing_pixels(root, warrior, primary, secondary, accent, w, h)
 
 	var footer := Label.new()
 	footer.text = "Lv%d · %s" % [warrior.level, PATTERN_NAMES[warrior.variant_pattern % PATTERN_NAMES.size()]]
 	footer.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	footer.anchor_top = 0.86
-	footer.anchor_bottom = 1.0
-	footer.anchor_right = 1.0
+	footer.position = Vector2(0, h * 0.86)
+	footer.size = Vector2(w, h * 0.14)
 	footer.add_theme_font_size_override("font_size", 11)
-	footer.add_theme_color_override("font_color", Color(0.88, 0.86, 0.8))
+	footer.add_theme_color_override("font_color", Color(0.9, 0.88, 0.82))
+	footer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(footer)
 
 	return root
 
 
-static func _add_clothing_layers(root: Control, warrior: Warrior) -> void:
-	var primary := warrior.outfit_primary()
-	var secondary := warrior.outfit_secondary()
-	var accent := warrior.outfit_accent()
+static func _rect(root: Control, color: Color, x: float, y: float, rw: float, rh: float) -> void:
+	var r := ColorRect.new()
+	r.color = color
+	r.position = Vector2(x, y)
+	r.size = Vector2(rw, rh)
+	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(r)
 
-	# Cape / cloak panels
-	var cape_l := ColorRect.new()
-	cape_l.anchor_left = 0.08
-	cape_l.anchor_right = 0.28
-	cape_l.anchor_top = 0.28
-	cape_l.anchor_bottom = 0.72
-	cape_l.color = Color(secondary.r, secondary.g, secondary.b, 0.7)
-	cape_l.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(cape_l)
-	var cape_r := ColorRect.new()
-	cape_r.anchor_left = 0.72
-	cape_r.anchor_right = 0.92
-	cape_r.anchor_top = 0.28
-	cape_r.anchor_bottom = 0.72
-	cape_r.color = Color(secondary.r, secondary.g, secondary.b, 0.7)
-	cape_r.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(cape_r)
 
-	# Pattern-specific gear
+static func _add_clothing_pixels(root: Control, warrior: Warrior, primary: Color, secondary: Color, accent: Color, w: float, h: float) -> void:
 	match warrior.variant_pattern % 6:
 		1: # Striped pauldrons
-			_band(root, 0.12, 0.4, 0.22, 0.32, primary)
-			_band(root, 0.6, 0.88, 0.22, 0.32, primary)
-			_band(root, 0.12, 0.4, 0.28, 0.31, accent)
-			_band(root, 0.6, 0.88, 0.28, 0.31, accent)
+			_rect(root, primary, w * 0.14, h * 0.22, w * 0.22, h * 0.1)
+			_rect(root, primary, w * 0.64, h * 0.22, w * 0.22, h * 0.1)
+			_rect(root, accent, w * 0.14, h * 0.28, w * 0.22, h * 0.03)
+			_rect(root, accent, w * 0.64, h * 0.28, w * 0.22, h * 0.03)
 		2: # Marbled wrap
-			_band(root, 0.22, 0.78, 0.42, 0.55, Color(primary.r, primary.g, primary.b, 0.85))
-			_band(root, 0.26, 0.74, 0.46, 0.5, secondary)
+			_rect(root, Color(primary.r, primary.g, primary.b, 0.85), w * 0.22, h * 0.42, w * 0.56, h * 0.12)
+			_rect(root, secondary, w * 0.26, h * 0.46, w * 0.48, h * 0.04)
 		3: # Runed plate
-			_band(root, 0.3, 0.7, 0.3, 0.55, Color(primary.r, primary.g, primary.b, 0.8))
-			_band(root, 0.42, 0.58, 0.4, 0.48, accent)
+			_rect(root, Color(primary.r, primary.g, primary.b, 0.8), w * 0.3, h * 0.3, w * 0.4, h * 0.24)
+			_rect(root, accent, w * 0.42, h * 0.38, w * 0.16, h * 0.08)
 		4: # Speckled clasp
-			_band(root, 0.44, 0.56, 0.26, 0.34, accent)
+			_rect(root, accent, w * 0.44, h * 0.26, w * 0.12, h * 0.08)
 			for i in 4:
-				var speck := ColorRect.new()
-				speck.anchor_left = 0.3 + (i % 2) * 0.25
-				speck.anchor_right = speck.anchor_left + 0.06
-				speck.anchor_top = 0.48 + (i / 2) * 0.1
-				speck.anchor_bottom = speck.anchor_top + 0.05
-				speck.color = primary
-				speck.mouse_filter = Control.MOUSE_FILTER_IGNORE
-				root.add_child(speck)
+				_rect(root, primary, w * (0.32 + (i % 2) * 0.28), h * (0.48 + int(i / 2) * 0.08), w * 0.05, h * 0.04)
 		5: # Banded belts
-			_band(root, 0.25, 0.75, 0.48, 0.54, secondary)
-			_band(root, 0.25, 0.75, 0.54, 0.59, primary)
-			_band(root, 0.25, 0.75, 0.59, 0.63, accent)
+			_rect(root, secondary, w * 0.25, h * 0.48, w * 0.5, h * 0.05)
+			_rect(root, primary, w * 0.25, h * 0.54, w * 0.5, h * 0.05)
+			_rect(root, accent, w * 0.25, h * 0.59, w * 0.5, h * 0.04)
 		_: # Plainweave sash
-			_band(root, 0.22, 0.78, 0.48, 0.58, primary)
-			_band(root, 0.22, 0.78, 0.51, 0.54, accent)
+			_rect(root, primary, w * 0.22, h * 0.48, w * 0.56, h * 0.1)
+			_rect(root, accent, w * 0.22, h * 0.51, w * 0.56, h * 0.03)
 
 	# Belt buckle
-	_band(root, 0.44, 0.56, 0.52, 0.6, accent)
+	_rect(root, accent, w * 0.44, h * 0.52, w * 0.12, h * 0.08)
 
-	# Crest
+	# Crest glyph
 	var crest := Label.new()
 	crest.text = CREST_GLYPHS[warrior.variant_crest % CREST_GLYPHS.size()]
 	crest.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	crest.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	crest.anchor_left = 0.4
-	crest.anchor_right = 0.6
-	crest.anchor_top = 0.34
-	crest.anchor_bottom = 0.46
+	crest.position = Vector2(w * 0.38, h * 0.34)
+	crest.size = Vector2(w * 0.24, h * 0.1)
 	crest.add_theme_font_size_override("font_size", 16)
 	crest.add_theme_color_override("font_color", accent)
 	crest.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(crest)
 
 	# Weapon finish stripe
-	var weapon := ColorRect.new()
-	weapon.anchor_left = 0.78
-	weapon.anchor_right = 0.84
-	weapon.anchor_top = 0.3
-	weapon.anchor_bottom = 0.62
+	var wcol := Color(0.7, 0.72, 0.75, 0.85)
 	match warrior.variant_weapon_style % 4:
 		1:
-			weapon.color = Color(0.9, 0.92, 1.0, 0.9)
+			wcol = Color(0.9, 0.92, 1.0, 0.95)
 		2:
-			weapon.color = Color(0.25, 0.28, 0.35, 0.95)
+			wcol = Color(0.25, 0.28, 0.35, 0.95)
 		3:
-			weapon.color = Color(0.95, 0.8, 0.35, 0.95)
-		_:
-			weapon.color = Color(0.7, 0.72, 0.75, 0.75)
-	weapon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(weapon)
-
-
-static func _band(root: Control, l: float, r: float, t: float, b: float, color: Color) -> void:
-	var rect := ColorRect.new()
-	rect.anchor_left = l
-	rect.anchor_right = r
-	rect.anchor_top = t
-	rect.anchor_bottom = b
-	rect.color = color
-	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(rect)
+			wcol = Color(0.95, 0.8, 0.35, 0.95)
+	_rect(root, wcol, w * 0.78, h * 0.3, w * 0.05, h * 0.32)
 
 
 static func apply_to_texture_rect(tr: TextureRect, warrior: Warrior) -> void:
@@ -166,6 +130,8 @@ static func apply_to_texture_rect(tr: TextureRect, warrior: Warrior) -> void:
 		return
 	if ResourceLoader.exists(warrior.preview_path()):
 		tr.texture = load(warrior.preview_path())
+	elif ResourceLoader.exists(warrior.sprite_path()):
+		tr.texture = load(warrior.sprite_path())
 	tr.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	tr.modulate = warrior.display_modulate()
 

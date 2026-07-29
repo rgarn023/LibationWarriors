@@ -7,7 +7,6 @@ const ROOM_W := 16
 const ROOM_H := 11
 const ENEMY_SCRIPT := preload("res://scripts/adventure/dungeon_enemy.gd")
 const ROOM_DRAW_SCRIPT := preload("res://scripts/adventure/dungeon_room_draw.gd")
-const PIXEL_BOX_SCRIPT := preload("res://scripts/adventure/pixel_box.gd")
 const GEAR_SCRIPT := preload("res://scripts/adventure/warrior_gear.gd")
 const COMBAT_FX := preload("res://scripts/adventure/combat_fx.gd")
 
@@ -111,9 +110,12 @@ func _setup_camera() -> void:
 	_cam.enabled = true
 	_cam.position = Vector2(ROOM_W * TILE * 0.5, ROOM_H * TILE * 0.45)
 	# Zoom so the full room fits a 720x1280 portrait viewport with HUD margins.
-	_cam.zoom = Vector2(2.1, 2.1)
+	_cam.zoom = Vector2(2.45, 2.45)
 	add_child(_cam)
 	_cam.make_current()
+	# Ensure world is above the clear color and camera can see room origin.
+	world.z_index = 0
+	player.z_as_relative = true
 
 
 func _setup_player() -> void:
@@ -152,7 +154,7 @@ func _process(delta: float) -> void:
 		if _message_timer <= 0.0 and message_label:
 			message_label.text = ""
 	_torch_t += delta
-	if _room_art != null and is_instance_valid(_room_art) and _torch_t >= 0.12:
+	if _room_art != null and is_instance_valid(_room_art) and _torch_t >= 0.22:
 		_torch_t = 0.0
 		_room_art.call("set_torch_phase", Time.get_ticks_msec() * 0.001)
 
@@ -451,11 +453,16 @@ func _add_door_triggers(doors: Dictionary) -> void:
 
 
 func _box(color: Color, size: Vector2, pos: Vector2, parent: Node = null) -> Node2D:
-	var n: Node2D = PIXEL_BOX_SCRIPT.new()
-	n.position = pos
-	n.call("configure", color, size, false)
-	(parent if parent else world).add_child(n)
-	return n
+	## Sprite2D-backed pixel box (same path as character sprites on Android).
+	var img := Image.create(maxi(1, int(size.x)), maxi(1, int(size.y)), false, Image.FORMAT_RGBA8)
+	img.fill(color)
+	var spr := Sprite2D.new()
+	spr.centered = false
+	spr.position = pos
+	spr.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	spr.texture = ImageTexture.create_from_image(img)
+	(parent if parent else world).add_child(spr)
+	return spr
 
 
 func _spawn_chest(has_key: bool, pos: Vector2, accent_c: Color) -> void:

@@ -78,6 +78,8 @@ func _select(w: Warrior) -> void:
 	for c in preview_host.get_children():
 		c.queue_free()
 	var portrait := WarriorPortrait.make_portrait(w, Vector2(140, 175))
+	portrait.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	preview_host.custom_minimum_size = Vector2(140, 175)
 	preview_host.add_child(portrait)
 	_update_dungeon_preview()
 

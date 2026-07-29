@@ -54,13 +54,16 @@ func setup(data: Dictionary, player: CharacterBody2D, boss: bool) -> void:
 	rect.size = Vector2(14, 16) if not boss else Vector2(18, 20)
 	cs.shape = rect
 	add_child(cs)
-	# Shadow via draw node (ColorRect under CharacterBody2D is unreliable on mobile)
-	var sh := Node2D.new()
+	# Shadow via sprite (matches character render path on mobile)
+	var sh_img := Image.create(16 if not boss else 22, 5 if not boss else 6, false, Image.FORMAT_RGBA8)
+	sh_img.fill(Color(0, 0, 0, 0.35))
+	var sh := Sprite2D.new()
 	sh.z_index = -1
+	sh.centered = true
 	sh.position = Vector2(0, 12)
-	sh.set_script(load("res://scripts/adventure/pixel_box.gd"))
+	sh.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	sh.texture = ImageTexture.create_from_image(sh_img)
 	add_child(sh)
-	sh.call("configure", Color(0, 0, 0, 0.35), Vector2(16, 5) if not boss else Vector2(22, 6), true)
 	var gear := Node2D.new()
 	gear.set_script(load("res://scripts/adventure/warrior_gear.gd"))
 	add_child(gear)
