@@ -45,7 +45,7 @@ https://github.com/rgarn023/LibationWarriors/blob/cursor/libation-warriors-game-
 |---|---|
 | File | `export/LibationWarriors.apk` |
 | Package | `com.libationwarriors.game` |
-| Version | 1.1.0 (debug-signed) |
+| Version | 1.1.1 (debug-signed) |
 | Min Android | API 24 |
 
 ### Mobile notes
