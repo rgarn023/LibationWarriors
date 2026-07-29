@@ -51,9 +51,23 @@ horizontal_alignment = 1
 layout_mode = 2
 theme_override_colors/font_color = Color(0.75, 0.7, 0.62, 1)
 theme_override_font_sizes/font_size = 15
-text = "Choose one warrior. Explore a random dungeon."
+text = "Choose one warrior. Explore a random or event dungeon."
 horizontal_alignment = 1
 autowrap_mode = 3
+
+[node name="EventBanner" type="Label" parent="SafeRoot/Margin/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.85, 0.7, 0.4, 1)
+theme_override_font_sizes/font_size = 14
+text = ""
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="DungeonMode" type="OptionButton" parent="SafeRoot/Margin/VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
 
 [node name="DungeonName" type="Label" parent="SafeRoot/Margin/VBox"]
 unique_name_in_owner = true

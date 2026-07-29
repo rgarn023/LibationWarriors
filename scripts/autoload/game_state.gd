@@ -43,14 +43,17 @@ func get_all_warriors() -> Array[Warrior]:
 	return list
 
 
-func unlock_warrior(warrior: Warrior) -> Dictionary:
+func unlock_warrior(warrior: Warrior, from_scan: bool = false) -> Dictionary:
 	var key := warrior.barcode.strip_edges()
 	if key.is_empty():
 		return {"ok": false, "reason": "empty_barcode"}
 	if collection.has(key):
 		return {"ok": false, "reason": "duplicate", "warrior": Warrior.new(collection[key])}
 	collection[key] = warrior.to_dict()
-	SaveSystem.save_game()
+	if from_scan:
+		ScanGuard.record_successful_summon(key)
+	else:
+		SaveSystem.save_game()
 	collection_changed.emit()
 	warrior_unlocked.emit(warrior)
 	return {"ok": true, "warrior": warrior}
@@ -103,6 +106,7 @@ func to_save_dict() -> Dictionary:
 	return {
 		"collection": collection,
 		"party": party,
+		"scan_guard": ScanGuard.to_save_dict(),
 	}
 
 
@@ -112,6 +116,8 @@ func from_save_dict(data: Dictionary) -> void:
 	party = ["", "", ""]
 	for i in mini(PARTY_SIZE, raw_party.size()):
 		party[i] = str(raw_party[i])
+	if data.has("scan_guard"):
+		ScanGuard.from_save_dict(data.get("scan_guard", {}))
 	collection_changed.emit()
 	party_changed.emit()
 

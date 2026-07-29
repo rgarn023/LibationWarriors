@@ -1,10 +1,8 @@
 extends Control
-## Bottle UPC scanner with automatic product-type identification (no brand display).
-## Pulls packaging photo colors when available for warrior tinting.
+## Camera-only bottle scanner. Manual barcode entry removed.
+## Requires live product lookup (or an active event barcode) + ScanGuard limits.
 
 @onready var safe_root: Control = %SafeRoot
-@onready var barcode_input: LineEdit = %BarcodeInput
-@onready var category_option: OptionButton = %CategoryOption
 @onready var status_label: Label = %StatusLabel
 @onready var identified_label: Label = %IdentifiedLabel
 @onready var result_panel: PanelContainer = %ResultPanel
@@ -13,40 +11,31 @@ extends Control
 @onready var result_stats: Label = %ResultStats
 @onready var result_sprite: TextureRect = %ResultSprite
 @onready var btn_camera: Button = %BtnCamera
-@onready var btn_scan: Button = %BtnScan
-@onready var btn_lookup: Button = %BtnLookup
 @onready var btn_back: Button = %BtnBack
 @onready var demo_box: VBoxContainer = %DemoBox
+@onready var demo_header: Label = %DemoHeader
+@onready var limit_label: Label = %LimitLabel
 @onready var http: HTTPRequest = %HTTPRequest
 @onready var camera_hint: Label = %CameraHint
 
-var _categories: Array = []
-var _identified_category: int = -1
 var _lookup_pending := false
-var _auto_summon_after_lookup := false
 var _lookup_code := ""
-var _pending_category: int = -1
 var _packaging_colors: Dictionary = {}
 var _http_mode := "" ## product | image
+var _pending_category: int = -1
 var _image_http: HTTPRequest
+var _camera_origin := false
 
 
 func _ready() -> void:
 	SafeArea.register(safe_root)
 	UITheme.style_button(btn_camera, true)
-	UITheme.style_button(btn_scan, true)
-	UITheme.style_button(btn_lookup)
 	UITheme.style_button(btn_back)
 	UITheme.style_panel(result_panel)
 	result_panel.visible = false
-	identified_label.text = "Item type: not identified yet"
-	_populate_categories()
-	_populate_demos()
+	identified_label.text = "Scan a real bottle UPC with the camera."
 	btn_camera.pressed.connect(_on_camera_pressed)
-	btn_scan.pressed.connect(_on_scan_pressed)
-	btn_lookup.pressed.connect(_on_lookup_pressed)
 	btn_back.pressed.connect(func(): get_tree().change_scene_to_file("res://scenes/main_menu.tscn"))
-	category_option.item_selected.connect(_on_category_chosen)
 	http.request_completed.connect(_on_http_completed)
 	_image_http = HTTPRequest.new()
 	_image_http.name = "ImageHTTP"
@@ -55,42 +44,42 @@ func _ready() -> void:
 	UpcScanner.barcode_scanned.connect(_on_camera_barcode)
 	UpcScanner.scan_cancelled.connect(func(): status_label.text = "Camera scan cancelled.")
 	UpcScanner.scan_failed.connect(func(reason: String): status_label.text = "Scan failed: %s" % reason)
+	ScanGuard.limits_changed.connect(_refresh_limits)
+	_refresh_limits()
+	_setup_dev_demos()
 	_update_camera_ui()
 	if OS.has_feature("android"):
 		OS.request_permissions()
 
 
+func _refresh_limits() -> void:
+	limit_label.text = ScanGuard.status_text()
+
+
 func _update_camera_ui() -> void:
-	camera_hint.text = "Scan a UPC — the app identifies the beverage type (never brands)."
-	status_label.text = "Tap Scan with Camera, or type a barcode then Identify."
+	camera_hint.text = "Camera only — no typing barcodes. Product must verify online (brands never shown). Event codes work during live events."
+	if not UpcScanner.can_scan_camera() and not DevBuild.allow_dev_tools():
+		status_label.text = "Camera scanning requires the Android build."
+		btn_camera.disabled = true
+	else:
+		status_label.text = "Point the camera at a bottle barcode on the packaging."
+		btn_camera.disabled = false
 
 
-func _populate_categories() -> void:
-	category_option.clear()
-	_categories.clear()
-	category_option.add_item("— Select / confirm beverage type —")
-	_categories.append(-1)
-	var keys := FactionData.CATEGORY_LABELS.keys()
-	keys.sort()
-	for cat in keys:
-		_categories.append(cat)
-		var faction := FactionData.faction_for_category(cat)
-		category_option.add_item("%s → %s" % [FactionData.category_label(cat), FactionData.faction_label(faction)])
-	category_option.select(0)
-
-
-func _populate_demos() -> void:
+func _setup_dev_demos() -> void:
+	var show_demos := DevBuild.allow_dev_tools()
+	demo_header.visible = show_demos
+	demo_box.visible = show_demos
+	if not show_demos:
+		return
+	demo_header.text = "DEV demos (not in public build)"
+	for c in demo_box.get_children():
+		c.queue_free()
 	var demos := [
 		{"label": "Demo Rum", "code": "DEMO-RUM-88001", "cat": FactionData.Category.RUM},
-		{"label": "Demo Bourbon", "code": "DEMO-BRBN-88002", "cat": FactionData.Category.BOURBON},
-		{"label": "Demo Tequila", "code": "DEMO-TEQ-88003", "cat": FactionData.Category.TEQUILA},
-		{"label": "Demo Scotch", "code": "DEMO-SCT-88004", "cat": FactionData.Category.SCOTCH},
-		{"label": "Demo Vodka", "code": "DEMO-VDK-88005", "cat": FactionData.Category.VODKA},
 		{"label": "Demo Beer", "code": "DEMO-BEER-88006", "cat": FactionData.Category.BEER},
-		{"label": "Demo Sake", "code": "DEMO-SAKE-88007", "cat": FactionData.Category.SAKE},
-		{"label": "Demo Mead", "code": "DEMO-MEAD-88008", "cat": FactionData.Category.MEAD},
-		{"label": "Demo Red Wine", "code": "DEMO-RWINE-88009", "cat": FactionData.Category.RED_WINE},
 		{"label": "Demo Soft Drink", "code": "DEMO-SODA-88010", "cat": FactionData.Category.NON_ALCOHOLIC},
+		{"label": "Event Moonwell (if live)", "code": "EVENT-MOONWELL-001", "cat": -1},
 	]
 	for d in demos:
 		var b := Button.new()
@@ -100,55 +89,23 @@ func _populate_demos() -> void:
 		b.add_theme_font_size_override("font_size", 16)
 		var code: String = d.code
 		var cat: int = d.cat
-		b.pressed.connect(func():
-			barcode_input.text = code
-			_packaging_colors = {}
-			_apply_identification(cat, true)
-			_summon(code, cat)
-		)
+		b.pressed.connect(func(): _dev_demo_summon(code, cat))
 		demo_box.add_child(b)
 
 
-func _on_category_chosen(index: int) -> void:
-	if index <= 0 or index >= _categories.size():
-		_identified_category = -1
-		identified_label.text = "Item type: not identified yet"
+func _dev_demo_summon(code: String, cat: int) -> void:
+	if not DevBuild.allow_dev_tools():
 		return
-	_identified_category = int(_categories[index])
-	identified_label.text = "Item type: %s → %s" % [
-		FactionData.category_label(_identified_category),
-		FactionData.faction_label(FactionData.faction_for_category(_identified_category)),
-	]
-
-
-func _select_category(cat: int) -> void:
-	for i in _categories.size():
-		if int(_categories[i]) == cat:
-			category_option.select(i)
-			_identified_category = cat
-			return
-
-
-func _apply_identification(cat: int, confident: bool) -> void:
-	_select_category(cat)
-	var faction := FactionData.faction_for_category(cat)
-	identified_label.text = "Identified: %s → %s warrior" % [
-		FactionData.category_label(cat),
-		FactionData.faction_label(faction),
-	]
-	if confident:
-		status_label.text = "Identified as %s. Summoning..." % FactionData.category_label(cat)
-	else:
-		status_label.text = "Type set to %s. Tap Summon Warrior." % FactionData.category_label(cat)
-
-
-func _selected_category() -> int:
-	if _identified_category >= 0:
-		return _identified_category
-	var idx := category_option.selected
-	if idx <= 0 or idx >= _categories.size():
-		return -1
-	return int(_categories[idx])
+	_camera_origin = true
+	var spec := EventService.find_special_barcode(code)
+	if not spec.is_empty():
+		_summon_event(spec)
+		return
+	if cat < 0:
+		status_label.text = "Event barcode not active right now."
+		return
+	_packaging_colors = {}
+	_summon_verified(code, cat, false)
 
 
 func _on_camera_pressed() -> void:
@@ -158,36 +115,31 @@ func _on_camera_pressed() -> void:
 
 func _on_camera_barcode(code: String) -> void:
 	var clean := code.strip_edges()
-	barcode_input.text = clean
-	_identified_category = -1
+	_camera_origin = true
 	_packaging_colors = {}
-	category_option.select(0)
-	identified_label.text = "Identifying scanned item..."
-	status_label.text = "UPC captured. Identifying beverage type..."
-	_auto_summon_after_lookup = true
+	identified_label.text = "Checking scan..."
+	status_label.text = "UPC captured. Verifying..."
+	if not ScanGuard.is_plausible_product_barcode(clean):
+		status_label.text = "That code doesn't look like a retail bottle barcode."
+		return
+	var gate := ScanGuard.can_attempt_summon(clean)
+	if not gate.get("ok", false):
+		status_label.text = str(gate.get("message", "Summon blocked."))
+		if gate.get("duplicate", false):
+			pass
+		else:
+			return
+	if GameState.has_warrior(clean):
+		var existing := GameState.get_warrior(clean)
+		_show_result(existing, true)
+		status_label.text = "Already collected: %s" % existing.name
+		return
+	# Event special barcode path (no OFF required).
+	var spec := EventService.find_special_barcode(clean)
+	if not spec.is_empty():
+		_summon_event(spec)
+		return
 	_pending_lookup(clean)
-
-
-func _on_scan_pressed() -> void:
-	var code := barcode_input.text.strip_edges()
-	if code.is_empty():
-		status_label.text = "Scan or enter a barcode first."
-		return
-	var cat := _selected_category()
-	if cat < 0:
-		_auto_summon_after_lookup = true
-		_pending_lookup(code)
-		return
-	_summon(code, cat)
-
-
-func _on_lookup_pressed() -> void:
-	var code := barcode_input.text.strip_edges()
-	if code.is_empty():
-		status_label.text = "Enter or scan a barcode first."
-		return
-	_auto_summon_after_lookup = false
-	_pending_lookup(code)
 
 
 func _pending_lookup(code: String) -> void:
@@ -197,15 +149,14 @@ func _pending_lookup(code: String) -> void:
 	_lookup_code = code
 	_http_mode = "product"
 	_packaging_colors = {}
-	status_label.text = "Looking up item type (brands never shown)..."
+	status_label.text = "Verifying bottle against product database..."
 	var fields := "categories_tags,categories,generic_name,labels_tags,product_name,product_name_en,alcohol_100g,nutriments,ingredients_analysis_tags,image_front_url,image_url,image_front_small_url"
 	var url := "https://world.openfoodfacts.org/api/v2/product/%s.json?fields=%s" % [code.uri_encode(), fields.uri_encode()]
 	var err := http.request(url)
 	if err != OK:
 		_lookup_pending = false
-		_auto_summon_after_lookup = false
 		_http_mode = ""
-		status_label.text = "Lookup failed to start. Select the beverage type manually, then Summon."
+		status_label.text = "Verification failed to start. Check connection and retry."
 
 
 func _on_http_completed(_result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
@@ -214,43 +165,41 @@ func _on_http_completed(_result: int, response_code: int, _headers: PackedString
 	_lookup_pending = false
 	_http_mode = ""
 	var code := _lookup_code
-	var want_summon := _auto_summon_after_lookup
-	_auto_summon_after_lookup = false
 
 	if response_code != 200:
-		status_label.text = "Product not found online. Select the beverage type, then Summon."
+		status_label.text = "Could not verify this barcode online. Only real listed bottles can summon."
 		return
 	var parsed = JSON.parse_string(body.get_string_from_utf8())
 	if typeof(parsed) != TYPE_DICTIONARY:
-		status_label.text = "Lookup parse error. Select type manually."
+		status_label.text = "Verification parse error."
 		return
 	if int(parsed.get("status", 0)) != 1:
-		status_label.text = "Unknown barcode. Select the beverage type, then Summon."
+		status_label.text = "Unknown barcode — not a listed product. Printed/fake codes are rejected."
 		return
 	var product: Dictionary = parsed.get("product", {})
 	var info: Dictionary = WarriorFactory.classify_product_dict(product)
 	var cat: int = int(info.get("category", -1))
 	if cat < 0:
-		status_label.text = "Could not classify this item. Select type manually, then Summon."
-		identified_label.text = "Item type: unknown — please select"
+		status_label.text = "Listed product, but not identified as a beverage. Try another bottle."
+		identified_label.text = "Item type: not a supported beverage"
 		return
-	_apply_identification(cat, true)
 	_pending_category = cat
+	identified_label.text = "Verified: %s → %s" % [
+		FactionData.category_label(cat),
+		FactionData.faction_label(FactionData.faction_for_category(cat)),
+	]
 	var image_url := _pick_image_url(product)
 	if image_url.is_empty():
-		if want_summon and not code.is_empty():
-			_summon(code, cat)
+		_summon_verified(code, cat, true)
 		return
 	status_label.text = "Sampling packaging colors..."
 	_http_mode = "image"
 	_lookup_pending = true
-	_auto_summon_after_lookup = want_summon
 	var err := _image_http.request(image_url)
 	if err != OK:
 		_lookup_pending = false
 		_http_mode = ""
-		if want_summon:
-			_summon(code, cat)
+		_summon_verified(code, cat, true)
 
 
 func _pick_image_url(product: Dictionary) -> String:
@@ -266,8 +215,6 @@ func _on_image_http_completed(_result: int, response_code: int, _headers: Packed
 	_http_mode = ""
 	var code := _lookup_code
 	var cat := _pending_category
-	var want_summon := _auto_summon_after_lookup
-	_auto_summon_after_lookup = false
 	if response_code == 200 and body.size() > 32:
 		var img := Image.new()
 		var err := img.load_jpg_from_buffer(body)
@@ -277,35 +224,54 @@ func _on_image_http_completed(_result: int, response_code: int, _headers: Packed
 			err = img.load_webp_from_buffer(body)
 		if err == OK:
 			_packaging_colors = WarriorFactory.colors_from_image(img)
-			if not _packaging_colors.is_empty():
-				status_label.text = "Packaging colors sampled."
-	if want_summon and cat >= 0 and not code.is_empty():
-		_summon(code, cat)
-	elif cat >= 0:
-		status_label.text = "Identified. Tap Summon Warrior."
+	if cat >= 0 and not code.is_empty():
+		_summon_verified(code, cat, true)
 
 
-func _summon(code: String, category: int) -> void:
-	if category < 0:
-		status_label.text = "Identify or select a beverage type first."
+func _summon_event(spec: Dictionary) -> void:
+	var code := str(spec.get("barcode", "")).strip_edges()
+	var gate := ScanGuard.can_attempt_summon(code)
+	if not gate.get("ok", false) and not gate.get("duplicate", false):
+		status_label.text = str(gate.get("message", "Summon blocked."))
 		return
 	if GameState.has_warrior(code):
-		var existing := GameState.get_warrior(code)
-		_show_result(existing, true)
-		status_label.text = "This barcode already summoned %s. Each barcode is unique." % existing.name
+		_show_result(GameState.get_warrior(code), true)
+		status_label.text = "Event warrior already collected."
 		return
-	var warrior := WarriorFactory.generate(code, category, _packaging_colors)
-	var result := GameState.unlock_warrior(warrior)
+	if not _camera_origin and not DevBuild.allow_dev_tools():
+		status_label.text = "Camera scan required."
+		return
+	var warrior := EventService.make_rare_warrior(spec)
+	var result := GameState.unlock_warrior(warrior, true)
 	if result.ok:
 		_show_result(warrior, false)
-		var color_note := " (packaging tint)" if not _packaging_colors.is_empty() else ""
-		status_label.text = "Identified %s → summoned %s!%s" % [
-			FactionData.category_label(category),
-			warrior.name,
-			color_note,
-		]
+		status_label.text = "Event unlock: %s (%s)!" % [warrior.name, str(spec.get("event_title", "Event"))]
+		identified_label.text = "Event rarity: %s" % str(spec.get("rarity", "rare"))
+	else:
+		status_label.text = "Could not unlock event warrior."
+	_refresh_limits()
+
+
+func _summon_verified(code: String, category: int, require_camera: bool) -> void:
+	if require_camera and not _camera_origin and not DevBuild.allow_dev_tools():
+		status_label.text = "Camera scan required."
+		return
+	var gate := ScanGuard.can_attempt_summon(code)
+	if not gate.get("ok", false) and not gate.get("duplicate", false):
+		status_label.text = str(gate.get("message", "Summon blocked."))
+		return
+	if GameState.has_warrior(code):
+		_show_result(GameState.get_warrior(code), true)
+		status_label.text = "Already collected."
+		return
+	var warrior := WarriorFactory.generate(code, category, _packaging_colors)
+	var result := GameState.unlock_warrior(warrior, true)
+	if result.ok:
+		_show_result(warrior, false)
+		status_label.text = "Verified bottle → summoned %s!" % warrior.name
 	else:
 		status_label.text = "Could not unlock warrior."
+	_refresh_limits()
 
 
 func _show_result(warrior: Warrior, duplicate: bool) -> void:
@@ -325,6 +291,7 @@ func _show_result(warrior: Warrior, duplicate: bool) -> void:
 	]
 	WarriorPortrait.apply_to_texture_rect(result_sprite, warrior)
 	result_sprite.custom_minimum_size = Vector2(180, 220)
+	result_sprite.visible = true
 	var parent := result_sprite.get_parent()
 	if parent != null:
 		var old := parent.get_node_or_null("ResultPortrait")

@@ -54,8 +54,16 @@ unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.7, 0.65, 0.58, 1)
 theme_override_font_sizes/font_size = 14
-text = "Point your camera at the bottle UPC."
+text = "Camera only — scan the bottle UPC."
 autowrap_mode = 3
+horizontal_alignment = 1
+
+[node name="LimitLabel" type="Label" parent="SafeRoot/Scroll/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.75, 0.7, 1)
+theme_override_font_sizes/font_size = 14
+text = "New summons left today: —"
 horizontal_alignment = 1
 
 [node name="BtnCamera" type="Button" parent="SafeRoot/Scroll/VBox"]
@@ -63,30 +71,6 @@ unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 64)
 layout_mode = 2
 text = "Scan with Camera"
-
-[node name="BarcodeInput" type="LineEdit" parent="SafeRoot/Scroll/VBox"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 52)
-layout_mode = 2
-placeholder_text = "Or type barcode / UPC"
-alignment = 1
-
-[node name="CategoryOption" type="OptionButton" parent="SafeRoot/Scroll/VBox"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 52)
-layout_mode = 2
-
-[node name="BtnLookup" type="Button" parent="SafeRoot/Scroll/VBox"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 52)
-layout_mode = 2
-text = "Identify Item Type"
-
-[node name="BtnScan" type="Button" parent="SafeRoot/Scroll/VBox"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 56)
-layout_mode = 2
-text = "Identify & Summon"
 
 [node name="StatusLabel" type="Label" parent="SafeRoot/Scroll/VBox"]
 unique_name_in_owner = true
@@ -100,7 +84,7 @@ unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.85, 0.62, 0.22, 1)
 theme_override_font_sizes/font_size = 16
-text = "Item type: not identified yet"
+text = "Scan a real bottle UPC with the camera."
 autowrap_mode = 3
 horizontal_alignment = 1
 
@@ -145,15 +129,18 @@ horizontal_alignment = 1
 autowrap_mode = 3
 
 [node name="DemoHeader" type="Label" parent="SafeRoot/Scroll/VBox"]
+unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.85, 0.62, 0.22, 1)
 theme_override_font_sizes/font_size = 18
-text = "Demo Bottles"
+text = "DEV demos"
+visible = false
 
 [node name="DemoBox" type="VBoxContainer" parent="SafeRoot/Scroll/VBox"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_constants/separation = 8
+visible = false
 
 [node name="BtnBack" type="Button" parent="SafeRoot/Scroll/VBox"]
 unique_name_in_owner = true

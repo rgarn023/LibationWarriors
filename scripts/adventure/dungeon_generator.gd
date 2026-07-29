@@ -86,14 +86,18 @@ const DIR_DELTA := {
 const OPPOSITE := {"n": "s", "s": "n", "w": "e", "e": "w"}
 
 
-static func generate(hero_level: int, seed_value: int = 0) -> Dictionary:
+static func generate(hero_level: int, seed_value: int = 0, theme_override: Dictionary = {}) -> Dictionary:
 	var rng := RandomNumberGenerator.new()
 	if seed_value == 0:
 		rng.randomize()
 	else:
 		rng.seed = seed_value
 
-	var theme: Dictionary = THEMES[rng.randi() % THEMES.size()].duplicate(true)
+	var theme: Dictionary
+	if theme_override.is_empty():
+		theme = THEMES[rng.randi() % THEMES.size()].duplicate(true)
+	else:
+		theme = normalize_theme(theme_override)
 	var room_count := rng.randi_range(10, 15)
 
 	# Place rooms on a grid via growth from origin.
@@ -193,7 +197,36 @@ static func generate(hero_level: int, seed_value: int = 0) -> Dictionary:
 		"potions_small": 0,
 		"potions_large": 0,
 		"player_hp": -1, ## filled when adventure starts
+		"is_event": not theme_override.is_empty(),
+		"event_id": str(theme_override.get("event_id", "")),
 	}
+
+
+static func normalize_theme(raw: Dictionary) -> Dictionary:
+	var base: Dictionary = THEMES[0].duplicate(true)
+	if raw.has("name"):
+		base["name"] = str(raw["name"])
+	if raw.has("boss"):
+		base["boss"] = str(raw["boss"])
+	if raw.has("enemy_label"):
+		base["enemy_label"] = str(raw["enemy_label"])
+	if raw.has("enemy_factions"):
+		base["enemy_factions"] = raw["enemy_factions"]
+	base["floor"] = _as_color(raw.get("floor", base["floor"]))
+	base["wall"] = _as_color(raw.get("wall", base["wall"]))
+	base["accent"] = _as_color(raw.get("accent", base["accent"]))
+	return base
+
+
+static func _as_color(value) -> Color:
+	if value is Color:
+		return value
+	if value is Array and value.size() >= 3:
+		var a := float(value[3]) if value.size() > 3 else 1.0
+		return Color(float(value[0]), float(value[1]), float(value[2]), a)
+	if value is String:
+		return Color(value)
+	return Color(0.2, 0.2, 0.22)
 
 
 static func _blank_room(id: int, gx: int, gy: int) -> Dictionary:

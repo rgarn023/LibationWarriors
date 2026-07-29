@@ -95,6 +95,28 @@ custom_minimum_size = Vector2(0, 56)
 layout_mode = 2
 text = "Battle"
 
+[node name="BtnEvents" type="Button" parent="SafeRoot/VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 52)
+layout_mode = 2
+text = "Event Admin (DEV)"
+visible = false
+
+[node name="BtnRefreshEvents" type="Button" parent="SafeRoot/VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+text = "Refresh Events"
+
+[node name="EventLabel" type="Label" parent="SafeRoot/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.75, 0.65, 0.4, 1)
+theme_override_font_sizes/font_size = 14
+text = ""
+horizontal_alignment = 1
+autowrap_mode = 3
+
 [node name="CollectionCount" type="Label" parent="SafeRoot/VBox"]
 unique_name_in_owner = true
 layout_mode = 2
