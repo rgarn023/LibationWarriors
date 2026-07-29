@@ -254,20 +254,29 @@ func variant_label() -> String:
 
 
 func display_modulate() -> Color:
-	## Strong packaging-driven tint for the base sprite.
-	var c := tint_primary
+	## Near-neutral base sprite; clothing overlays carry packaging color.
+	return Color(0.96, 0.96, 0.97, 1.0)
+
+
+func outfit_primary() -> Color:
+	return _outfit_shift(tint_primary)
+
+
+func outfit_secondary() -> Color:
+	return _outfit_shift(tint_secondary)
+
+
+func outfit_accent() -> Color:
+	return _outfit_shift(tint_accent)
+
+
+func _outfit_shift(base: Color) -> Color:
+	var c := base
 	if absf(variant_hue_shift) > 0.001:
 		var h := c.h + variant_hue_shift
 		if h < 0.0:
 			h += 1.0
 		if h > 1.0:
 			h -= 1.0
-		c = Color.from_hsv(h, clampf(c.s * 1.15, 0.2, 1.0), clampf(c.v, 0.3, 1.0), 1.0)
-	# Stronger packaging read while keeping art visible.
-	var blend := 0.72
-	return Color(
-		c.r * blend + (1.0 - blend),
-		c.g * blend + (1.0 - blend),
-		c.b * blend + (1.0 - blend),
-		1.0
-	)
+		c = Color.from_hsv(h, clampf(c.s * 1.08, 0.15, 1.0), clampf(c.v, 0.25, 1.0), 1.0)
+	return c

@@ -45,20 +45,26 @@ func setup(data: Dictionary, player: CharacterBody2D, boss: bool) -> void:
 	elif ResourceLoader.exists(warrior.sprite_path()):
 		_sprite.texture = load(warrior.sprite_path())
 	_sprite.modulate = warrior.display_modulate()
-	_sprite.scale = Vector2(0.55, 0.55) if boss else Vector2(0.42, 0.42)
+	var sc := 0.55 if boss else 0.42
+	_sprite.scale = Vector2(sc, sc)
 	if boss:
-		_sprite.modulate = Color(_sprite.modulate.r * 0.9 + 0.2, _sprite.modulate.g * 0.7, _sprite.modulate.b * 0.7)
+		_sprite.modulate = Color(1.0, 0.85, 0.85, 1.0)
 	var cs := CollisionShape2D.new()
 	var rect := RectangleShape2D.new()
 	rect.size = Vector2(14, 16) if not boss else Vector2(18, 20)
 	cs.shape = rect
 	add_child(cs)
-	var sh := ColorRect.new()
-	sh.color = Color(0, 0, 0, 0.35)
-	sh.size = Vector2(16, 5) if not boss else Vector2(22, 6)
-	sh.position = Vector2(-sh.size.x * 0.5, 10)
+	# Shadow via draw node (ColorRect under CharacterBody2D is unreliable on mobile)
+	var sh := Node2D.new()
 	sh.z_index = -1
+	sh.position = Vector2(0, 12)
+	sh.set_script(load("res://scripts/adventure/pixel_box.gd"))
 	add_child(sh)
+	sh.call("configure", Color(0, 0, 0, 0.35), Vector2(16, 5) if not boss else Vector2(22, 6), true)
+	var gear := Node2D.new()
+	gear.set_script(load("res://scripts/adventure/warrior_gear.gd"))
+	add_child(gear)
+	gear.call("configure", warrior, sc, true)
 
 
 func _physics_process(delta: float) -> void:
