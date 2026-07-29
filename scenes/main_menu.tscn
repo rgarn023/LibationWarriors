@@ -83,6 +83,12 @@ custom_minimum_size = Vector2(0, 56)
 layout_mode = 2
 text = "Party of Three"
 
+[node name="BtnAdventure" type="Button" parent="SafeRoot/VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 56)
+layout_mode = 2
+text = "Adventure"
+
 [node name="BtnBattle" type="Button" parent="SafeRoot/VBox"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 56)

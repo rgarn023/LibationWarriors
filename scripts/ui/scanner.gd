@@ -1,5 +1,6 @@
 extends Control
 ## Bottle UPC scanner with automatic product-type identification (no brand display).
+## Pulls packaging photo colors when available for warrior tinting.
 
 @onready var safe_root: Control = %SafeRoot
 @onready var barcode_input: LineEdit = %BarcodeInput
@@ -24,6 +25,10 @@ var _identified_category: int = -1
 var _lookup_pending := false
 var _auto_summon_after_lookup := false
 var _lookup_code := ""
+var _pending_category: int = -1
+var _packaging_colors: Dictionary = {}
+var _http_mode := "" ## product | image
+var _image_http: HTTPRequest
 
 
 func _ready() -> void:
@@ -43,6 +48,10 @@ func _ready() -> void:
 	btn_back.pressed.connect(func(): get_tree().change_scene_to_file("res://scenes/main_menu.tscn"))
 	category_option.item_selected.connect(_on_category_chosen)
 	http.request_completed.connect(_on_http_completed)
+	_image_http = HTTPRequest.new()
+	_image_http.name = "ImageHTTP"
+	add_child(_image_http)
+	_image_http.request_completed.connect(_on_image_http_completed)
 	UpcScanner.barcode_scanned.connect(_on_camera_barcode)
 	UpcScanner.scan_cancelled.connect(func(): status_label.text = "Camera scan cancelled.")
 	UpcScanner.scan_failed.connect(func(reason: String): status_label.text = "Scan failed: %s" % reason)
@@ -93,6 +102,7 @@ func _populate_demos() -> void:
 		var cat: int = d.cat
 		b.pressed.connect(func():
 			barcode_input.text = code
+			_packaging_colors = {}
 			_apply_identification(cat, true)
 			_summon(code, cat)
 		)
@@ -150,6 +160,7 @@ func _on_camera_barcode(code: String) -> void:
 	var clean := code.strip_edges()
 	barcode_input.text = clean
 	_identified_category = -1
+	_packaging_colors = {}
 	category_option.select(0)
 	identified_label.text = "Identifying scanned item..."
 	status_label.text = "UPC captured. Identifying beverage type..."
@@ -164,7 +175,6 @@ func _on_scan_pressed() -> void:
 		return
 	var cat := _selected_category()
 	if cat < 0:
-		# Identify first, then summon.
 		_auto_summon_after_lookup = true
 		_pending_lookup(code)
 		return
@@ -185,18 +195,24 @@ func _pending_lookup(code: String) -> void:
 		http.cancel_request()
 	_lookup_pending = true
 	_lookup_code = code
+	_http_mode = "product"
+	_packaging_colors = {}
 	status_label.text = "Looking up item type (brands never shown)..."
-	var fields := "categories_tags,categories,generic_name,labels_tags,product_name,product_name_en,alcohol_100g,nutriments,ingredients_analysis_tags"
+	var fields := "categories_tags,categories,generic_name,labels_tags,product_name,product_name_en,alcohol_100g,nutriments,ingredients_analysis_tags,image_front_url,image_url,image_front_small_url"
 	var url := "https://world.openfoodfacts.org/api/v2/product/%s.json?fields=%s" % [code.uri_encode(), fields.uri_encode()]
 	var err := http.request(url)
 	if err != OK:
 		_lookup_pending = false
 		_auto_summon_after_lookup = false
+		_http_mode = ""
 		status_label.text = "Lookup failed to start. Select the beverage type manually, then Summon."
 
 
 func _on_http_completed(_result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
+	if _http_mode != "product":
+		return
 	_lookup_pending = false
+	_http_mode = ""
 	var code := _lookup_code
 	var want_summon := _auto_summon_after_lookup
 	_auto_summon_after_lookup = false
@@ -219,8 +235,54 @@ func _on_http_completed(_result: int, response_code: int, _headers: PackedString
 		identified_label.text = "Item type: unknown — please select"
 		return
 	_apply_identification(cat, true)
-	if want_summon and not code.is_empty():
+	_pending_category = cat
+	var image_url := _pick_image_url(product)
+	if image_url.is_empty():
+		if want_summon and not code.is_empty():
+			_summon(code, cat)
+		return
+	status_label.text = "Sampling packaging colors..."
+	_http_mode = "image"
+	_lookup_pending = true
+	_auto_summon_after_lookup = want_summon
+	var err := _image_http.request(image_url)
+	if err != OK:
+		_lookup_pending = false
+		_http_mode = ""
+		if want_summon:
+			_summon(code, cat)
+
+
+func _pick_image_url(product: Dictionary) -> String:
+	for key in ["image_front_small_url", "image_front_url", "image_url"]:
+		var u := str(product.get(key, "")).strip_edges()
+		if u.begins_with("http"):
+			return u
+	return ""
+
+
+func _on_image_http_completed(_result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
+	_lookup_pending = false
+	_http_mode = ""
+	var code := _lookup_code
+	var cat := _pending_category
+	var want_summon := _auto_summon_after_lookup
+	_auto_summon_after_lookup = false
+	if response_code == 200 and body.size() > 32:
+		var img := Image.new()
+		var err := img.load_jpg_from_buffer(body)
+		if err != OK:
+			err = img.load_png_from_buffer(body)
+		if err != OK:
+			err = img.load_webp_from_buffer(body)
+		if err == OK:
+			_packaging_colors = WarriorFactory.colors_from_image(img)
+			if not _packaging_colors.is_empty():
+				status_label.text = "Packaging colors sampled."
+	if want_summon and cat >= 0 and not code.is_empty():
 		_summon(code, cat)
+	elif cat >= 0:
+		status_label.text = "Identified. Tap Summon Warrior."
 
 
 func _summon(code: String, category: int) -> void:
@@ -232,13 +294,15 @@ func _summon(code: String, category: int) -> void:
 		_show_result(existing, true)
 		status_label.text = "This barcode already summoned %s. Each barcode is unique." % existing.name
 		return
-	var warrior := WarriorFactory.generate(code, category)
+	var warrior := WarriorFactory.generate(code, category, _packaging_colors)
 	var result := GameState.unlock_warrior(warrior)
 	if result.ok:
 		_show_result(warrior, false)
-		status_label.text = "Identified %s → summoned %s!" % [
+		var color_note := " (packaging tint)" if not _packaging_colors.is_empty() else ""
+		status_label.text = "Identified %s → summoned %s!%s" % [
 			FactionData.category_label(category),
 			warrior.name,
+			color_note,
 		]
 	else:
 		status_label.text = "Could not unlock warrior."
@@ -246,26 +310,28 @@ func _summon(code: String, category: int) -> void:
 
 func _show_result(warrior: Warrior, duplicate: bool) -> void:
 	result_panel.visible = true
-	result_name.text = warrior.name
+	result_name.text = "Lv.%d  %s" % [warrior.level, warrior.name]
 	result_faction.text = "%s  ·  %s  ·  %s" % [
 		warrior.faction_display(),
 		warrior.category_display(),
 		warrior.bottle_palette_name,
 	]
-	result_stats.text = "ATK %d  DEF %d  HP %d\n%s (%d) / %s (%d)%s" % [
+	result_stats.text = "ATK %d  DEF %d  HP %d\n%s\n%s (%d) / %s (%d)%s" % [
 		warrior.attack, warrior.defense, warrior.max_hp,
+		warrior.variant_label(),
 		warrior.regular_move, warrior.regular_power,
 		warrior.special_move, warrior.special_power,
 		"\n(Already collected)" if duplicate else "",
 	]
-	var tex := UITheme.load_texture(warrior.preview_path())
-	result_sprite.texture = tex
-	result_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	WarriorPortrait.apply_to_texture_rect(result_sprite, warrior)
 	result_sprite.custom_minimum_size = Vector2(180, 220)
-	# Keep sprite colors authentic — light bottle tint only
-	result_sprite.modulate = Color(
-		warrior.tint_primary.r * 0.2 + 0.8,
-		warrior.tint_primary.g * 0.2 + 0.8,
-		warrior.tint_primary.b * 0.2 + 0.8,
-		1.0
-	)
+	var parent := result_sprite.get_parent()
+	if parent != null:
+		var old := parent.get_node_or_null("ResultPortrait")
+		if old:
+			old.queue_free()
+		var portrait := WarriorPortrait.make_portrait(warrior, Vector2(160, 200))
+		portrait.name = "ResultPortrait"
+		parent.add_child(portrait)
+		parent.move_child(portrait, result_sprite.get_index())
+		result_sprite.visible = false

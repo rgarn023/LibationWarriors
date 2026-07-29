@@ -1,0 +1,158 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/adventure/dungeon_explore.gd" id="1"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_player"]
+size = Vector2(12, 14)
+
+[node name="DungeonExplore" type="Node2D"]
+script = ExtResource("1")
+
+[node name="World" type="Node2D" parent="."]
+
+[node name="Player" type="CharacterBody2D" parent="."]
+collision_layer = 1
+collision_mask = 1
+
+[node name="Collision" type="CollisionShape2D" parent="Player"]
+shape = SubResource("RectangleShape2D_player")
+
+[node name="HUD" type="CanvasLayer" parent="."]
+
+[node name="SafeRoot" type="Control" parent="HUD"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+
+[node name="TopBar" type="VBoxContainer" parent="HUD/SafeRoot"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 10.0
+offset_top = 8.0
+offset_right = -10.0
+offset_bottom = 140.0
+mouse_filter = 2
+theme_override_constants/separation = 2
+
+[node name="RoomLabel" type="Label" parent="HUD/SafeRoot/TopBar"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.92, 0.88, 0.78, 1)
+theme_override_font_sizes/font_size = 16
+text = "Dungeon"
+
+[node name="LevelLabel" type="Label" parent="HUD/SafeRoot/TopBar"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.85, 0.62, 0.22, 1)
+theme_override_font_sizes/font_size = 14
+text = "Lv.1"
+
+[node name="HpLabel" type="Label" parent="HUD/SafeRoot/TopBar"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.85, 0.65, 1)
+theme_override_font_sizes/font_size = 14
+text = "HP"
+
+[node name="KeyLabel" type="Label" parent="HUD/SafeRoot/TopBar"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.9, 0.8, 0.4, 1)
+theme_override_font_sizes/font_size = 14
+text = "Key: —"
+
+[node name="PotionLabel" type="Label" parent="HUD/SafeRoot/TopBar"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.65, 0.75, 0.9, 1)
+theme_override_font_sizes/font_size = 14
+text = "Potions"
+
+[node name="MessageLabel" type="Label" parent="HUD/SafeRoot"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -200.0
+offset_top = -180.0
+offset_right = 200.0
+offset_bottom = -140.0
+theme_override_colors/font_color = Color(1, 0.95, 0.8, 1)
+theme_override_font_sizes/font_size = 16
+text = ""
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="Bottom" type="HBoxContainer" parent="HUD/SafeRoot"]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 10.0
+offset_top = -210.0
+offset_right = -10.0
+offset_bottom = -12.0
+theme_override_constants/separation = 10
+
+[node name="Pad" type="GridContainer" parent="HUD/SafeRoot/Bottom"]
+layout_mode = 2
+columns = 3
+theme_override_constants/h_separation = 4
+theme_override_constants/v_separation = 4
+
+[node name="PadSpacer1" type="Control" parent="HUD/SafeRoot/Bottom/Pad"]
+custom_minimum_size = Vector2(56, 56)
+layout_mode = 2
+
+[node name="PadUp" type="Button" parent="HUD/SafeRoot/Bottom/Pad"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(56, 56)
+layout_mode = 2
+text = "▲"
+
+[node name="PadSpacer2" type="Control" parent="HUD/SafeRoot/Bottom/Pad"]
+custom_minimum_size = Vector2(56, 56)
+layout_mode = 2
+
+[node name="PadLeft" type="Button" parent="HUD/SafeRoot/Bottom/Pad"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(56, 56)
+layout_mode = 2
+text = "◀"
+
+[node name="PadDown" type="Button" parent="HUD/SafeRoot/Bottom/Pad"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(56, 56)
+layout_mode = 2
+text = "▼"
+
+[node name="PadRight" type="Button" parent="HUD/SafeRoot/Bottom/Pad"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(56, 56)
+layout_mode = 2
+text = "▶"
+
+[node name="Actions" type="VBoxContainer" parent="HUD/SafeRoot/Bottom"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="UsePotionBtn" type="Button" parent="HUD/SafeRoot/Bottom/Actions"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 52)
+layout_mode = 2
+text = "Use Potion"
+
+[node name="LeaveBtn" type="Button" parent="HUD/SafeRoot/Bottom/Actions"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 52)
+layout_mode = 2
+text = "Leave"

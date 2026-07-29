@@ -29,7 +29,7 @@ func _refresh() -> void:
 	empty_label.visible = warriors.is_empty()
 	for w in warriors:
 		var row := Button.new()
-		row.text = "%s  [%s]" % [w.name, w.faction_display()]
+		row.text = "Lv.%d  %s  [%s]" % [w.level, w.name, w.faction_display()]
 		row.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		UITheme.style_button(row)
 		row.custom_minimum_size = Vector2(0, 52)
@@ -41,15 +41,26 @@ func _refresh() -> void:
 func _show_detail(w: Warrior) -> void:
 	_selected = w
 	detail_panel.visible = true
-	detail_name.text = w.name
-	detail_info.text = "%s · %s\nPalette: %s\nATK %d  DEF %d  HP %d\nRegular: %s (%d)\nSpecial: %s (%d)\nBarcode: %s" % [
-		w.faction_display(), w.category_display(), w.bottle_palette_name,
+	detail_name.text = "Lv.%d  %s" % [w.level, w.name]
+	detail_info.text = "%s · %s\nXP %d / %d\nPalette: %s\n%s\nATK %d  DEF %d  HP %d\nRegular: %s (%d)\nSpecial: %s (%d)\nBarcode: %s" % [
+		w.faction_display(), w.category_display(),
+		w.xp, w.xp_to_next_level(),
+		w.bottle_palette_name,
+		w.variant_label(),
 		w.attack, w.defense, w.max_hp,
 		w.regular_move, w.regular_power,
 		w.special_move, w.special_power,
 		w.barcode,
 	]
-	detail_sprite.texture = UITheme.load_texture(w.preview_path())
-	detail_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	WarriorPortrait.apply_to_texture_rect(detail_sprite, w)
 	detail_sprite.custom_minimum_size = Vector2(120, 160)
-	detail_sprite.modulate = Color(w.tint_primary.r * 0.35 + 0.65, w.tint_primary.g * 0.35 + 0.65, w.tint_primary.b * 0.35 + 0.65, 1)
+	var parent := detail_sprite.get_parent()
+	if parent != null:
+		var old := parent.get_node_or_null("DetailPortrait")
+		if old:
+			old.queue_free()
+		var portrait := WarriorPortrait.make_portrait(w, Vector2(120, 150))
+		portrait.name = "DetailPortrait"
+		parent.add_child(portrait)
+		parent.move_child(portrait, detail_sprite.get_index())
+		detail_sprite.visible = false

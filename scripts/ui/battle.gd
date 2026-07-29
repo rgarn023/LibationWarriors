@@ -84,15 +84,13 @@ func _make_fighter_panel(w: Warrior, is_enemy: bool, index: int) -> PanelContain
 	var v := VBoxContainer.new()
 	panel.add_child(v)
 	var tr := TextureRect.new()
-	tr.texture = UITheme.load_texture(w.preview_path())
 	tr.custom_minimum_size = Vector2(72, 96)
 	tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	tr.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	tr.modulate = Color(w.tint_primary.r * 0.35 + 0.65, w.tint_primary.g * 0.35 + 0.65, w.tint_primary.b * 0.35 + 0.65, 1)
+	WarriorPortrait.apply_to_texture_rect(tr, w)
 	v.add_child(tr)
 	var name_l := Label.new()
-	name_l.text = w.name
+	name_l.text = "Lv.%d %s" % [w.level, w.name]
 	name_l.autowrap_mode = TextServer.AUTOWRAP_WORD
 	name_l.add_theme_font_size_override("font_size", 14)
 	name_l.add_theme_color_override("font_color", UITheme.C_TEXT)

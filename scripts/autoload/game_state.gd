@@ -1,5 +1,5 @@
 extends Node
-## Persistent collection, party slots, and battle staging.
+## Persistent collection, party slots, battle + adventure staging.
 
 signal collection_changed
 signal party_changed
@@ -12,6 +12,12 @@ var collection: Dictionary = {} ## barcode -> Warrior dict
 var party: Array[String] = ["", "", ""] ## barcodes
 var last_battle_mode: String = "local"
 var pending_enemy_party: Array = []
+
+## Adventure run state
+var adventure_warrior_barcode: String = ""
+var adventure_dungeon: Dictionary = {}
+var adventure_return_scene: String = "res://scenes/adventure_lobby.tscn"
+var pending_adventure_battle: Dictionary = {} ## enemy + context for dungeon combat
 
 
 func _ready() -> void:
@@ -50,13 +56,21 @@ func unlock_warrior(warrior: Warrior) -> Dictionary:
 	return {"ok": true, "warrior": warrior}
 
 
+func update_warrior(warrior: Warrior) -> void:
+	var key := warrior.barcode.strip_edges()
+	if key.is_empty() or not collection.has(key):
+		return
+	collection[key] = warrior.to_dict()
+	SaveSystem.save_game()
+	collection_changed.emit()
+
+
 func set_party_slot(index: int, barcode: String) -> bool:
 	if index < 0 or index >= PARTY_SIZE:
 		return false
 	var key := barcode.strip_edges()
 	if key != "" and not collection.has(key):
 		return false
-	# Prevent duplicates in party
 	if key != "":
 		for i in party.size():
 			if i != index and party[i] == key:
@@ -103,7 +117,6 @@ func from_save_dict(data: Dictionary) -> void:
 
 
 func make_training_enemies() -> Array[Warrior]:
-	## Local practice opponents generated from fixed demo barcodes (no brands).
 	var demos := [
 		{"code": "LOCAL-RUM-001", "cat": FactionData.Category.RUM},
 		{"code": "LOCAL-BEER-002", "cat": FactionData.Category.BEER},
@@ -115,3 +128,40 @@ func make_training_enemies() -> Array[Warrior]:
 		w.reset_hp()
 		enemies.append(w)
 	return enemies
+
+
+func begin_adventure(barcode: String, dungeon: Dictionary) -> void:
+	adventure_warrior_barcode = barcode.strip_edges()
+	adventure_dungeon = dungeon
+	pending_adventure_battle.clear()
+	var w := get_warrior(adventure_warrior_barcode)
+	if w != null:
+		w.reset_hp()
+		adventure_dungeon["player_hp"] = w.max_hp
+		update_warrior(w)
+
+
+func get_adventure_warrior() -> Warrior:
+	if adventure_warrior_barcode.is_empty():
+		return null
+	var w := get_warrior(adventure_warrior_barcode)
+	if w == null:
+		return null
+	var hp := int(adventure_dungeon.get("player_hp", w.max_hp))
+	if hp < 0:
+		hp = w.max_hp
+	w.current_hp = clampi(hp, 0, w.max_hp)
+	return w
+
+
+func save_adventure_warrior(w: Warrior) -> void:
+	if w == null:
+		return
+	adventure_dungeon["player_hp"] = w.current_hp
+	update_warrior(w)
+
+
+func end_adventure() -> void:
+	adventure_warrior_barcode = ""
+	adventure_dungeon = {}
+	pending_adventure_battle.clear()

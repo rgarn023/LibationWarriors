@@ -9,7 +9,7 @@ func barcode_seed(barcode: String) -> int:
 	return h
 
 
-func generate(barcode: String, category: int) -> Warrior:
+func generate(barcode: String, category: int, packaging_colors: Dictionary = {}) -> Warrior:
 	var seed := barcode_seed(barcode)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed
@@ -20,6 +20,8 @@ func generate(barcode: String, category: int) -> Warrior:
 	warrior.faction = faction
 	warrior.category = category
 	warrior.seed_value = seed
+	warrior.level = 1
+	warrior.xp = 0
 
 	var prefixes: Array = FactionData.NAME_PREFIXES.get(faction, ["Warrior"])
 	var prefix: String = prefixes[rng.randi() % prefixes.size()]
@@ -29,26 +31,109 @@ func generate(barcode: String, category: int) -> Warrior:
 	if rng.randf() < 0.45:
 		warrior.name = "%s %s" % [warrior.name, suffix]
 
-	var palette: Dictionary = FactionData.BOTTLE_PALETTES[rng.randi() % FactionData.BOTTLE_PALETTES.size()]
-	warrior.bottle_palette_name = palette["name"]
-	warrior.tint_primary = palette["primary"]
-	warrior.tint_secondary = palette["secondary"]
+	_apply_packaging_or_fallback_colors(warrior, rng, packaging_colors)
+
+	# Strong per-barcode visual variants
+	warrior.variant_pattern = rng.randi_range(0, 5)
+	warrior.variant_crest = rng.randi_range(0, 4)
+	warrior.variant_weapon_style = rng.randi_range(0, 3)
+	warrior.variant_hue_shift = rng.randf_range(-0.07, 0.07)
 
 	var atk_bias := _faction_atk_bias(faction)
 	var def_bias := _faction_def_bias(faction)
-	warrior.attack = clampi(12 + rng.randi_range(0, 28) + atk_bias, 8, 48)
-	warrior.defense = clampi(12 + rng.randi_range(0, 28) + def_bias, 8, 48)
-	warrior.max_hp = clampi(80 + rng.randi_range(0, 60) + (def_bias * 2), 70, 180)
+	warrior.base_attack = clampi(12 + rng.randi_range(0, 28) + atk_bias, 8, 48)
+	warrior.base_defense = clampi(12 + rng.randi_range(0, 28) + def_bias, 8, 48)
+	warrior.base_max_hp = clampi(80 + rng.randi_range(0, 60) + (def_bias * 2), 70, 180)
+	warrior.base_regular_power = clampi(10 + rng.randi_range(0, 14) + atk_bias / 2, 8, 30)
+	warrior.base_special_power = clampi(18 + rng.randi_range(0, 22) + atk_bias, 14, 45)
+	warrior._recompute_stats_from_level()
 	warrior.current_hp = warrior.max_hp
 
 	var regs: Array = FactionData.REGULAR_MOVES.get(faction, ["Strike"])
 	var specs: Array = FactionData.SPECIAL_MOVES.get(faction, ["Special"])
 	warrior.regular_move = regs[rng.randi() % regs.size()]
 	warrior.special_move = specs[rng.randi() % specs.size()]
-	warrior.regular_power = clampi(10 + rng.randi_range(0, 14) + atk_bias / 2, 8, 30)
-	warrior.special_power = clampi(18 + rng.randi_range(0, 22) + atk_bias, 14, 45)
 
 	return warrior
+
+
+func _apply_packaging_or_fallback_colors(warrior: Warrior, rng: RandomNumberGenerator, packaging_colors: Dictionary) -> void:
+	var has_pkg := packaging_colors.has("primary") and packaging_colors.has("secondary")
+	if has_pkg:
+		warrior.tint_primary = packaging_colors["primary"]
+		warrior.tint_secondary = packaging_colors["secondary"]
+		warrior.tint_accent = packaging_colors.get("accent", packaging_colors["primary"].lightened(0.2))
+		warrior.bottle_palette_name = str(packaging_colors.get("label", "Packaging Blend"))
+	else:
+		var palette: Dictionary = FactionData.BOTTLE_PALETTES[rng.randi() % FactionData.BOTTLE_PALETTES.size()]
+		warrior.bottle_palette_name = palette["name"]
+		warrior.tint_primary = palette["primary"]
+		warrior.tint_secondary = palette["secondary"]
+		warrior.tint_accent = Color(
+			clampf(palette["primary"].r * 0.6 + palette["secondary"].r * 0.4 + 0.15, 0, 1),
+			clampf(palette["primary"].g * 0.6 + palette["secondary"].g * 0.4 + 0.1, 0, 1),
+			clampf(palette["primary"].b * 0.5 + 0.2, 0, 1)
+		)
+
+
+## Sample dominant colors from a product photo Image (no brand text used).
+func colors_from_image(image: Image) -> Dictionary:
+	if image == null or image.get_width() < 4 or image.get_height() < 4:
+		return {}
+	var img := image
+	if img.get_format() != Image.FORMAT_RGBA8 and img.get_format() != Image.FORMAT_RGB8:
+		img = img.duplicate()
+		img.convert(Image.FORMAT_RGBA8)
+	# Downsample for speed
+	var tw := mini(48, img.get_width())
+	var th := mini(48, img.get_height())
+	img = img.duplicate()
+	img.resize(tw, th, Image.INTERPOLATE_NEAREST)
+
+	var buckets: Dictionary = {}
+	var total := 0
+	for y in th:
+		for x in tw:
+			var c := img.get_pixel(x, y)
+			# Skip near-white / near-black / gray (labels & shadows)
+			if c.v < 0.12 or c.v > 0.94:
+				continue
+			if c.s < 0.12:
+				continue
+			var key := "%d_%d_%d" % [int(c.r * 8.0), int(c.g * 8.0), int(c.b * 8.0)]
+			if not buckets.has(key):
+				buckets[key] = {"count": 0, "r": 0.0, "g": 0.0, "b": 0.0}
+			buckets[key]["count"] += 1
+			buckets[key]["r"] += c.r
+			buckets[key]["g"] += c.g
+			buckets[key]["b"] += c.b
+			total += 1
+	if total < 8:
+		return {}
+
+	var ranked: Array = []
+	for k in buckets.keys():
+		ranked.append(buckets[k])
+	ranked.sort_custom(func(a, b): return int(a["count"]) > int(b["count"]))
+
+	var primary := _bucket_to_color(ranked[0])
+	var secondary := primary.darkened(0.35)
+	var accent := primary.lightened(0.2)
+	if ranked.size() > 1:
+		secondary = _bucket_to_color(ranked[1])
+	if ranked.size() > 2:
+		accent = _bucket_to_color(ranked[2])
+	return {
+		"primary": primary,
+		"secondary": secondary,
+		"accent": accent,
+		"label": "Packaging Blend",
+	}
+
+
+func _bucket_to_color(b: Dictionary) -> Color:
+	var n: float = maxf(1.0, float(b["count"]))
+	return Color(float(b["r"]) / n, float(b["g"]) / n, float(b["b"]) / n, 1.0)
 
 
 func _token_from_seed(seed: int) -> String:

@@ -47,7 +47,7 @@ func _refresh() -> void:
 			_slot_buttons[i].text = "Slot %d — Empty" % (i + 1)
 		else:
 			var w := GameState.get_warrior(code)
-			_slot_buttons[i].text = "Slot %d — %s [%s]" % [i + 1, w.name, w.faction_display()]
+			_slot_buttons[i].text = "Slot %d — Lv.%d %s [%s]" % [i + 1, w.level, w.name, w.faction_display()]
 	if GameState.party_is_ready():
 		status_label.text = "Party ready for battle!"
 	elif _active_slot < 0:
@@ -69,7 +69,7 @@ func _refresh_picker() -> void:
 		return
 	for w in warriors:
 		var b := Button.new()
-		b.text = "%s  ATK%d DEF%d" % [w.name, w.attack, w.defense]
+		b.text = "Lv.%d %s  ATK%d DEF%d" % [w.level, w.name, w.attack, w.defense]
 		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		UITheme.style_button(b)
 		var code := w.barcode

@@ -9,6 +9,7 @@ var category: int = FactionData.Category.OTHER_ALCOHOL
 var bottle_palette_name: String = ""
 var tint_primary: Color = Color.WHITE
 var tint_secondary: Color = Color.GRAY
+var tint_accent: Color = Color(0.85, 0.62, 0.22)
 var attack: int = 10
 var defense: int = 10
 var max_hp: int = 100
@@ -18,6 +19,18 @@ var special_move: String = "Special"
 var special_power: int = 20
 var regular_power: int = 12
 var seed_value: int = 0
+var level: int = 1
+var xp: int = 0
+## Visual variant knobs derived from barcode (and packaging colors).
+var variant_pattern: int = 0 ## 0..5 pattern / marking style
+var variant_crest: int = 0 ## 0..4 crest / emblem
+var variant_weapon_style: int = 0 ## 0..3 weapon finish
+var variant_hue_shift: float = 0.0 ## -0.08..0.08
+var base_attack: int = 10
+var base_defense: int = 10
+var base_max_hp: int = 100
+var base_regular_power: int = 12
+var base_special_power: int = 20
 
 
 func _init(data: Dictionary = {}) -> void:
@@ -34,6 +47,7 @@ func from_dict(data: Dictionary) -> void:
 	bottle_palette_name = str(data.get("bottle_palette_name", ""))
 	tint_primary = _color_from(data.get("tint_primary", [1, 1, 1, 1]))
 	tint_secondary = _color_from(data.get("tint_secondary", [0.5, 0.5, 0.5, 1]))
+	tint_accent = _color_from(data.get("tint_accent", [0.85, 0.62, 0.22, 1]))
 	attack = int(data.get("attack", 10))
 	defense = int(data.get("defense", 10))
 	max_hp = int(data.get("max_hp", 100))
@@ -43,6 +57,25 @@ func from_dict(data: Dictionary) -> void:
 	special_power = int(data.get("special_power", 20))
 	regular_power = int(data.get("regular_power", 12))
 	seed_value = int(data.get("seed_value", 0))
+	level = maxi(1, int(data.get("level", 1)))
+	xp = maxi(0, int(data.get("xp", 0)))
+	variant_pattern = int(data.get("variant_pattern", 0))
+	variant_crest = int(data.get("variant_crest", 0))
+	variant_weapon_style = int(data.get("variant_weapon_style", 0))
+	variant_hue_shift = float(data.get("variant_hue_shift", 0.0))
+	base_attack = int(data.get("base_attack", attack))
+	base_defense = int(data.get("base_defense", defense))
+	base_max_hp = int(data.get("base_max_hp", max_hp))
+	base_regular_power = int(data.get("base_regular_power", regular_power))
+	base_special_power = int(data.get("base_special_power", special_power))
+	# Migrate older saves that lacked base_* / level.
+	if not data.has("base_attack"):
+		base_attack = attack
+		base_defense = defense
+		base_max_hp = max_hp
+		base_regular_power = regular_power
+		base_special_power = special_power
+		_recompute_stats_from_level()
 
 
 func to_dict() -> Dictionary:
@@ -54,6 +87,7 @@ func to_dict() -> Dictionary:
 		"bottle_palette_name": bottle_palette_name,
 		"tint_primary": [tint_primary.r, tint_primary.g, tint_primary.b, tint_primary.a],
 		"tint_secondary": [tint_secondary.r, tint_secondary.g, tint_secondary.b, tint_secondary.a],
+		"tint_accent": [tint_accent.r, tint_accent.g, tint_accent.b, tint_accent.a],
 		"attack": attack,
 		"defense": defense,
 		"max_hp": max_hp,
@@ -63,6 +97,17 @@ func to_dict() -> Dictionary:
 		"special_power": special_power,
 		"regular_power": regular_power,
 		"seed_value": seed_value,
+		"level": level,
+		"xp": xp,
+		"variant_pattern": variant_pattern,
+		"variant_crest": variant_crest,
+		"variant_weapon_style": variant_weapon_style,
+		"variant_hue_shift": variant_hue_shift,
+		"base_attack": base_attack,
+		"base_defense": base_defense,
+		"base_max_hp": base_max_hp,
+		"base_regular_power": base_regular_power,
+		"base_special_power": base_special_power,
 	}
 
 
@@ -81,8 +126,18 @@ func reset_hp() -> void:
 	current_hp = max_hp
 
 
+func heal(amount: int) -> int:
+	var before := current_hp
+	current_hp = mini(max_hp, current_hp + maxi(0, amount))
+	return current_hp - before
+
+
 func is_alive() -> bool:
 	return current_hp > 0
+
+
+func duplicate_warrior() -> Warrior:
+	return Warrior.new(to_dict())
 
 
 func sprite_path() -> String:
@@ -105,9 +160,76 @@ func category_display() -> String:
 	return FactionData.category_label(category)
 
 
+func xp_to_next_level() -> int:
+	return 40 + (level * 35) + ((level * level) * 5)
+
+
+func gain_xp(amount: int) -> Dictionary:
+	var gained := maxi(0, amount)
+	xp += gained
+	var levels := 0
+	while xp >= xp_to_next_level():
+		xp -= xp_to_next_level()
+		level += 1
+		levels += 1
+		_recompute_stats_from_level()
+		current_hp = max_hp
+	return {"gained": gained, "levels": levels, "level": level, "xp": xp}
+
+
+func _recompute_stats_from_level() -> void:
+	var bonus := level - 1
+	attack = base_attack + bonus * 2
+	defense = base_defense + bonus * 2
+	max_hp = base_max_hp + bonus * 8
+	regular_power = base_regular_power + bonus
+	special_power = base_special_power + bonus * 2
+
+
+func scaled_for_level(target_level: int) -> Warrior:
+	## Clone with stats scaled as if this warrior were target_level (for enemies).
+	var w := Warrior.new(to_dict())
+	w.level = maxi(1, target_level)
+	w.xp = 0
+	w._recompute_stats_from_level()
+	w.reset_hp()
+	return w
+
+
 func calc_damage(move_power: int, target_defense: int, is_special: bool = false) -> int:
 	var variance: float = 0.85 + (float((seed_value + move_power) % 30) / 100.0)
 	var raw: float = float(attack) * float(move_power) / maxf(1.0, float(target_defense) * 0.65)
 	if is_special:
 		raw *= 1.35
 	return maxi(1, int(round(raw * variance)))
+
+
+func variant_label() -> String:
+	const PATTERNS := ["Plainweave", "Striped", "Marbled", "Runed", "Speckled", "Banded"]
+	const CRESTS := ["No Crest", "Sunmark", "Moonmark", "Thornmark", "Wave mark"]
+	const WEAPONS := ["Dull Steel", "Bright Edge", "Darksteel", "Gilded"]
+	return "%s · %s · %s" % [
+		PATTERNS[variant_pattern % PATTERNS.size()],
+		CRESTS[variant_crest % CRESTS.size()],
+		WEAPONS[variant_weapon_style % WEAPONS.size()],
+	]
+
+
+func display_modulate() -> Color:
+	## Strong packaging-driven tint for the base sprite.
+	var c := tint_primary
+	if absf(variant_hue_shift) > 0.001:
+		var h := c.h + variant_hue_shift
+		if h < 0.0:
+			h += 1.0
+		if h > 1.0:
+			h -= 1.0
+		c = Color.from_hsv(h, clampf(c.s * 1.15, 0.2, 1.0), clampf(c.v, 0.3, 1.0), 1.0)
+	# Stronger packaging read while keeping art visible.
+	var blend := 0.72
+	return Color(
+		c.r * blend + (1.0 - blend),
+		c.g * blend + (1.0 - blend),
+		c.b * blend + (1.0 - blend),
+		1.0
+	)
