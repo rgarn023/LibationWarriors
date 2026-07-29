@@ -14,6 +14,8 @@ var attack: int = 10
 var defense: int = 10
 var max_hp: int = 100
 var current_hp: int = 100
+var max_energy: int = 50
+var current_energy: int = 50
 var regular_move: String = "Strike"
 var special_move: String = "Special"
 var special_power: int = 20
@@ -29,8 +31,10 @@ var variant_hue_shift: float = 0.0 ## -0.08..0.08
 var base_attack: int = 10
 var base_defense: int = 10
 var base_max_hp: int = 100
+var base_max_energy: int = 50
 var base_regular_power: int = 12
 var base_special_power: int = 20
+const SPECIAL_ENERGY_COST := 22
 
 
 func _init(data: Dictionary = {}) -> void:
@@ -52,6 +56,8 @@ func from_dict(data: Dictionary) -> void:
 	defense = int(data.get("defense", 10))
 	max_hp = int(data.get("max_hp", 100))
 	current_hp = int(data.get("current_hp", max_hp))
+	max_energy = int(data.get("max_energy", 50))
+	current_energy = int(data.get("current_energy", max_energy))
 	regular_move = str(data.get("regular_move", "Strike"))
 	special_move = str(data.get("special_move", "Special"))
 	special_power = int(data.get("special_power", 20))
@@ -66,9 +72,10 @@ func from_dict(data: Dictionary) -> void:
 	base_attack = int(data.get("base_attack", attack))
 	base_defense = int(data.get("base_defense", defense))
 	base_max_hp = int(data.get("base_max_hp", max_hp))
+	base_max_energy = int(data.get("base_max_energy", max_energy))
 	base_regular_power = int(data.get("base_regular_power", regular_power))
 	base_special_power = int(data.get("base_special_power", special_power))
-	# Migrate older saves that lacked base_* / level.
+	# Migrate older saves that lacked base_* / level / energy.
 	if not data.has("base_attack"):
 		base_attack = attack
 		base_defense = defense
@@ -76,6 +83,10 @@ func from_dict(data: Dictionary) -> void:
 		base_regular_power = regular_power
 		base_special_power = special_power
 		_recompute_stats_from_level()
+	if not data.has("max_energy"):
+		base_max_energy = 45 + mini(30, (level - 1) * 4)
+		max_energy = base_max_energy
+		current_energy = max_energy
 
 
 func to_dict() -> Dictionary:
@@ -92,6 +103,8 @@ func to_dict() -> Dictionary:
 		"defense": defense,
 		"max_hp": max_hp,
 		"current_hp": current_hp,
+		"max_energy": max_energy,
+		"current_energy": current_energy,
 		"regular_move": regular_move,
 		"special_move": special_move,
 		"special_power": special_power,
@@ -106,6 +119,7 @@ func to_dict() -> Dictionary:
 		"base_attack": base_attack,
 		"base_defense": base_defense,
 		"base_max_hp": base_max_hp,
+		"base_max_energy": base_max_energy,
 		"base_regular_power": base_regular_power,
 		"base_special_power": base_special_power,
 	}
@@ -124,6 +138,7 @@ func _color_from(value) -> Color:
 
 func reset_hp() -> void:
 	current_hp = max_hp
+	current_energy = max_energy
 
 
 func heal(amount: int) -> int:
@@ -132,8 +147,29 @@ func heal(amount: int) -> int:
 	return current_hp - before
 
 
+func restore_energy(amount: int) -> int:
+	var before := current_energy
+	current_energy = mini(max_energy, current_energy + maxi(0, amount))
+	return current_energy - before
+
+
+func can_special() -> bool:
+	return current_energy >= SPECIAL_ENERGY_COST and is_alive()
+
+
+func spend_special_energy() -> bool:
+	if not can_special():
+		return false
+	current_energy -= SPECIAL_ENERGY_COST
+	return true
+
+
 func is_alive() -> bool:
 	return current_hp > 0
+
+
+func energy_item_name() -> String:
+	return FactionData.energy_item_for_faction(faction)
 
 
 func duplicate_warrior() -> Warrior:
@@ -174,6 +210,7 @@ func gain_xp(amount: int) -> Dictionary:
 		levels += 1
 		_recompute_stats_from_level()
 		current_hp = max_hp
+		current_energy = max_energy
 	return {"gained": gained, "levels": levels, "level": level, "xp": xp}
 
 
@@ -182,6 +219,7 @@ func _recompute_stats_from_level() -> void:
 	attack = base_attack + bonus * 2
 	defense = base_defense + bonus * 2
 	max_hp = base_max_hp + bonus * 8
+	max_energy = base_max_energy + bonus * 4
 	regular_power = base_regular_power + bonus
 	special_power = base_special_power + bonus * 2
 

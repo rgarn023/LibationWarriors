@@ -1,0 +1,124 @@
+extends CharacterBody2D
+## Real-time dungeon foe. Chases the player and deals contact damage.
+
+signal died(enemy: CharacterBody2D, is_boss: bool, world_pos: Vector2)
+
+var warrior: Warrior
+var is_boss: bool = false
+var speed: float = 38.0
+var contact_damage: int = 8
+var invuln: float = 0.0
+var knockback: Vector2 = Vector2.ZERO
+var _player: CharacterBody2D
+var _anim_t: float = 0.0
+var _frame: int = 0
+var _sprite: Sprite2D
+var _sheet: Texture2D
+var _alive: bool = true
+var _hurt_flash: float = 0.0
+var _ai_dir: Vector2 = Vector2.ZERO
+var _ai_timer: float = 0.0
+
+
+func setup(data: Dictionary, player: CharacterBody2D, boss: bool) -> void:
+	_player = player
+	is_boss = boss
+	warrior = Warrior.new(data)
+	warrior.reset_hp()
+	contact_damage = maxi(4, int(warrior.regular_power * (1.35 if boss else 0.85)))
+	speed = 28.0 if boss else 42.0
+	collision_layer = 2
+	collision_mask = 1 # walls only (player is layer 4)
+	_sprite = Sprite2D.new()
+	_sprite.centered = true
+	_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	add_child(_sprite)
+	if ResourceLoader.exists(warrior.sheet_path()):
+		_sheet = load(warrior.sheet_path())
+		_sprite.texture = _sheet
+		_sprite.region_enabled = true
+		_sprite.region_rect = Rect2(0, 0, 64, 80)
+	elif ResourceLoader.exists(warrior.sprite_path()):
+		_sprite.texture = load(warrior.sprite_path())
+	_sprite.modulate = warrior.display_modulate()
+	_sprite.scale = Vector2(0.55, 0.55) if boss else Vector2(0.42, 0.42)
+	if boss:
+		_sprite.modulate = Color(_sprite.modulate.r * 0.9 + 0.2, _sprite.modulate.g * 0.7, _sprite.modulate.b * 0.7)
+	var cs := CollisionShape2D.new()
+	var rect := RectangleShape2D.new()
+	rect.size = Vector2(14, 16) if not boss else Vector2(18, 20)
+	cs.shape = rect
+	add_child(cs)
+	# Soft shadow
+	var sh := ColorRect.new()
+	sh.color = Color(0, 0, 0, 0.35)
+	sh.size = Vector2(16, 5) if not boss else Vector2(22, 6)
+	sh.position = Vector2(-sh.size.x * 0.5, 10)
+	sh.z_index = -1
+	add_child(sh)
+
+
+func _physics_process(delta: float) -> void:
+	if not _alive:
+		return
+	if invuln > 0.0:
+		invuln -= delta
+	if _hurt_flash > 0.0:
+		_hurt_flash -= delta
+		_sprite.modulate.a = 0.45 if int(_hurt_flash * 20.0) % 2 == 0 else 1.0
+	else:
+		_sprite.modulate.a = 1.0
+
+	_anim_t += delta
+	if _anim_t >= 0.14:
+		_anim_t = 0.0
+		_frame = (_frame + 1) % 4
+		_update_frame()
+
+	if knockback.length() > 4.0:
+		velocity = knockback
+		knockback = knockback.move_toward(Vector2.ZERO, 280.0 * delta)
+	else:
+		knockback = Vector2.ZERO
+		_ai_timer -= delta
+		if _ai_timer <= 0.0:
+			_ai_timer = randf_range(0.35, 0.9)
+			if _player != null and is_instance_valid(_player):
+				var to_p: Vector2 = _player.global_position - global_position
+				if to_p.length() < 110.0 or is_boss:
+					_ai_dir = to_p.normalized()
+				else:
+					_ai_dir = Vector2(randf_range(-1, 1), randf_range(-1, 1)).normalized()
+			else:
+				_ai_dir = Vector2.ZERO
+		velocity = _ai_dir * speed
+	move_and_slide()
+	# Soft stay in floor bounds
+	position.x = clampf(position.x, 24.0, 232.0)
+	position.y = clampf(position.y, 24.0, 152.0)
+
+
+func _update_frame() -> void:
+	if _sheet == null or not _sprite.region_enabled:
+		return
+	_sprite.region_rect = Rect2(_frame * 64, 0, 64, 80)
+
+
+func take_hit(amount: int, from_pos: Vector2) -> void:
+	if not _alive or invuln > 0.0:
+		return
+	warrior.current_hp = maxi(0, warrior.current_hp - amount)
+	invuln = 0.28
+	_hurt_flash = 0.35
+	var dir := (global_position - from_pos).normalized()
+	if dir == Vector2.ZERO:
+		dir = Vector2.RIGHT
+	knockback = dir * (140.0 if is_boss else 180.0)
+	if warrior.current_hp <= 0:
+		_alive = false
+		died.emit(self, is_boss, global_position)
+		queue_free()
+
+
+func is_alive_enemy() -> bool:
+	return _alive

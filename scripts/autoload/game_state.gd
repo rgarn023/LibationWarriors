@@ -144,6 +144,7 @@ func begin_adventure(barcode: String, dungeon: Dictionary) -> void:
 	if w != null:
 		w.reset_hp()
 		adventure_dungeon["player_hp"] = w.max_hp
+		adventure_dungeon["player_energy"] = w.max_energy
 		update_warrior(w)
 
 
@@ -157,6 +158,10 @@ func get_adventure_warrior() -> Warrior:
 	if hp < 0:
 		hp = w.max_hp
 	w.current_hp = clampi(hp, 0, w.max_hp)
+	var en := int(adventure_dungeon.get("player_energy", w.max_energy))
+	if en < 0:
+		en = w.max_energy
+	w.current_energy = clampi(en, 0, w.max_energy)
 	return w
 
 
@@ -164,6 +169,7 @@ func save_adventure_warrior(w: Warrior) -> void:
 	if w == null:
 		return
 	adventure_dungeon["player_hp"] = w.current_hp
+	adventure_dungeon["player_energy"] = w.current_energy
 	update_warrior(w)
 
 

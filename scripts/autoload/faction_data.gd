@@ -77,6 +77,26 @@ const FACTION_LABELS := {
 	"nimrod": "Nimrod",
 }
 
+## Faction energy pickups used in Adventure (restore energy, not HP).
+const ENERGY_ITEMS := {
+	"pirate": "Bottle of Rum",
+	"militiaman": "Canteen of Bourbon",
+	"bandit": "Flask of Tequila",
+	"druid": "Dram of Scotch",
+	"barbarian": "Jug of Vodka",
+	"paladin": "Snifter of Brandy",
+	"alchemist": "Phial of Gin",
+	"bard": "Cordial Flask",
+	"red_mage": "Goblet of Red",
+	"white_mage": "Glass of White",
+	"black_mage": "Cup of Wine",
+	"brawler": "Stein of Ale",
+	"samurai": "Sakazuki of Sake",
+	"viking": "Horn of Mead",
+	"rogue": "Shot of Spirits",
+	"nimrod": "Bottle of Soda",
+}
+
 ## Bottle-inspired color palettes (no brands). Used to tint warriors.
 const BOTTLE_PALETTES := [
 	{"name": "Amber Glass", "primary": Color(0.72, 0.42, 0.12), "secondary": Color(0.35, 0.18, 0.05)},
@@ -167,6 +187,10 @@ func faction_for_category(cat: int) -> String:
 
 func faction_label(faction_id: String) -> String:
 	return FACTION_LABELS.get(faction_id, faction_id.capitalize())
+
+
+func energy_item_for_faction(faction_id: String) -> String:
+	return ENERGY_ITEMS.get(faction_id, "Libation Flask")
 
 
 func all_categories() -> Array:

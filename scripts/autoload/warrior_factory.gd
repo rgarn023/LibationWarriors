@@ -44,10 +44,12 @@ func generate(barcode: String, category: int, packaging_colors: Dictionary = {})
 	warrior.base_attack = clampi(12 + rng.randi_range(0, 28) + atk_bias, 8, 48)
 	warrior.base_defense = clampi(12 + rng.randi_range(0, 28) + def_bias, 8, 48)
 	warrior.base_max_hp = clampi(80 + rng.randi_range(0, 60) + (def_bias * 2), 70, 180)
+	warrior.base_max_energy = clampi(42 + rng.randi_range(0, 18), 40, 70)
 	warrior.base_regular_power = clampi(10 + rng.randi_range(0, 14) + atk_bias / 2, 8, 30)
 	warrior.base_special_power = clampi(18 + rng.randi_range(0, 22) + atk_bias, 14, 45)
 	warrior._recompute_stats_from_level()
 	warrior.current_hp = warrior.max_hp
+	warrior.current_energy = warrior.max_energy
 
 	var regs: Array = FactionData.REGULAR_MOVES.get(faction, ["Strike"])
 	var specs: Array = FactionData.SPECIAL_MOVES.get(faction, ["Special"])
