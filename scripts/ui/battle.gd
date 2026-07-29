@@ -85,7 +85,7 @@ func _make_fighter_panel(w: Warrior, is_enemy: bool, index: int) -> PanelContain
 	panel.add_child(v)
 	var tr := TextureRect.new()
 	tr.texture = UITheme.load_texture(w.preview_path())
-	tr.custom_minimum_size = Vector2(64, 88)
+	tr.custom_minimum_size = Vector2(72, 96)
 	tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	tr.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST

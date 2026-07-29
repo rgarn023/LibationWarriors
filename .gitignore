@@ -16,3 +16,4 @@ local.properties
 
 # Godot Android gradle template (regenerated on export)
 android/build/
+assets/refs/

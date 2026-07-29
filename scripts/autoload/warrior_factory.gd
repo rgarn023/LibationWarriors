@@ -24,7 +24,6 @@ func generate(barcode: String, category: int) -> Warrior:
 	var prefixes: Array = FactionData.NAME_PREFIXES.get(faction, ["Warrior"])
 	var prefix: String = prefixes[rng.randi() % prefixes.size()]
 	var suffix: String = FactionData.NAME_SUFFIXES[rng.randi() % FactionData.NAME_SUFFIXES.size()]
-	# Encode a short unique token from barcode so same liquor/different codes differ.
 	var token := _token_from_seed(seed)
 	warrior.name = "%s %s" % [prefix, token]
 	if rng.randf() < 0.45:
@@ -35,7 +34,6 @@ func generate(barcode: String, category: int) -> Warrior:
 	warrior.tint_primary = palette["primary"]
 	warrior.tint_secondary = palette["secondary"]
 
-	# Stats unique per barcode; faction nudges the spread.
 	var atk_bias := _faction_atk_bias(faction)
 	var def_bias := _faction_def_bias(faction)
 	warrior.attack = clampi(12 + rng.randi_range(0, 28) + atk_bias, 8, 48)
@@ -85,46 +83,169 @@ func _faction_def_bias(faction: String) -> int:
 			return 0
 
 
-## Best-effort classification hints from Open Food Facts-style keywords.
-## Never returns or displays brand names.
-func classify_from_keywords(text: String) -> int:
-	var t := text.to_lower()
-	if t.is_empty():
+func _has_word(hay: String, needle: String) -> bool:
+	## Match whole token/tag fragments so "rum" does not hit unrelated text wrongly,
+	## while still matching OFF tags like "en:rums" / "dark-rum".
+	if needle.is_empty() or hay.is_empty():
+		return false
+	if hay == needle:
+		return true
+	# Tag / hyphen / underscore / punctuation boundaries.
+	var markers := [" ", "-", "_", ":", "/", ",", ";", "(", ")", "[", "]", "."]
+	if (" " + hay + " ").find(" " + needle + " ") >= 0:
+		return true
+	for m in markers:
+		if hay.find(m + needle + m) >= 0:
+			return true
+		if hay.begins_with(needle + m) or hay.ends_with(m + needle):
+			return true
+		if hay.find(m + needle + "s" + m) >= 0 or hay.find(m + needle + "s") >= 0:
+			return true
+		if hay.ends_with(m + needle + "s") or hay == needle + "s":
+			return true
+	# Compact tag forms: en:soft-drinks, en:non-alcoholic-beverages
+	if hay.find(needle) >= 0:
+		# Reject accidental substring inside longer alpha words (e.g. "forum").
+		var idx := 0
+		while true:
+			var at := hay.find(needle, idx)
+			if at < 0:
+				break
+			var before_ok := at == 0 or not _is_alpha(hay.unicode_at(at - 1))
+			var after_i := at + needle.length()
+			var after_ok := after_i >= hay.length() or not _is_alpha(hay.unicode_at(after_i))
+			# Allow plural trailing s
+			if after_i < hay.length() and hay.unicode_at(after_i) == "s".unicode_at(0):
+				var after2 := after_i + 1
+				after_ok = after2 >= hay.length() or not _is_alpha(hay.unicode_at(after2))
+			if before_ok and after_ok:
+				return true
+			idx = at + 1
+	return false
+
+
+func _is_alpha(code: int) -> bool:
+	return (code >= 65 and code <= 90) or (code >= 97 and code <= 122)
+
+
+func _has_any(hay: String, needles: Array) -> bool:
+	for n in needles:
+		if _has_word(hay, str(n)):
+			return true
+	return false
+
+
+## Classify beverage TYPE from product metadata. Never for display of brand names.
+## Returns FactionData.Category or -1 if unknown.
+func classify_from_keywords(text: String, alcohol_percent: float = -1.0) -> int:
+	var t := text.to_lower().replace("_", "-")
+	if t.is_empty() and alcohol_percent < 0.0:
 		return -1
-	# Non-alcoholic first
-	if "non-alcoholic" in t or "nonalcoholic" in t or "alcohol free" in t or "soda" in t or "soft drink" in t or "juice" in t or "water" in t and "tonic" not in t:
-		if "beer" in t or "wine" in t or "spirit" in t:
-			pass
-		else:
-			return FactionData.Category.NON_ALCOHOLIC
-	if "rum" in t:
+
+	# Explicit zero / near-zero alcohol → non-alcoholic.
+	if alcohol_percent >= 0.0 and alcohol_percent < 0.5:
+		return FactionData.Category.NON_ALCOHOLIC
+
+	var non_alc := [
+		"non-alcoholic", "nonalcoholic", "alcohol-free", "alcohol free",
+		"soft-drink", "soft-drinks", "soda", "sodas", "cola", "colas",
+		"lemonade", "lemonades", "energy-drink", "energy-drinks",
+		"sport-drink", "sports-drink", "sports-drinks",
+		"carbonated-drink", "carbonated-drinks", "fizzy",
+		"juice", "juices", "nectar", "smoothie",
+		"water", "waters", "sparkling-water", "still-water", "mineral-water",
+		"tea", "teas", "coffee", "coffees", "milk", "dairy-drink",
+		"beverage-preparation", "drinkable-yogurt",
+		"tonic-water", # non-alc mixer unless marked alcoholic elsewhere
+	]
+	var alcoholic_conflict := ["beer", "wine", "spirit", "spirits", "rum", "vodka", "whisky", "whiskey", "liqueur", "cider"]
+
+	if _has_any(t, non_alc):
+		# Soft drinks / sodas / waters win unless clearly alcoholic beverage too.
+		if not _has_any(t, alcoholic_conflict) or _has_any(t, ["non-alcoholic", "nonalcoholic", "alcohol-free", "alcohol free"]):
+			# Exception: tonic water with gin context stays gin; plain tonic → non-alc.
+			if _has_word(t, "gin") and _has_word(t, "tonic") and not _has_any(t, ["soft-drink", "soft-drinks", "soda", "sodas"]):
+				pass
+			else:
+				return FactionData.Category.NON_ALCOHOLIC
+
+	# Strong spirits — order matters (specific before generic).
+	if _has_any(t, ["rum", "rums", "dark-rum", "white-rum", "spiced-rum"]):
 		return FactionData.Category.RUM
-	if "bourbon" in t or "whiskey" in t and "scotch" not in t and "irish" not in t:
+	if _has_any(t, ["bourbon", "bourbons"]):
 		return FactionData.Category.BOURBON
-	if "tequila" in t or "mezcal" in t:
+	if _has_any(t, ["tequila", "tequilas", "mezcal", "mezcals"]):
 		return FactionData.Category.TEQUILA
-	if "scotch" in t or "single malt" in t:
+	if _has_any(t, ["scotch", "single-malt", "single malt"]):
 		return FactionData.Category.SCOTCH
-	if "vodka" in t:
+	if _has_any(t, ["vodka", "vodkas"]):
 		return FactionData.Category.VODKA
-	if "brandy" in t or "cognac" in t or "armagnac" in t:
+	if _has_any(t, ["brandy", "brandies", "cognac", "cognacs", "armagnac"]):
 		return FactionData.Category.BRANDY
-	if "gin" in t and "ginger" not in t:
-		return FactionData.Category.GIN
-	if "liqueur" in t or "cordial" in t or "cocktail" in t or "ready to drink" in t or "rtd" in t:
+	# Gin: avoid ginger / virginia edge-cases via word match.
+	if _has_word(t, "gin") or _has_word(t, "gins") or _has_word(t, "genever"):
+		if not _has_any(t, ["ginger", "virginia"]):
+			return FactionData.Category.GIN
+	if _has_any(t, ["liqueur", "liqueurs", "cordial", "cordials", "cocktail", "cocktails", "ready-to-drink", "rtd", "alcopop", "alcopops"]):
 		return FactionData.Category.LIQUEUR
-	if "red wine" in t or ("wine" in t and ("cabernet" in t or "merlot" in t or "pinot noir" in t or "syrah" in t or "malbec" in t or "zinfandel" in t)):
+
+	# Wines
+	if _has_any(t, ["red-wine", "red wine"]) or (_has_word(t, "wine") and _has_any(t, ["cabernet", "merlot", "pinot-noir", "pinot noir", "syrah", "shiraz", "malbec", "zinfandel", "tempranillo", "sangiovese"])):
 		return FactionData.Category.RED_WINE
-	if "white wine" in t or ("wine" in t and ("chardonnay" in t or "sauvignon" in t or "riesling" in t or "pinot grigio" in t or "pinot gris" in t)):
+	if _has_any(t, ["white-wine", "white wine"]) or (_has_word(t, "wine") and _has_any(t, ["chardonnay", "sauvignon", "riesling", "pinot-grigio", "pinot grigio", "pinot-gris", "pinot gris", "moscato"])):
 		return FactionData.Category.WHITE_WINE
-	if "wine" in t or "champagne" in t or "prosecco" in t or "sparkling" in t:
-		return FactionData.Category.OTHER_WINE
-	if "beer" in t or "ale" in t or "lager" in t or "ipa" in t or "stout" in t or "porter" in t:
+	if _has_any(t, ["wine", "wines", "champagne", "prosecco", "cava", "sparkling-wine", "sparkling wine", "rose-wine", "rosé", "rose"]):
+		# Avoid classifying plain "sparkling" soft drinks as wine (already handled above).
+		if not _has_any(t, ["soft-drink", "soft-drinks", "soda", "sodas", "cola"]):
+			return FactionData.Category.OTHER_WINE
+
+	if _has_any(t, ["beer", "beers", "ale", "ales", "lager", "lagers", "ipa", "stout", "porter", "porters", "pilsner", "cider", "ciders"]):
 		return FactionData.Category.BEER
-	if "sake" in t or "nihonshu" in t:
+	if _has_any(t, ["sake", "sakes", "nihonshu"]):
 		return FactionData.Category.SAKE
-	if "mead" in t:
+	if _has_any(t, ["mead", "meads"]):
 		return FactionData.Category.MEAD
-	if "whisky" in t or "whiskey" in t or "spirit" in t or "alcohol" in t:
+
+	# Generic alcohol leftovers
+	if alcohol_percent >= 0.5:
 		return FactionData.Category.OTHER_ALCOHOL
+	if _has_any(t, ["whisky", "whiskey", "spirit", "spirits", "liquor", "distilled", "alcoholic-beverage", "alcoholic-beverages", "alcohol"]):
+		# "alcohol" tag alone with soft-drink already returned; remaining → other alcohol
+		if not _has_any(t, non_alc):
+			return FactionData.Category.OTHER_ALCOHOL
+
 	return -1
+
+
+## Build a classification blob from an Open Food Facts (or similar) product dict.
+## Includes product_name only for matching — callers must never show brand text.
+func classify_product_dict(product: Dictionary) -> Dictionary:
+	var blob := ""
+	blob += str(product.get("categories", "")) + " "
+	blob += str(product.get("generic_name", "")) + " "
+	blob += str(product.get("product_name", "")) + " " # classify only
+	blob += str(product.get("product_name_en", "")) + " "
+	for t in product.get("categories_tags", []):
+		blob += str(t) + " "
+	for t in product.get("labels_tags", []):
+		blob += str(t) + " "
+	for t in product.get("ingredients_analysis_tags", []):
+		blob += str(t) + " "
+	# Alcohol % from nutriments if present
+	var alcohol := -1.0
+	if product.has("alcohol_100g"):
+		alcohol = float(product.get("alcohol_100g"))
+	var nutriments: Variant = product.get("nutriments", {})
+	if typeof(nutriments) == TYPE_DICTIONARY:
+		if nutriments.has("alcohol") or nutriments.has("alcohol_100g"):
+			alcohol = float(nutriments.get("alcohol", nutriments.get("alcohol_100g", alcohol)))
+	var cat := classify_from_keywords(blob, alcohol)
+	var type_label := ""
+	if cat >= 0:
+		type_label = FactionData.category_label(cat)
+	return {
+		"category": cat,
+		"type_label": type_label,
+		"alcohol_percent": alcohol,
+		"confident": cat >= 0,
+	}
