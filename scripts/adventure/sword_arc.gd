@@ -1,15 +1,15 @@
 extends Node2D
 class_name SwordArc
-## Classic JRPG melee swing: the carried blade rotates through a wide arc with a
-## thick white crescent smear (Chrono Trigger / SNES slash style).
+## Chrono Trigger-style melee: wind-up → snappy slash with a thick white crescent
+## smear → follow-through. Blade rides the leading edge of the arc.
 
 
-const LIFE_NORMAL := 0.28
-const LIFE_SPECIAL := 0.34
+const LIFE_NORMAL := 0.32
+const LIFE_SPECIAL := 0.38
 
 var _t: float = 0.0
 var _life: float = LIFE_NORMAL
-var _face: Vector2 = Vector2.RIGHT
+var _face: Vector2 = Vector2.LEFT
 var _shape: String = "sword"
 var _color: Color = Color(0.8, 0.8, 0.9)
 var _special: bool = false
@@ -52,72 +52,115 @@ func _draw() -> void:
 
 
 func _ease_strike(p: float) -> float:
-	## Slow wind-up, snappy cut, soft recover.
-	if p < 0.28:
-		return (p / 0.28) * 0.22
-	if p < 0.55:
-		var u := (p - 0.28) / 0.27
-		return 0.22 + u * u * 0.58
-	var u2 := (p - 0.55) / 0.45
+	## Hold wind-up, snap through the cut, ease into recover.
+	if p < 0.30:
+		return (p / 0.30) * 0.18
+	if p < 0.48:
+		var u := (p - 0.30) / 0.18
+		## Ease-in-out cubed for a violent mid-slash
+		var s := u * u * (3.0 - 2.0 * u)
+		return 0.18 + s * 0.62
+	var u2 := (p - 0.48) / 0.52
 	return 0.8 + (1.0 - (1.0 - u2) * (1.0 - u2)) * 0.2
 
 
 func _draw_slash() -> void:
-	var side := 1.0 if _face.x >= 0.0 else -1.0
-	if _face.x == 0.0:
-		side = 1.0
-	var base := _face.angle()
-	var start := base - side * (2.05 if _special else 1.75)
-	var end := base + side * (1.45 if _special else 1.15)
+	## Reference: raised behind shoulder → snappy diagonal cut → low follow-through,
+	## with a huge white/blue crescent smear on the active frames.
+	var start: float
+	var end: float
+	if _face == Vector2.LEFT:
+		start = PI + 1.15 ## raised behind head
+		end = PI - 1.25 ## low in front
+	elif _face == Vector2.RIGHT:
+		start = -1.15
+		end = 1.25
+	elif _face == Vector2.UP:
+		start = -PI * 0.5 - 1.2
+		end = -PI * 0.5 + 1.2
+	else:
+		start = PI * 0.5 - 1.2
+		end = PI * 0.5 + 1.2
+
 	var e := _ease_strike(_progress)
 	var ang := lerpf(start, end, e)
 	var hand := _hand_local()
-	var radius := 30.0 if _special else 24.0
+	var radius := 34.0 if _special else 28.0
 
-	# Crescent smear — solid fan wedges (the iconic JRPG look)
-	if _progress > 0.18 and _progress < 0.85:
-		var smear_a := clampf((_progress - 0.18) / 0.2, 0.0, 1.0)
-		if _progress > 0.55:
-			smear_a = clampf(1.0 - (_progress - 0.55) / 0.3, 0.0, 1.0)
-		var trail_start := lerpf(start, ang, 0.15)
-		var blades := 11 if _special else 9
-		for i in blades:
-			var t := float(i) / float(blades - 1)
-			var a := lerpf(trail_start, ang, t)
-			var inner := radius * 0.22
-			var outer := radius * lerpf(0.75, 1.05, t)
-			var p0 := hand + Vector2(cos(a), sin(a)) * inner
-			var p1 := hand + Vector2(cos(a), sin(a)) * outer
-			var w := lerpf(7.0, 2.0, t) * (1.15 if _special else 1.0)
-			var c := Color(1.0, 1.0, 0.95, smear_a * lerpf(0.95, 0.25, t))
-			draw_line(p0, p1, c, w)
-			# tinted core
-			var c2 := Color(_color.r, _color.g, _color.b, c.a * 0.55)
-			draw_line(p0, p1, c2, w * 0.45)
-		# Leading edge flash
+	## Crescent only during the violent part of the swing
+	if _progress >= 0.28 and _progress <= 0.72:
+		var fade := 1.0
+		if _progress < 0.36:
+			fade = (_progress - 0.28) / 0.08
+		elif _progress > 0.58:
+			fade = 1.0 - (_progress - 0.58) / 0.14
+		fade = clampf(fade, 0.0, 1.0)
+		var trail_from := lerpf(start, ang, 0.08)
+		_draw_crescent(hand, trail_from, ang, radius * 0.28, radius * 1.08, fade)
+		## Leading flash
 		var tip := hand + Vector2(cos(ang), sin(ang)) * radius
-		draw_circle(tip, 3.5 if _special else 2.5, Color(1, 1, 1, smear_a))
+		draw_circle(tip, 4.0 if _special else 3.0, Color(1, 1, 1, 0.95 * fade))
+		draw_circle(tip, 2.0, Color(0.75, 0.9, 1.0, 0.85 * fade))
 
-	# Carried blade at current angle
-	_draw_blade(hand, ang, radius * 0.92)
+	## Blade visible on wind-up, strike edge, and follow-through
+	_draw_blade(hand, ang, radius * 0.9)
+
+
+func _draw_crescent(hand: Vector2, a0: float, a1: float, r_in: float, r_out: float, alpha: float) -> void:
+	## Filled pie-band (the big white CT slash trail).
+	var steps := 18
+	var outer: PackedVector2Array = PackedVector2Array()
+	var inner: PackedVector2Array = PackedVector2Array()
+	for i in steps:
+		var t := float(i) / float(steps - 1)
+		var a := lerpf(a0, a1, t)
+		outer.append(hand + Vector2(cos(a), sin(a)) * r_out)
+		inner.append(hand + Vector2(cos(a), sin(a)) * r_in)
+	var pts := PackedVector2Array()
+	for p in outer:
+		pts.append(p)
+	for i in range(inner.size() - 1, -1, -1):
+		pts.append(inner[i])
+	if pts.size() >= 3:
+		## Soft blue-white fill
+		draw_colored_polygon(pts, Color(0.85, 0.95, 1.0, 0.55 * alpha))
+		## Brighter core band (slightly thinner)
+		var core := PackedVector2Array()
+		var mid_in := (r_in + r_out) * 0.42
+		var mid_out := r_out * 0.98
+		for i in steps:
+			var t := float(i) / float(steps - 1)
+			var a := lerpf(a0, a1, t)
+			core.append(hand + Vector2(cos(a), sin(a)) * mid_out)
+		for i in range(steps - 1, -1, -1):
+			var t := float(i) / float(steps - 1)
+			var a := lerpf(a0, a1, t)
+			core.append(hand + Vector2(cos(a), sin(a)) * mid_in)
+		draw_colored_polygon(core, Color(1.0, 1.0, 1.0, 0.88 * alpha))
+		## Jagged leading rim
+		for i in range(1, steps):
+			var t := float(i) / float(steps - 1)
+			var a := lerpf(a0, a1, t)
+			var p := hand + Vector2(cos(a), sin(a)) * r_out
+			var w := lerpf(2.5, 5.5, t)
+			draw_circle(p, w * 0.35, Color(1, 1, 1, (0.5 + 0.5 * t) * alpha))
 
 
 func _draw_chop() -> void:
-	var side := 1.0 if _face.x >= 0.0 else -1.0
-	var base := _face.angle()
-	var start := base - side * 1.4 - 0.9
-	var end := base + side * 0.4 + 0.9
+	var start := -2.0
+	var end := 1.4
+	if _face == Vector2.LEFT:
+		start = PI + 1.4
+		end = PI - 0.9
+	elif _face == Vector2.RIGHT:
+		start = -1.4
+		end = 0.9
 	var e := _ease_strike(_progress)
 	var ang := lerpf(start, end, e)
-	var hand := _hand_local() + Vector2(0, lerpf(-6.0, 4.0, e))
-	if _progress > 0.2 and _progress < 0.8:
-		var a0 := lerpf(start, ang, 0.2)
-		for i in 8:
-			var t := float(i) / 7.0
-			var a := lerpf(a0, ang, t)
-			var p0 := hand + Vector2(cos(a), sin(a)) * 6.0
-			var p1 := hand + Vector2(cos(a), sin(a)) * 26.0
-			draw_line(p0, p1, Color(1, 1, 0.92, lerpf(0.9, 0.2, t)), lerpf(6.0, 2.0, t))
+	var hand := _hand_local() + Vector2(0, lerpf(-8.0, 5.0, e))
+	if _progress >= 0.28 and _progress <= 0.7:
+		var fade := clampf(1.0 - absf(_progress - 0.45) / 0.25, 0.0, 1.0)
+		_draw_crescent(hand, lerpf(start, ang, 0.1), ang, 8.0, 30.0, fade)
 	_draw_blade(hand, ang, 26.0)
 
 
@@ -128,7 +171,8 @@ func _draw_thrust() -> void:
 	var tip := hand + _face * (10.0 + reach)
 	var grip := hand + _face * (reach * 0.15)
 	if _progress > 0.25 and _progress < 0.7:
-		draw_line(grip, tip + _face * 6.0, Color(1, 1, 0.9, 0.85), 4.0 if _special else 3.0)
+		draw_line(grip, tip + _face * 6.0, Color(1, 1, 0.95, 0.9), 5.0 if _special else 3.5)
+		draw_circle(tip + _face * 4.0, 4.0, Color(1, 1, 1, 0.9))
 	_draw_blade(grip, _face.angle(), 18.0)
 
 
@@ -144,26 +188,26 @@ func _draw_cast() -> void:
 
 
 func _hand_local() -> Vector2:
-	## Offset from character center toward the striking hand.
+	## Grip near the painted hand (sheets face left: sword hand is toward viewer).
 	if _face == Vector2.RIGHT:
-		return Vector2(6, 2)
+		return Vector2(5, 3)
 	if _face == Vector2.LEFT:
-		return Vector2(-6, 2)
+		return Vector2(-4, 3)
 	if _face == Vector2.UP:
-		return Vector2(2, -4)
-	return Vector2(2, 5)
+		return Vector2(1, -5)
+	return Vector2(1, 6)
 
 
 func _draw_blade(hand: Vector2, angle: float, length: float) -> void:
 	var dir := Vector2(cos(angle), sin(angle))
 	var perp := Vector2(-dir.y, dir.x)
-	var steel := _color.lightened(0.15)
-	var edge := Color(1, 1, 1, 0.95)
-	var dark := steel.darkened(0.45)
+	var steel := _color.lightened(0.2)
+	var edge := Color(0.95, 0.98, 1.0, 1.0)
+	var dark := steel.darkened(0.5)
 	var grip_c := Color(0.42, 0.28, 0.16)
 	var tip := hand + dir * length
-	var guard := hand + dir * 3.0
-	var pommel := hand - dir * 5.0
+	var guard := hand + dir * 2.5
+	var pommel := hand - dir * 5.5
 
 	match _shape:
 		"axe":
@@ -188,24 +232,19 @@ func _draw_blade(hand: Vector2, angle: float, length: float) -> void:
 			draw_line(hand, hand + dir * 8.0, steel, 2.0)
 			draw_rect(Rect2(hand + dir * 6.0 - Vector2(4, 4), Vector2(8, 10)), _color, true)
 		_:
-			# Sword / cutlass / katana / dagger family — tapered blade + guard
-			var thick := 3.2 if _shape in ["cutlass", "sword", "katana"] else (2.2 if _shape in ["rapier", "bayonet"] else 2.0)
+			var thick := 3.4 if _shape in ["cutlass", "sword", "katana"] else (2.2 if _shape in ["rapier", "bayonet"] else 2.0)
 			if _shape == "cutlass":
-				# Slight curve via mid control point
-				var mid := hand + dir * (length * 0.55) + perp * (2.5 * (1.0 if _face.x >= 0.0 else -1.0))
+				var mid := hand + dir * (length * 0.55) + perp * 2.8
 				_draw_thick_poly(hand + dir * 4.0, mid, tip, thick, steel, edge)
 			else:
 				var half := perp * (thick * 0.5)
-				var base_l := guard + half
-				var base_r := guard - half
-				var tip_l := tip + perp * 0.4
-				var tip_r := tip - perp * 0.4
-				draw_colored_polygon(PackedVector2Array([base_l, tip_l, tip_r, base_r]), steel)
-				draw_line(guard, tip, edge, 1.0)
-			# Guard + grip
-			draw_line(hand + perp * 4.0, hand - perp * 4.0, dark, 2.0)
-			draw_line(hand, pommel, grip_c, 2.5)
-			draw_circle(pommel, 1.6, dark)
+				draw_colored_polygon(PackedVector2Array([
+					guard + half, tip + perp * 0.3, tip - perp * 0.3, guard - half
+				]), steel)
+				draw_line(guard, tip, edge, 1.1)
+			draw_line(hand + perp * 4.5, hand - perp * 4.5, dark, 2.2)
+			draw_line(hand, pommel, grip_c, 2.6)
+			draw_circle(pommel, 1.7, dark)
 
 
 func _draw_thick_poly(a: Vector2, b: Vector2, c: Vector2, thick: float, fill: Color, highlight: Color) -> void:

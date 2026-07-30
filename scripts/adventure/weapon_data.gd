@@ -61,6 +61,11 @@ static func cardinal(dir: Vector2) -> Vector2:
 	return Vector2.DOWN if dir.y >= 0.0 else Vector2.UP
 
 
+static func flip_h_for(facing: Vector2) -> bool:
+	## Walk sheets are authored facing left / down-left. Flip only when facing right.
+	return WeaponData.cardinal(facing).x > 0.2
+
+
 static func finish_color(base: Color, weapon_style: int) -> Color:
 	match weapon_style % 4:
 		1: # Bright Edge

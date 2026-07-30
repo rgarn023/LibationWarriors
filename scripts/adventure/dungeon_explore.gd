@@ -262,7 +262,7 @@ func _set_player_frame(frame: int) -> void:
 	if _player_sheet == null or not _player_sprite.region_enabled:
 		return
 	_player_sprite.region_rect = Rect2(frame * 64, 0, 64, 80)
-	_player_sprite.flip_h = _facing.x < -0.2
+	_player_sprite.flip_h = WeaponData.flip_h_for(_facing)
 
 
 func _clamp_player_in_room() -> void:
@@ -742,10 +742,11 @@ func _spawn_sword_arc(shape: String, col: Color, is_special: bool) -> void:
 	# Counter sprite scale so the arc reads at world size (~character height).
 	var s := _player_base_scale if _player_base_scale > 0.01 else 0.42
 	arc.scale = Vector2(1.0 / s, 1.0 / s)
-	# Sprite flip_h already mirrors left; feed RIGHT so the arc isn't double-flipped.
+	# Sheets face left; flip_h mirrors when facing right. Always draw the arc in
+	# native (left) space so flip_h carries it to the correct world side.
 	var face_for_arc := _facing
-	if face_for_arc.x < 0.0:
-		face_for_arc = Vector2.RIGHT
+	if absf(face_for_arc.x) >= absf(face_for_arc.y):
+		face_for_arc = Vector2.LEFT
 	arc.play(face_for_arc, shape, col, is_special, _attack_style)
 	_sword_arc = arc
 

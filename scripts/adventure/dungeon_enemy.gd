@@ -184,8 +184,8 @@ func _begin_attack(ranged: bool) -> void:
 	var s := _base_scale if _base_scale > 0.01 else 0.42
 	arc.scale = Vector2(1.0 / s, 1.0 / s)
 	var face_for_arc := _facing
-	if face_for_arc.x < 0.0:
-		face_for_arc = Vector2.RIGHT
+	if absf(face_for_arc.x) >= absf(face_for_arc.y):
+		face_for_arc = Vector2.LEFT
 	arc.play(face_for_arc, shape, col, is_boss, _attack_style)
 	_sword_arc = arc
 
@@ -226,7 +226,7 @@ func _update_frame() -> void:
 	if _sheet == null or not _sprite.region_enabled or _attack_anim_t > 0.0:
 		return
 	_sprite.region_rect = Rect2(_frame * 64, 0, 64, 80)
-	_sprite.flip_h = _facing.x < -0.2
+	_sprite.flip_h = WeaponData.flip_h_for(_facing)
 
 
 func take_hit(amount: int, from_pos: Vector2) -> void:

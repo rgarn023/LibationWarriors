@@ -13,7 +13,7 @@ static func apply(sprite: Sprite2D, facing: Vector2, remaining01: float, is_spec
 	var u := 1.0 - clampf(remaining01, 0.0, 1.0) # elapsed 0..1
 	var wind := 0.22
 	var strike := 0.55
-	sprite.flip_h = face.x < -0.2
+	sprite.flip_h = WeaponData.flip_h_for(face)
 	var bs := base_scale if base_scale > 0.01 else 0.42
 	match style:
 		"thrust", "jab":
@@ -48,23 +48,23 @@ static func swing_style_for(shape: String) -> String:
 
 
 static func _pose_slash(sprite: Sprite2D, face: Vector2, u: float, wind: float, strike: float, special: bool, bs: float) -> void:
-	## Bigger wind-up coil and strike lunge so the body sells the sword swing.
+	## CT-style: coil back → hard forward lunge → settle.
 	if u < wind:
 		var p := u / wind
-		sprite.offset = -face * (6.0 + 3.0 * p) + _perp(face) * (5.0 * p) + Vector2(0, -2.0 * p)
-		sprite.rotation = _lean(face, -0.55 - 0.2 * float(special)) * p
-		sprite.scale = Vector2(bs * (1.0 + 0.1 * p), bs * (1.0 - 0.12 * p))
+		sprite.offset = -face * (7.0 + 4.0 * p) + _perp(face) * (4.0 * p) + Vector2(0, -3.0 * p)
+		sprite.rotation = _lean(face, -0.65 - 0.2 * float(special)) * p
+		sprite.scale = Vector2(bs * (1.0 + 0.08 * p), bs * (1.0 - 0.14 * p))
 	elif u < strike:
 		var p := (u - wind) / (strike - wind)
-		var ease := p * p
-		sprite.offset = face * lerpf(-3.0, 12.0 if special else 9.0, ease) + _perp(face) * lerpf(5.0, -6.0, ease)
-		sprite.rotation = _lean(face, lerpf(-0.55, 0.75 if special else 0.55, ease))
-		sprite.scale = Vector2(bs * lerpf(1.08, 1.18, ease), bs * lerpf(0.9, 0.8, ease))
+		var ease := p * p * (3.0 - 2.0 * p)
+		sprite.offset = face * lerpf(-4.0, 14.0 if special else 11.0, ease) + _perp(face) * lerpf(4.0, -5.0, ease) + Vector2(0, lerpf(-2.0, 2.0, ease))
+		sprite.rotation = _lean(face, lerpf(-0.65, 0.7 if special else 0.5, ease))
+		sprite.scale = Vector2(bs * lerpf(1.06, 1.2, ease), bs * lerpf(0.88, 0.78, ease))
 	else:
 		var p := (u - strike) / maxf(0.001, 1.0 - strike)
-		sprite.offset = face * lerpf(9.0, 0.0, p) + _perp(face) * lerpf(-4.0, 0.0, p)
-		sprite.rotation = _lean(face, lerpf(0.5, 0.0, p))
-		sprite.scale = Vector2(bs * lerpf(1.14, 1.0, p), bs * lerpf(0.84, 1.0, p))
+		sprite.offset = face * lerpf(11.0, 0.0, p) + _perp(face) * lerpf(-3.0, 0.0, p)
+		sprite.rotation = _lean(face, lerpf(0.45, 0.0, p))
+		sprite.scale = Vector2(bs * lerpf(1.16, 1.0, p), bs * lerpf(0.82, 1.0, p))
 
 
 static func _pose_thrust(sprite: Sprite2D, face: Vector2, u: float, wind: float, strike: float, special: bool, bs: float) -> void:
