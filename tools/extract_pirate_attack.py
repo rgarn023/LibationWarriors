@@ -16,10 +16,13 @@ from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
 CANDIDATES = [
+    ROOT / "assets/animations/01_Pirate_Attack.png",
     ROOT / "assets/sprites/attacks/pirate_attack.png",
     ROOT / "assets/sprites/attacks/pirate_cutlass_attack_sprite_sheet.png",
     ROOT / "assets/sprites/attacks/pirate_sword_attack.png",
 ]
+# Curated usable cells only (exclude 2, 3, 5, 6, 8).
+CURATED = [0, 1, 4, 7, 0]
 X = [0, 341, 683, 1024]
 Y = [0, 512, 1024, 1536]
 PHASES = [
@@ -66,10 +69,12 @@ def main() -> int:
             dy = mh - cell.height
             canvas.paste(cell, (dx, dy), cell)
             canvas.save(path)
+            curated = "CURATED" if i in set(CURATED) else "EXCLUDE"
             status = "KEEP" if ratio >= 0.008 else "SKIP?"
-            print(f"{status} {i} {PHASES[i]:16s} {cell.size} opaque={ratio:.3f} -> {path.name}")
+            print(f"{status}/{curated} {i} {PHASES[i]:16s} {cell.size} opaque={ratio:.3f} -> {path.name}")
             if ratio >= 0.008:
                 kept += 1
+    print(f"curated order={CURATED}")
     print(f"kept≈{kept}/9 canvas={mw}x{mh}")
     return 0
 

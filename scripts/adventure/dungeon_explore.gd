@@ -262,7 +262,8 @@ func _set_player_walk_frame(frame: int) -> void:
 	if _player_anim.animation != "idle":
 		_player_anim.play("idle")
 	_player_anim.frame = clampi(frame, 0, maxi(0, _player_anim.sprite_frames.get_frame_count("idle") - 1))
-	_player_anim.flip_h = WeaponData.flip_h_for(_facing)
+	# Facing is applied only via PlayerAnimController (flip_h, never scale.x).
+	_player_anim.set_facing(_facing)
 
 
 func _on_player_attack_started() -> void:
@@ -277,6 +278,7 @@ func _on_player_attack_finished() -> void:
 	if _blade_trail != null and is_instance_valid(_blade_trail):
 		_blade_trail.queue_free()
 		_blade_trail = null
+	# BladeTrailFx / SwordArc are disabled for player attacks.
 	if _player_anim:
 		_player_anim.set_facing(_facing)
 		_player_anim.set_moving(false)
@@ -286,26 +288,14 @@ func _on_player_attack_frame_changed() -> void:
 	if _player_anim == null or not _player_anim.is_attacking():
 		return
 	var f := _player_anim.frame
-	# Tiny blade trail only on configured main-slash / impact frames — once.
+	# No separate slash FX — Pirate source art already contains the trail.
+	# Resolve hit once on the strike frame index (or fallback mid-animation).
 	if not _slash_spawned and f in _trail_frame_indices:
 		_slash_spawned = true
-		_spawn_small_blade_trail()
 		_resolve_attack_hit()
 	elif not _slash_spawned and _trail_frame_indices.is_empty() and f >= 2:
 		_slash_spawned = true
 		_resolve_attack_hit()
-
-
-func _spawn_small_blade_trail() -> void:
-	if _blade_trail != null and is_instance_valid(_blade_trail):
-		return
-	var profile := _weapon_profile if not _weapon_profile.is_empty() else _warrior.weapon_profile()
-	var col: Color = WeaponData.finish_color(profile.get("color", _warrior.outfit_accent()), _warrior.variant_weapon_style)
-	var fx := BladeTrailFx.new()
-	player.add_child(fx)
-	fx.position = Vector2.ZERO
-	fx.play(_facing, 34.0, col)
-	_blade_trail = fx
 
 
 func _resolve_attack_hit() -> void:
@@ -804,7 +794,7 @@ func _perform_attack(is_special: bool) -> void:
 		return
 	if _player_anim.sprite_frames == null or not _player_anim.sprite_frames.has_animation("attack") \
 			or _player_anim.sprite_frames.get_frame_count("attack") < 1:
-		print("[DungeonExplore] no attack frames for %s — place individual attack PNG under assets/sprites/attacks/" % _warrior.faction)
+		print("[DungeonExplore] no attack frames for %s — place 01_Pirate_Attack.png under assets/animations/" % _warrior.faction)
 		_show_message("Attack sheet missing for %s" % _warrior.faction)
 		_pending_melee = false
 		_pending_ranged = false

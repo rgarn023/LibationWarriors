@@ -3,22 +3,23 @@
 Place each class’s attack PNG here. **Do not** use `export/all_character_*.png`
 contact sheets as atlases.
 
-## Pirate (required for sword-frame attacks)
+## Pirate (preferred path)
 
-Preferred filename:
+Preferred location for the isolated test and loader:
 
 ```
-pirate_attack.png
+res://assets/animations/01_Pirate_Attack.png
 ```
 
-Also accepted:
+Legacy fallbacks under this folder:
 
+- `pirate_attack.png`
 - `pirate_cutlass_attack_sprite_sheet.png`
 - `pirate_sword_attack.png`
 
-Authored layout: **3 columns × 3 rows** on a ~1024×1536 sheet.
+Authored layout: **3 columns × 3 rows** on a **1024×1536** sheet.
 
-Manual region boundaries (scaled if the PNG size differs):
+Manual region boundaries:
 
 | | x0 | x1 |
 |---|---|---|
@@ -28,8 +29,15 @@ Manual region boundaries (scaled if the PNG size differs):
 |---|---|---|
 | rows | 0, 512, 1024 | 1536 |
 
-Reading order (L→R, T→B):
-1 Ready · 2 Anticipation · 3 Sword raised · 4 Swing begins · 5 Main slash · 6 Impact · 7 Follow-through · 8 Recovery · 9 Return pose (optional)
+## Curated frame order (NOT all 9 cells)
+
+```
+0 → 1 → 4 → 7 → 0
+```
+
+Excluded: `2, 3, 5, 6, 8` (duplicates / clipped blades / missing sword).
+
+Source art faces **LEFT**. Facing right uses `AnimatedSprite2D.flip_h = true` only.
 
 Inspect with:
 
