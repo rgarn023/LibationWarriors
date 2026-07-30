@@ -1,5 +1,5 @@
 extends CharacterBody2D
-## Real-time dungeon foe: faces player, swings painted weapons dynamically, may fire ranged shots.
+## Real-time dungeon foe with multi-frame weapon swing strips + ranged shots.
 
 signal died(enemy: CharacterBody2D, is_boss: bool, world_pos: Vector2)
 signal damaged_player(amount: int, from_pos: Vector2)
@@ -23,12 +23,11 @@ var _ai_dir: Vector2 = Vector2.ZERO
 var _facing: Vector2 = Vector2.LEFT
 var _ai_timer: float = 0.0
 var _attack_cd: float = 0.0
-var _attack_anim: float = 0.0
-var _attack_anim_max: float = 0.32
 var _attack_style: String = "slash"
 var _base_scale: float = 0.42
-var _strike_done: bool = false
 var _pending_ranged: bool = false
+var _strike_done: bool = false
+var _swing := SwingPlayer.new()
 var _world: Node2D
 var _profile: Dictionary = {}
 
@@ -90,30 +89,24 @@ func _physics_process(delta: float) -> void:
 	else:
 		_sprite.modulate.a = 1.0
 
-	if _attack_anim > 0.0:
-		_attack_anim -= delta
-		var remaining := clampf(_attack_anim / maxf(0.001, _attack_anim_max), 0.0, 1.0)
-		var elapsed := 1.0 - remaining
-		AttackPose.apply(_sprite, _facing, remaining, is_boss, _attack_style, _base_scale)
-		if not _strike_done and elapsed >= 0.24:
+	if _swing.active:
+		_swing.update(delta)
+		if _swing.hit_ready and not _strike_done:
 			_strike_done = true
 			_resolve_strike()
-		if _attack_anim <= 0.0:
-			AttackPose.reset(_sprite, _base_scale, warrior.display_modulate())
-			_strike_done = false
-
-	_anim_t += delta
-	if _anim_t >= 0.14 and _attack_anim <= 0.0:
-		_anim_t = 0.0
-		_frame = (_frame + 1) % 4
-		_update_frame()
+	else:
+		_anim_t += delta
+		if _anim_t >= 0.14:
+			_anim_t = 0.0
+			_frame = (_frame + 1) % 4
+			_update_frame()
 
 	var to_player := Vector2.ZERO
 	var dist := 999.0
 	if _player != null and is_instance_valid(_player):
 		to_player = _player.global_position - global_position
 		dist = to_player.length()
-		if dist > 0.1 and _attack_anim <= 0.0:
+		if dist > 0.1 and not _swing.active:
 			_facing = WeaponData.cardinal(to_player)
 
 	if knockback.length() > 4.0:
@@ -125,13 +118,13 @@ func _physics_process(delta: float) -> void:
 		if _ai_timer <= 0.0:
 			_ai_timer = randf_range(0.25, 0.7)
 			_ai_dir = _choose_move_dir(to_player, dist)
-		var mul := 0.3 if _attack_anim > _attack_anim_max * 0.45 else (0.65 if _attack_anim > 0.0 else 1.0)
+		var mul := 0.28 if _swing.active else 1.0
 		velocity = _ai_dir * (speed * mul)
 	move_and_slide()
 	position.x = clampf(position.x, 28.0, 228.0)
 	position.y = clampf(position.y, 28.0, 148.0)
 
-	if _player != null and is_instance_valid(_player) and _attack_cd <= 0.0 and _attack_anim <= 0.0:
+	if _player != null and is_instance_valid(_player) and _attack_cd <= 0.0 and not _swing.active:
 		_try_attack(dist)
 
 
@@ -166,21 +159,34 @@ func _try_attack(dist: float) -> void:
 
 func _begin_attack(ranged: bool) -> void:
 	_attack_cd = 0.85 if is_boss else 1.05
-	_attack_anim_max = 0.36 if is_boss else 0.3
-	_attack_anim = _attack_anim_max
 	_strike_done = false
 	_pending_ranged = ranged
 	var shape := str(_profile.get("shape", "sword"))
 	_attack_style = "cast" if ranged else AttackPose.swing_style_for(shape)
 	if _player != null and is_instance_valid(_player):
 		_facing = WeaponData.cardinal(_player.global_position - global_position)
+	if _sheet == null:
+		return
+	var col: Color = WeaponData.finish_color(_profile.get("color", warrior.outfit_accent()), warrior.variant_weapon_style)
+	_swing.start(
+		_sprite,
+		_sheet,
+		Rect2(0, 0, 64, 80),
+		shape,
+		_facing,
+		col,
+		_base_scale,
+		warrior.display_modulate(),
+		is_boss
+	)
 
 
 func _resolve_strike() -> void:
 	var col: Color = WeaponData.finish_color(_profile.get("color", warrior.outfit_accent()), warrior.variant_weapon_style)
 	var origin := position + _facing * (12.0 if not _pending_ranged else 6.0)
+	var parent_fx: Node2D = _world if _world else self
 	if _pending_ranged:
-		CombatFx.spawn_cast_burst(_world if _world else self, origin, _facing, col)
+		CombatFx.spawn_cast_burst(parent_fx, origin, _facing, col)
 		var kind := str(_profile.get("projectile", "bolt"))
 		var aim := _facing
 		if _player != null and is_instance_valid(_player):
@@ -195,11 +201,11 @@ func _resolve_strike() -> void:
 			if not proj.hit_player.is_connected(_on_proj_hit_player):
 				proj.hit_player.connect(_on_proj_hit_player)
 	else:
-		CombatFx.spawn_slash(_world if _world else self, origin, _facing, col, is_boss, _attack_style)
+		CombatFx.spawn_slash(parent_fx, origin, _facing, col, is_boss, _attack_style)
 		if _player != null and is_instance_valid(_player):
 			var to_p: Vector2 = (_player.global_position - global_position)
 			if to_p.length() <= float(_profile.get("melee_reach", 18.0)) + 6.0:
-				if _facing.dot(to_p.normalized()) >= 0.15:
+				if to_p != Vector2.ZERO and _facing.dot(to_p.normalized()) >= 0.15:
 					damaged_player.emit(contact_damage, global_position)
 
 
@@ -208,7 +214,7 @@ func _on_proj_hit_player(amount: int, from_pos: Vector2) -> void:
 
 
 func _update_frame() -> void:
-	if _sheet == null or not _sprite.region_enabled:
+	if _sheet == null or not _sprite.region_enabled or _swing.active:
 		return
 	_sprite.region_rect = Rect2(_frame * 64, 0, 64, 80)
 	_sprite.flip_h = _facing.x < -0.2
