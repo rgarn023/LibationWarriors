@@ -58,8 +58,8 @@ var _slash_spawned: bool = false
 var _pending_melee: bool = false
 var _pending_ranged: bool = false
 var _pending_special: bool = false
-var _swing := SwingPlayer.new()
 var _door_dirs: Array = []
+var _sword_arc: Node2D = null
 var _exits: Array = [] ## {dir, target, locked, mouth: Rect2}
 var _retreat_dir: String = "" ## door that leads back the way you came
 var _room_art: Node2D
@@ -202,30 +202,22 @@ func _physics_process(delta: float) -> void:
 	if Input.is_key_pressed(KEY_X) or Input.is_key_pressed(KEY_K):
 		_on_special()
 
-	if dir != Vector2.ZERO and _attack_anim_t <= 0.0 and not _swing.active:
+	if dir != Vector2.ZERO and _attack_anim_t <= 0.0:
 		_facing = WeaponData.cardinal(dir)
 		_anim_t += delta
 		if _anim_t >= 0.12:
 			_anim_t = 0.0
 			_anim_frame = (_anim_frame + 1) % 4
 			_set_player_frame(_anim_frame)
-	elif _attack_anim_t <= 0.0 and not _swing.active:
+	elif _attack_anim_t <= 0.0:
 		_set_player_frame(0)
 
-	if _swing.active:
-		_swing.update(delta)
-		if _swing.hit_ready:
-			_on_swing_hit_frame()
-		if not _swing.active:
-			# finished this frame
-			_attack_anim_t = 0.0
-			_slash_spawned = false
-	elif _attack_anim_t > 0.0:
+	if _attack_anim_t > 0.0:
 		_attack_anim_t -= delta
 		_animate_attack_pose()
 
 	# Slow during swing
-	var busy := _swing.active or _attack_anim_t > 0.0
+	var busy := _attack_anim_t > 0.0
 	var move_mul := 0.3 if busy else 1.0
 	player.velocity = dir.normalized() * (98.0 * move_mul)
 	player.move_and_slide()
@@ -237,30 +229,12 @@ func _physics_process(delta: float) -> void:
 	_update_hud()
 
 
-func _on_swing_hit_frame() -> void:
-	if _slash_spawned:
-		return
-	_slash_spawned = true
-	var profile := _weapon_profile if not _weapon_profile.is_empty() else _warrior.weapon_profile()
-	var col: Color = WeaponData.finish_color(profile.get("color", _warrior.outfit_accent()), _warrior.variant_weapon_style)
-	var origin := player.position + _facing * (12.0 if _attack_style != "cast" else 6.0)
-	if _pending_ranged:
-		COMBAT_FX.spawn_cast_burst(world, origin, _facing, col)
-		_fire_player_projectile(_pending_special, profile, col)
-	else:
-		COMBAT_FX.spawn_slash(world, origin, _facing, col, _pending_special, _attack_style)
-		if _pending_melee:
-			_do_facing_melee(_pending_special, profile, col)
-	_pending_melee = false
-	_pending_ranged = false
-
-
 func _animate_attack_pose() -> void:
 	var remaining := clampf(_attack_anim_t / maxf(0.001, _attack_anim_max), 0.0, 1.0)
 	var elapsed := 1.0 - remaining
 	AttackPose.apply(_player_sprite, _facing, remaining, _attack_anim_special, _attack_style, _player_base_scale)
-	# Strike frame: smear + damage / projectile
-	if not _slash_spawned and elapsed >= 0.24:
+	# Strike frame: damage / projectile (visual arc already playing on SwordArc)
+	if not _slash_spawned and elapsed >= 0.28:
 		_slash_spawned = true
 		var profile := _weapon_profile if not _weapon_profile.is_empty() else _warrior.weapon_profile()
 		var col: Color = WeaponData.finish_color(profile.get("color", _warrior.outfit_accent()), _warrior.variant_weapon_style)
@@ -268,10 +242,9 @@ func _animate_attack_pose() -> void:
 		if _pending_ranged:
 			COMBAT_FX.spawn_cast_burst(world, origin, _facing, col)
 			_fire_player_projectile(_pending_special, profile, col)
-		else:
-			COMBAT_FX.spawn_slash(world, origin, _facing, col, _pending_special, _attack_style)
-			if _pending_melee:
-				_do_facing_melee(_pending_special, profile, col)
+		elif _pending_melee:
+			COMBAT_FX.spawn_hit_spark(world, origin + _facing * 10.0, col)
+			_do_facing_melee(_pending_special, profile, col)
 		_pending_melee = false
 		_pending_ranged = false
 	if _attack_anim_special:
@@ -282,6 +255,7 @@ func _animate_attack_pose() -> void:
 		_slash_spawned = false
 		_pending_melee = false
 		_pending_ranged = false
+		_sword_arc = null
 
 
 func _set_player_frame(frame: int) -> void:
@@ -704,7 +678,7 @@ func _on_player_down() -> void:
 
 
 func _on_attack() -> void:
-	if _transitioning or _attack_cd > 0.0 or _warrior == null or _swing.active:
+	if _transitioning or _attack_cd > 0.0 or _warrior == null or _attack_anim_t > 0.0:
 		return
 	_facing = WeaponData.cardinal(_facing)
 	_attack_cd = 0.4
@@ -714,7 +688,7 @@ func _on_attack() -> void:
 
 
 func _on_special() -> void:
-	if _transitioning or _special_cd > 0.0 or _warrior == null or _swing.active:
+	if _transitioning or _special_cd > 0.0 or _warrior == null or _attack_anim_t > 0.0:
 		return
 	if not _warrior.spend_special_energy():
 		_show_message("Not enough energy for %s!" % _warrior.special_move)
@@ -751,28 +725,29 @@ func _perform_attack(is_special: bool) -> void:
 	else:
 		_pending_ranged = false
 		_pending_melee = true
-	var region := _player_sprite.region_rect if _player_sprite.region_enabled else Rect2(0, 0, 64, 80)
+	_attack_anim_max = 0.34 if is_special else 0.28
+	_attack_anim_t = _attack_anim_max
 	var col: Color = WeaponData.finish_color(profile.get("color", _warrior.outfit_accent()), _warrior.variant_weapon_style)
-	var ok := false
-	if _player_sheet != null:
-		ok = _swing.start(
-			_player_sprite,
-			_player_sheet,
-			Rect2(0, 0, 64, 80),
-			shape,
-			_facing,
-			col,
-			_player_base_scale,
-			_warrior.display_modulate(),
-			is_special
-		)
-	if ok:
-		_attack_anim_t = 0.0
-		_attack_anim_max = 0.4
-	else:
-		# Fallback body pose if strip bake fails
-		_attack_anim_max = 0.34 if is_special else 0.3
-		_attack_anim_t = _attack_anim_max
+	_spawn_sword_arc(shape, col, is_special)
+
+
+func _spawn_sword_arc(shape: String, col: Color, is_special: bool) -> void:
+	if _sword_arc != null and is_instance_valid(_sword_arc):
+		_sword_arc.queue_free()
+	var arc := SwordArc.new()
+	# Parent to sprite so the blade follows body lean / wind-up rotation.
+	var host: Node2D = _player_sprite if _player_sprite else player
+	host.add_child(arc)
+	arc.position = Vector2.ZERO
+	# Counter sprite scale so the arc reads at world size (~character height).
+	var s := _player_base_scale if _player_base_scale > 0.01 else 0.42
+	arc.scale = Vector2(1.0 / s, 1.0 / s)
+	# Sprite flip_h already mirrors left; feed RIGHT so the arc isn't double-flipped.
+	var face_for_arc := _facing
+	if face_for_arc.x < 0.0:
+		face_for_arc = Vector2.RIGHT
+	arc.play(face_for_arc, shape, col, is_special, _attack_style)
+	_sword_arc = arc
 
 
 func _fire_player_projectile(is_special: bool, profile: Dictionary, col: Color) -> void:

@@ -48,22 +48,23 @@ static func swing_style_for(shape: String) -> String:
 
 
 static func _pose_slash(sprite: Sprite2D, face: Vector2, u: float, wind: float, strike: float, special: bool, bs: float) -> void:
+	## Bigger wind-up coil and strike lunge so the body sells the sword swing.
 	if u < wind:
 		var p := u / wind
-		sprite.offset = -face * (4.0 + 2.0 * p) + _perp(face) * (3.0 * p)
-		sprite.rotation = _lean(face, -0.35 - 0.15 * float(special)) * p
-		sprite.scale = Vector2(bs * (1.0 + 0.06 * p), bs * (1.0 - 0.08 * p))
+		sprite.offset = -face * (6.0 + 3.0 * p) + _perp(face) * (5.0 * p) + Vector2(0, -2.0 * p)
+		sprite.rotation = _lean(face, -0.55 - 0.2 * float(special)) * p
+		sprite.scale = Vector2(bs * (1.0 + 0.1 * p), bs * (1.0 - 0.12 * p))
 	elif u < strike:
 		var p := (u - wind) / (strike - wind)
 		var ease := p * p
-		sprite.offset = face * lerpf(-2.0, 9.0 if special else 7.0, ease) + _perp(face) * lerpf(3.0, -4.0, ease)
-		sprite.rotation = _lean(face, lerpf(-0.4, 0.55 if special else 0.4, ease))
-		sprite.scale = Vector2(bs * lerpf(1.05, 1.12, ease), bs * lerpf(0.92, 0.85, ease))
+		sprite.offset = face * lerpf(-3.0, 12.0 if special else 9.0, ease) + _perp(face) * lerpf(5.0, -6.0, ease)
+		sprite.rotation = _lean(face, lerpf(-0.55, 0.75 if special else 0.55, ease))
+		sprite.scale = Vector2(bs * lerpf(1.08, 1.18, ease), bs * lerpf(0.9, 0.8, ease))
 	else:
 		var p := (u - strike) / maxf(0.001, 1.0 - strike)
-		sprite.offset = face * lerpf(7.0, 0.0, p) + _perp(face) * lerpf(-3.0, 0.0, p)
-		sprite.rotation = _lean(face, lerpf(0.4, 0.0, p))
-		sprite.scale = Vector2(bs * lerpf(1.1, 1.0, p), bs * lerpf(0.88, 1.0, p))
+		sprite.offset = face * lerpf(9.0, 0.0, p) + _perp(face) * lerpf(-4.0, 0.0, p)
+		sprite.rotation = _lean(face, lerpf(0.5, 0.0, p))
+		sprite.scale = Vector2(bs * lerpf(1.14, 1.0, p), bs * lerpf(0.84, 1.0, p))
 
 
 static func _pose_thrust(sprite: Sprite2D, face: Vector2, u: float, wind: float, strike: float, special: bool, bs: float) -> void:

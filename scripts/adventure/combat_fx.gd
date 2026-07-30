@@ -81,27 +81,26 @@ class _SlashSmear extends Node2D:
 				draw_circle(p, 2.5, _color)
 			draw_circle(Vector2.ZERO, 5.0, Color(_color.r, _color.g, _color.b, 0.7))
 			return
-		# Arc smear for slash / chop
-		var span := 1.7 if _special else 1.25
+		# Thick JRPG crescent (backup VFX if SwordArc isn't used)
+		var span := 2.0 if _special else 1.55
 		if _style == "chop":
-			span = 1.1 if _special else 0.85
-		var radius := 30.0 if _special else 22.0
-		var blades := 9 if _special else 7
+			span = 1.25 if _special else 1.0
+		var radius := 34.0 if _special else 26.0
+		var blades := 12 if _special else 10
 		for i in blades:
 			var t := float(i) / float(maxi(1, blades - 1))
-			var a := ang - span * 0.5 + span * t
+			var a := ang - span * 0.55 + span * t
 			if _style == "chop":
-				a = ang - 0.9 + 1.5 * t
-			var p1 := Vector2(cos(a), sin(a)) * (radius * 0.25)
+				a = ang - 1.0 + 1.7 * t
+			var p1 := Vector2(cos(a), sin(a)) * (radius * 0.18)
 			var p2 := Vector2(cos(a), sin(a)) * radius
-			var width := lerpf(5.0, 1.5, t)
-			var c := _color.lightened(0.35 * (1.0 - t))
-			c.a = lerpf(0.95, 0.35, t)
-			draw_line(p1, p2, c, width if _special else width * 0.75)
-		# Bright leading edge
-		var tip_a := ang + span * 0.45
+			var width := lerpf(8.0, 2.0, t)
+			var c := Color(1.0, 1.0, 0.95, lerpf(0.95, 0.2, t))
+			draw_line(p1, p2, c, width)
+			draw_line(p1, p2, Color(_color.r, _color.g, _color.b, c.a * 0.5), width * 0.4)
+		var tip_a := ang + span * 0.42
 		var tip := Vector2(cos(tip_a), sin(tip_a)) * radius
-		draw_circle(tip, 3.0 if _special else 2.0, Color(1, 1, 0.92, 0.95))
+		draw_circle(tip, 4.0 if _special else 3.0, Color(1, 1, 1, 0.95))
 
 
 class _SparkFx extends Node2D:

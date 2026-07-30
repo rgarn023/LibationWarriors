@@ -1,5 +1,5 @@
 extends CharacterBody2D
-## Real-time dungeon foe with multi-frame weapon swing strips + ranged shots.
+## Real-time dungeon foe: body attack pose + JRPG sword-arc swing / ranged shots.
 
 signal died(enemy: CharacterBody2D, is_boss: bool, world_pos: Vector2)
 signal damaged_player(amount: int, from_pos: Vector2)
@@ -27,9 +27,11 @@ var _attack_style: String = "slash"
 var _base_scale: float = 0.42
 var _pending_ranged: bool = false
 var _strike_done: bool = false
-var _swing := SwingPlayer.new()
+var _attack_anim_t: float = 0.0
+var _attack_anim_max: float = 0.28
 var _world: Node2D
 var _profile: Dictionary = {}
+var _sword_arc: Node2D = null
 
 
 func setup(data: Dictionary, player: CharacterBody2D, boss: bool) -> void:
@@ -89,11 +91,17 @@ func _physics_process(delta: float) -> void:
 	else:
 		_sprite.modulate.a = 1.0
 
-	if _swing.active:
-		_swing.update(delta)
-		if _swing.hit_ready and not _strike_done:
+	if _attack_anim_t > 0.0:
+		_attack_anim_t -= delta
+		var remaining := clampf(_attack_anim_t / maxf(0.001, _attack_anim_max), 0.0, 1.0)
+		var elapsed := 1.0 - remaining
+		AttackPose.apply(_sprite, _facing, remaining, is_boss, _attack_style, _base_scale)
+		if not _strike_done and elapsed >= 0.28:
 			_strike_done = true
 			_resolve_strike()
+		if _attack_anim_t <= 0.0:
+			AttackPose.reset(_sprite, _base_scale, warrior.display_modulate())
+			_sword_arc = null
 	else:
 		_anim_t += delta
 		if _anim_t >= 0.14:
@@ -106,7 +114,7 @@ func _physics_process(delta: float) -> void:
 	if _player != null and is_instance_valid(_player):
 		to_player = _player.global_position - global_position
 		dist = to_player.length()
-		if dist > 0.1 and not _swing.active:
+		if dist > 0.1 and _attack_anim_t <= 0.0:
 			_facing = WeaponData.cardinal(to_player)
 
 	if knockback.length() > 4.0:
@@ -118,13 +126,13 @@ func _physics_process(delta: float) -> void:
 		if _ai_timer <= 0.0:
 			_ai_timer = randf_range(0.25, 0.7)
 			_ai_dir = _choose_move_dir(to_player, dist)
-		var mul := 0.28 if _swing.active else 1.0
+		var mul := 0.28 if _attack_anim_t > 0.0 else 1.0
 		velocity = _ai_dir * (speed * mul)
 	move_and_slide()
 	position.x = clampf(position.x, 28.0, 228.0)
 	position.y = clampf(position.y, 28.0, 148.0)
 
-	if _player != null and is_instance_valid(_player) and _attack_cd <= 0.0 and not _swing.active:
+	if _player != null and is_instance_valid(_player) and _attack_cd <= 0.0 and _attack_anim_t <= 0.0:
 		_try_attack(dist)
 
 
@@ -165,20 +173,21 @@ func _begin_attack(ranged: bool) -> void:
 	_attack_style = "cast" if ranged else AttackPose.swing_style_for(shape)
 	if _player != null and is_instance_valid(_player):
 		_facing = WeaponData.cardinal(_player.global_position - global_position)
-	if _sheet == null:
-		return
+	_attack_anim_max = 0.34 if is_boss else 0.28
+	_attack_anim_t = _attack_anim_max
 	var col: Color = WeaponData.finish_color(_profile.get("color", warrior.outfit_accent()), warrior.variant_weapon_style)
-	_swing.start(
-		_sprite,
-		_sheet,
-		Rect2(0, 0, 64, 80),
-		shape,
-		_facing,
-		col,
-		_base_scale,
-		warrior.display_modulate(),
-		is_boss
-	)
+	if _sword_arc != null and is_instance_valid(_sword_arc):
+		_sword_arc.queue_free()
+	var arc := SwordArc.new()
+	_sprite.add_child(arc)
+	arc.position = Vector2.ZERO
+	var s := _base_scale if _base_scale > 0.01 else 0.42
+	arc.scale = Vector2(1.0 / s, 1.0 / s)
+	var face_for_arc := _facing
+	if face_for_arc.x < 0.0:
+		face_for_arc = Vector2.RIGHT
+	arc.play(face_for_arc, shape, col, is_boss, _attack_style)
+	_sword_arc = arc
 
 
 func _resolve_strike() -> void:
@@ -201,7 +210,7 @@ func _resolve_strike() -> void:
 			if not proj.hit_player.is_connected(_on_proj_hit_player):
 				proj.hit_player.connect(_on_proj_hit_player)
 	else:
-		CombatFx.spawn_slash(parent_fx, origin, _facing, col, is_boss, _attack_style)
+		CombatFx.spawn_hit_spark(parent_fx, origin + _facing * 8.0, col)
 		if _player != null and is_instance_valid(_player):
 			var to_p: Vector2 = (_player.global_position - global_position)
 			if to_p.length() <= float(_profile.get("melee_reach", 18.0)) + 6.0:
@@ -214,7 +223,7 @@ func _on_proj_hit_player(amount: int, from_pos: Vector2) -> void:
 
 
 func _update_frame() -> void:
-	if _sheet == null or not _sprite.region_enabled or _swing.active:
+	if _sheet == null or not _sprite.region_enabled or _attack_anim_t > 0.0:
 		return
 	_sprite.region_rect = Rect2(_frame * 64, 0, 64, 80)
 	_sprite.flip_h = _facing.x < -0.2
