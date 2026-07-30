@@ -1,0 +1,130 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/main_menu.gd" id="1"]
+
+[node name="MainMenu" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1")
+
+[node name="BG" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+color = Color(0.07, 0.06, 0.1, 1)
+
+[node name="SafeRoot" type="Control" parent="."]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBox" type="VBoxContainer" parent="SafeRoot"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 14
+
+[node name="Title" type="Label" parent="SafeRoot/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.85, 0.62, 0.22, 1)
+theme_override_font_sizes/font_size = 40
+text = "LIBATION
+WARRIORS"
+horizontal_alignment = 1
+
+[node name="Subtitle" type="Label" parent="SafeRoot/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.75, 0.7, 0.62, 1)
+theme_override_font_sizes/font_size = 16
+text = "Scan a bottle. Summon a warrior.
+No brands. Only battle."
+horizontal_alignment = 1
+
+[node name="SpriteRow" type="HBoxContainer" parent="SafeRoot/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 6
+
+[node name="Spacer" type="Control" parent="SafeRoot/VBox"]
+custom_minimum_size = Vector2(0, 8)
+layout_mode = 2
+
+[node name="BtnScan" type="Button" parent="SafeRoot/VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 60)
+layout_mode = 2
+text = "Scan Bottle"
+
+[node name="BtnCollection" type="Button" parent="SafeRoot/VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 56)
+layout_mode = 2
+text = "Collection"
+
+[node name="BtnParty" type="Button" parent="SafeRoot/VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 56)
+layout_mode = 2
+text = "Party of Three"
+
+[node name="BtnAdventure" type="Button" parent="SafeRoot/VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 56)
+layout_mode = 2
+text = "Adventure"
+
+[node name="BtnBattle" type="Button" parent="SafeRoot/VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 56)
+layout_mode = 2
+text = "Battle"
+
+[node name="BtnEvents" type="Button" parent="SafeRoot/VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 52)
+layout_mode = 2
+text = "Event Admin (DEV)"
+visible = false
+
+[node name="BtnRefreshEvents" type="Button" parent="SafeRoot/VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+text = "Refresh Events"
+
+[node name="EventLabel" type="Label" parent="SafeRoot/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.75, 0.65, 0.4, 1)
+theme_override_font_sizes/font_size = 14
+text = ""
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="CollectionCount" type="Label" parent="SafeRoot/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.65, 0.6, 0.55, 1)
+theme_override_font_sizes/font_size = 15
+text = "Warriors collected: 0"
+horizontal_alignment = 1
+
+[node name="BottomPad" type="Control" parent="SafeRoot/VBox"]
+custom_minimum_size = Vector2(0, 8)
+layout_mode = 2
