@@ -9,7 +9,6 @@ const DOOR_GAP := 3 ## tiles wide — wide enough for the player body
 const OPPOSITE := {"n": "s", "s": "n", "w": "e", "e": "w"}
 const ENEMY_SCRIPT := preload("res://scripts/adventure/dungeon_enemy.gd")
 const ROOM_DRAW_SCRIPT := preload("res://scripts/adventure/dungeon_room_draw.gd")
-const WEAPON_SCRIPT := preload("res://scripts/adventure/dungeon_weapon.gd")
 const PROJECTILE_SCRIPT := preload("res://scripts/adventure/dungeon_projectile.gd")
 const COMBAT_FX := preload("res://scripts/adventure/combat_fx.gd")
 
@@ -51,7 +50,14 @@ var _pickups: Array = []
 var _torch_t: float = 0.0
 var _cam: Camera2D
 var _attack_anim_t: float = 0.0
+var _attack_anim_max: float = 0.28
 var _attack_anim_special: bool = false
+var _attack_style: String = "slash"
+var _player_base_scale: float = 0.42
+var _slash_spawned: bool = false
+var _pending_melee: bool = false
+var _pending_ranged: bool = false
+var _pending_special: bool = false
 var _door_dirs: Array = []
 var _exits: Array = [] ## {dir, target, locked, mouth: Rect2}
 var _retreat_dir: String = "" ## door that leads back the way you came
@@ -139,7 +145,8 @@ func _setup_player() -> void:
 			child.queue_free()
 	_player_sprite.centered = true
 	_player_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	_player_sprite.scale = Vector2(0.42, 0.42)
+	_player_base_scale = 0.42
+	_player_sprite.scale = Vector2(_player_base_scale, _player_base_scale)
 	if ResourceLoader.exists(_warrior.sheet_path()):
 		_player_sheet = load(_warrior.sheet_path())
 		_player_sprite.texture = _player_sheet
@@ -148,6 +155,7 @@ func _setup_player() -> void:
 	elif ResourceLoader.exists(_warrior.sprite_path()):
 		_player_sprite.texture = load(_warrior.sprite_path())
 	_player_sprite.modulate = _warrior.display_modulate()
+	AttackPose.reset(_player_sprite, _player_base_scale, _warrior.display_modulate())
 	var col: CollisionShape2D = player.get_node_or_null("Collision")
 	if col and col.shape is RectangleShape2D:
 		(col.shape as RectangleShape2D).size = Vector2(10, 12)
@@ -207,7 +215,9 @@ func _physics_process(delta: float) -> void:
 		_attack_anim_t -= delta
 		_animate_attack_pose()
 
-	player.velocity = dir.normalized() * (70.0 if _attack_anim_t > 0.0 else 98.0)
+	# Slow during swing wind-up/strike
+	var move_mul := 0.35 if _attack_anim_t > _attack_anim_max * 0.45 else (0.7 if _attack_anim_t > 0.0 else 1.0)
+	player.velocity = dir.normalized() * (98.0 * move_mul)
 	player.move_and_slide()
 	_clamp_player_in_room()
 	_check_enemy_contact()
@@ -218,16 +228,32 @@ func _physics_process(delta: float) -> void:
 
 
 func _animate_attack_pose() -> void:
-	var t := clampf(_attack_anim_t / 0.22, 0.0, 1.0)
-	var lunge := (1.0 - absf(t - 0.5) * 2.0) * (5.0 if _attack_anim_special else 3.5)
-	_player_sprite.offset = _facing * lunge
+	var remaining := clampf(_attack_anim_t / maxf(0.001, _attack_anim_max), 0.0, 1.0)
+	var elapsed := 1.0 - remaining
+	AttackPose.apply(_player_sprite, _facing, remaining, _attack_anim_special, _attack_style, _player_base_scale)
+	# Strike frame: smear + damage / projectile
+	if not _slash_spawned and elapsed >= 0.24:
+		_slash_spawned = true
+		var profile := _weapon_profile if not _weapon_profile.is_empty() else _warrior.weapon_profile()
+		var col: Color = WeaponData.finish_color(profile.get("color", _warrior.outfit_accent()), _warrior.variant_weapon_style)
+		var origin := player.position + _facing * (12.0 if _attack_style != "cast" else 6.0)
+		if _pending_ranged:
+			COMBAT_FX.spawn_cast_burst(world, origin, _facing, col)
+			_fire_player_projectile(_pending_special, profile, col)
+		else:
+			COMBAT_FX.spawn_slash(world, origin, _facing, col, _pending_special, _attack_style)
+			if _pending_melee:
+				_do_facing_melee(_pending_special, profile, col)
+		_pending_melee = false
+		_pending_ranged = false
 	if _attack_anim_special:
-		_player_sprite.modulate = _warrior.outfit_accent().lerp(_warrior.display_modulate(), 1.0 - t)
+		_player_sprite.modulate = _warrior.outfit_accent().lerp(_warrior.display_modulate(), elapsed)
 	if _attack_anim_t <= 0.0:
-		_player_sprite.offset = Vector2.ZERO
-		_player_sprite.rotation = 0.0
-		_player_sprite.modulate = _warrior.display_modulate()
+		AttackPose.reset(_player_sprite, _player_base_scale, _warrior.display_modulate())
 		_player_sprite.modulate.a = 1.0
+		_slash_spawned = false
+		_pending_melee = false
+		_pending_ranged = false
 
 
 func _set_player_frame(frame: int) -> void:
@@ -653,9 +679,11 @@ func _on_attack() -> void:
 	if _transitioning or _attack_cd > 0.0 or _warrior == null:
 		return
 	_facing = WeaponData.cardinal(_facing)
-	_attack_cd = 0.34
-	_attack_anim_t = 0.22
+	_attack_cd = 0.38
+	_attack_anim_max = 0.32
+	_attack_anim_t = _attack_anim_max
 	_attack_anim_special = false
+	_slash_spawned = false
 	_perform_attack(false)
 
 
@@ -667,10 +695,12 @@ func _on_special() -> void:
 		_update_hud()
 		return
 	_facing = WeaponData.cardinal(_facing)
-	_special_cd = 0.65
-	_attack_cd = 0.42
-	_attack_anim_t = 0.28
+	_special_cd = 0.7
+	_attack_cd = 0.45
+	_attack_anim_max = 0.38
+	_attack_anim_t = _attack_anim_max
 	_attack_anim_special = true
+	_slash_spawned = false
 	GameState.save_adventure_warrior(_warrior)
 	_show_message(_warrior.special_move + "!")
 	_perform_attack(true)
@@ -680,7 +710,8 @@ func _on_special() -> void:
 func _perform_attack(is_special: bool) -> void:
 	var profile := _weapon_profile if not _weapon_profile.is_empty() else _warrior.weapon_profile()
 	var shape := str(profile.get("shape", "sword"))
-	var col: Color = WeaponData.finish_color(profile.get("color", _warrior.outfit_accent()), _warrior.variant_weapon_style)
+	_attack_style = AttackPose.swing_style_for(shape)
+	_pending_special = is_special
 	var use_ranged := false
 	if bool(profile.get("can_ranged", false)):
 		if str(profile.get("style", "")) == "ranged":
@@ -689,14 +720,13 @@ func _perform_attack(is_special: bool) -> void:
 			use_ranged = true
 		elif str(profile.get("style", "")) == "hybrid" and _warrior.prefers_ranged():
 			use_ranged = true
-	# Spawn facing weapon pose
-	var wpn: Sprite2D = WEAPON_SCRIPT.new()
-	world.add_child(wpn)
-	wpn.call("play", player.position, _facing, shape, col, is_special)
 	if use_ranged:
-		_fire_player_projectile(is_special, profile, col)
+		_attack_style = "cast"
+		_pending_ranged = true
+		_pending_melee = false
 	else:
-		_do_facing_melee(is_special, profile, col)
+		_pending_ranged = false
+		_pending_melee = true
 
 
 func _fire_player_projectile(is_special: bool, profile: Dictionary, col: Color) -> void:
@@ -706,7 +736,6 @@ func _fire_player_projectile(is_special: bool, profile: Dictionary, col: Color) 
 	var proj: Area2D = PROJECTILE_SCRIPT.new()
 	world.add_child(proj)
 	var dmg := _warrior.calc_damage(power, 10, is_special)
-	# Damage recalculated on hit with real defense
 	proj.call("setup", player.position + _facing * 12.0, _facing, spd, dmg, "player", kind, col)
 	proj.hit_enemy.connect(func(enemy: Node, _amt: int, from_pos: Vector2):
 		if not is_instance_valid(enemy):
@@ -723,7 +752,6 @@ func _fire_player_projectile(is_special: bool, profile: Dictionary, col: Color) 
 func _do_facing_melee(is_special: bool, profile: Dictionary, col: Color) -> void:
 	var reach: float = float(profile.get("melee_reach", 18.0)) * (1.25 if is_special else 1.0)
 	var center := player.position + _facing * reach
-	COMBAT_FX.spawn_slash(world, center, _facing, col, is_special)
 	var power := _warrior.special_power if is_special else _warrior.regular_power
 	var hit_r := reach * 0.85 + (6.0 if is_special else 2.0)
 	for e in _enemies.duplicate():
@@ -732,7 +760,6 @@ func _do_facing_melee(is_special: bool, profile: Dictionary, col: Color) -> void
 		var to_e: Vector2 = e.position - player.position
 		if to_e.length() > hit_r + 8.0:
 			continue
-		# Must be roughly in the facing cone (forgiving)
 		if to_e != Vector2.ZERO and _facing.dot(to_e.normalized()) < 0.1:
 			continue
 		if e.position.distance_to(center) > hit_r and to_e.length() > reach * 0.7:

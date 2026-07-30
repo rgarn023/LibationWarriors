@@ -1,10 +1,9 @@
 extends CharacterBody2D
-## Real-time dungeon foe: faces player, swings faction weapons, may fire ranged shots.
+## Real-time dungeon foe: faces player, swings painted weapons dynamically, may fire ranged shots.
 
 signal died(enemy: CharacterBody2D, is_boss: bool, world_pos: Vector2)
 signal damaged_player(amount: int, from_pos: Vector2)
 
-const WEAPON_SCRIPT := preload("res://scripts/adventure/dungeon_weapon.gd")
 const PROJECTILE_SCRIPT := preload("res://scripts/adventure/dungeon_projectile.gd")
 
 var warrior: Warrior
@@ -25,6 +24,11 @@ var _facing: Vector2 = Vector2.LEFT
 var _ai_timer: float = 0.0
 var _attack_cd: float = 0.0
 var _attack_anim: float = 0.0
+var _attack_anim_max: float = 0.32
+var _attack_style: String = "slash"
+var _base_scale: float = 0.42
+var _strike_done: bool = false
+var _pending_ranged: bool = false
 var _world: Node2D
 var _profile: Dictionary = {}
 
@@ -53,8 +57,8 @@ func setup(data: Dictionary, player: CharacterBody2D, boss: bool) -> void:
 	elif ResourceLoader.exists(warrior.sprite_path()):
 		_sprite.texture = load(warrior.sprite_path())
 	_sprite.modulate = warrior.display_modulate()
-	var sc := 0.55 if boss else 0.42
-	_sprite.scale = Vector2(sc, sc)
+	_base_scale = 0.55 if boss else 0.42
+	_sprite.scale = Vector2(_base_scale, _base_scale)
 	if boss:
 		_sprite.modulate = Color(_sprite.modulate.r, _sprite.modulate.g * 0.9, _sprite.modulate.b * 0.9)
 	var cs := CollisionShape2D.new()
@@ -88,10 +92,15 @@ func _physics_process(delta: float) -> void:
 
 	if _attack_anim > 0.0:
 		_attack_anim -= delta
-		var t := clampf(_attack_anim / 0.22, 0.0, 1.0)
-		_sprite.offset = _facing * (5.0 * (1.0 - absf(t - 0.5) * 2.0))
+		var remaining := clampf(_attack_anim / maxf(0.001, _attack_anim_max), 0.0, 1.0)
+		var elapsed := 1.0 - remaining
+		AttackPose.apply(_sprite, _facing, remaining, is_boss, _attack_style, _base_scale)
+		if not _strike_done and elapsed >= 0.24:
+			_strike_done = true
+			_resolve_strike()
 		if _attack_anim <= 0.0:
-			_sprite.offset = Vector2.ZERO
+			AttackPose.reset(_sprite, _base_scale, warrior.display_modulate())
+			_strike_done = false
 
 	_anim_t += delta
 	if _anim_t >= 0.14 and _attack_anim <= 0.0:
@@ -104,7 +113,7 @@ func _physics_process(delta: float) -> void:
 	if _player != null and is_instance_valid(_player):
 		to_player = _player.global_position - global_position
 		dist = to_player.length()
-		if dist > 0.1:
+		if dist > 0.1 and _attack_anim <= 0.0:
 			_facing = WeaponData.cardinal(to_player)
 
 	if knockback.length() > 4.0:
@@ -116,7 +125,8 @@ func _physics_process(delta: float) -> void:
 		if _ai_timer <= 0.0:
 			_ai_timer = randf_range(0.25, 0.7)
 			_ai_dir = _choose_move_dir(to_player, dist)
-		velocity = _ai_dir * (speed * (0.4 if _attack_anim > 0.0 else 1.0))
+		var mul := 0.3 if _attack_anim > _attack_anim_max * 0.45 else (0.65 if _attack_anim > 0.0 else 1.0)
+		velocity = _ai_dir * (speed * mul)
 	move_and_slide()
 	position.x = clampf(position.x, 28.0, 228.0)
 	position.y = clampf(position.y, 28.0, 148.0)
@@ -132,15 +142,13 @@ func _choose_move_dir(to_player: Vector2, dist: float) -> Vector2:
 	var pref: float = float(_profile.get("preferred_range", 70.0))
 	if ranged:
 		if dist < pref * 0.55:
-			return -to_player.normalized() # back off
+			return -to_player.normalized()
 		if dist > pref * 1.25:
 			return to_player.normalized()
-		# Strafe while holding range
 		var side := Vector2(-to_player.y, to_player.x).normalized()
 		if randf() < 0.5:
 			side = -side
 		return side
-	# Melee chase
 	if dist < 110.0 or is_boss:
 		return to_player.normalized()
 	return Vector2(randf_range(-1, 1), randf_range(-1, 1)).normalized()
@@ -150,50 +158,49 @@ func _try_attack(dist: float) -> void:
 	var can_r := bool(_profile.get("can_ranged", false))
 	var melee_reach: float = float(_profile.get("melee_reach", 18.0)) + (4.0 if is_boss else 0.0)
 	if can_r and dist > melee_reach + 6.0 and dist < 120.0:
-		_fire_ranged()
+		_begin_attack(true)
 		return
 	if dist <= melee_reach + 4.0:
-		_swing_melee()
+		_begin_attack(false)
 
 
-func _swing_melee() -> void:
-	_attack_cd = 0.75 if is_boss else 0.95
-	_attack_anim = 0.22
+func _begin_attack(ranged: bool) -> void:
+	_attack_cd = 0.85 if is_boss else 1.05
+	_attack_anim_max = 0.36 if is_boss else 0.3
+	_attack_anim = _attack_anim_max
+	_strike_done = false
+	_pending_ranged = ranged
 	var shape := str(_profile.get("shape", "sword"))
-	var col: Color = WeaponData.finish_color(_profile.get("color", warrior.outfit_accent()), warrior.variant_weapon_style)
-	if _world:
-		var wpn: Sprite2D = WEAPON_SCRIPT.new()
-		_world.add_child(wpn)
-		wpn.call("play", position, _facing, shape, col, is_boss)
-	# Contact damage in facing cone
+	_attack_style = "cast" if ranged else AttackPose.swing_style_for(shape)
 	if _player != null and is_instance_valid(_player):
-		var to_p: Vector2 = (_player.global_position - global_position)
-		if to_p.length() <= float(_profile.get("melee_reach", 18.0)) + 6.0:
-			if _facing.dot(to_p.normalized()) >= 0.25:
-				damaged_player.emit(contact_damage, global_position)
+		_facing = WeaponData.cardinal(_player.global_position - global_position)
 
 
-func _fire_ranged() -> void:
-	_attack_cd = 1.05 if is_boss else 1.25
-	_attack_anim = 0.18
-	var kind := str(_profile.get("projectile", "bolt"))
+func _resolve_strike() -> void:
 	var col: Color = WeaponData.finish_color(_profile.get("color", warrior.outfit_accent()), warrior.variant_weapon_style)
-	var aim := _facing
-	if _player != null and is_instance_valid(_player):
-		aim = (_player.global_position - global_position).normalized()
-		_facing = WeaponData.cardinal(aim)
-	# Cast pose with weapon
-	if _world:
-		var wpn: Sprite2D = WEAPON_SCRIPT.new()
-		_world.add_child(wpn)
-		wpn.call("play", position, _facing, str(_profile.get("shape", "staff")), col, false)
-		var proj: Area2D = PROJECTILE_SCRIPT.new()
-		_world.add_child(proj)
-		var dmg := maxi(3, int(contact_damage * (1.1 if is_boss else 0.85)))
-		var spd := 110.0 if is_boss else 90.0
-		proj.call("setup", position + _facing * 10.0, aim, spd, dmg, "enemy", kind, col)
-		if not proj.hit_player.is_connected(_on_proj_hit_player):
-			proj.hit_player.connect(_on_proj_hit_player)
+	var origin := position + _facing * (12.0 if not _pending_ranged else 6.0)
+	if _pending_ranged:
+		CombatFx.spawn_cast_burst(_world if _world else self, origin, _facing, col)
+		var kind := str(_profile.get("projectile", "bolt"))
+		var aim := _facing
+		if _player != null and is_instance_valid(_player):
+			aim = (_player.global_position - global_position).normalized()
+			_facing = WeaponData.cardinal(aim)
+		if _world:
+			var proj: Area2D = PROJECTILE_SCRIPT.new()
+			_world.add_child(proj)
+			var dmg := maxi(3, int(contact_damage * (1.1 if is_boss else 0.85)))
+			var spd := 110.0 if is_boss else 90.0
+			proj.call("setup", position + _facing * 10.0, aim, spd, dmg, "enemy", kind, col)
+			if not proj.hit_player.is_connected(_on_proj_hit_player):
+				proj.hit_player.connect(_on_proj_hit_player)
+	else:
+		CombatFx.spawn_slash(_world if _world else self, origin, _facing, col, is_boss, _attack_style)
+		if _player != null and is_instance_valid(_player):
+			var to_p: Vector2 = (_player.global_position - global_position)
+			if to_p.length() <= float(_profile.get("melee_reach", 18.0)) + 6.0:
+				if _facing.dot(to_p.normalized()) >= 0.15:
+					damaged_player.emit(contact_damage, global_position)
 
 
 func _on_proj_hit_player(amount: int, from_pos: Vector2) -> void:
