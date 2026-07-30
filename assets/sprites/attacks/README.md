@@ -1,45 +1,45 @@
-# Attack sprite sheets
+# Attack sprite sheets (individual characters only)
 
-Drop your per-class attack PNGs here using these exact names (or update
-`CharacterAnimationLibrary` if you rename them):
+Place each class’s attack PNG here. **Do not** use `export/all_character_*.png`
+contact sheets as atlases.
 
-| Class | File |
-|---|---|
-| WhiteMage | `white_mage_holy_casting_sprite_sheet.png` |
-| BlackMage | `shadowspell_black_mage_sprite_sheet.png` |
-| Brawler | `punch_combo_pixel_sprite_sheet.png` |
-| Samurai | `samurai_katana_attack_sprite_sheet.png` |
-| Viking | `viking_heavy_axe_attack_sprite_sheet.png` |
-| Rogue | `rogue_dagger_attack_sprite_sheet.png` |
-| Nimrod | `nimrod_s_woodland_club_attack_animation.png` |
+## Pirate (required for sword-frame attacks)
 
-## Pixel-perfect Import (Godot 4)
-
-For each PNG, select it in the FileSystem dock → **Import**:
-
-1. **Compress** → `Lossless` (mode 0)
-2. **Mipmaps** → Off
-3. Leave size limit at 0
-4. Click **Reimport**
-
-Project-wide Nearest filtering is already set in `project.godot`:
+Preferred filename:
 
 ```
-textures/canvas_textures/default_texture_filter=0
+pirate_attack.png
 ```
 
-`AnimatedCharacter` also forces:
+Also accepted:
 
-```gdscript
-texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-```
+- `pirate_cutlass_attack_sprite_sheet.png`
+- `pirate_sword_attack.png`
 
-After dropping files, run:
+Authored layout: **3 columns × 3 rows** on a ~1024×1536 sheet.
+
+Manual region boundaries (scaled if the PNG size differs):
+
+| | x0 | x1 |
+|---|---|---|
+| cols | 0, 341, 683 | 1024 |
+
+| | y0 | y1 |
+|---|---|---|
+| rows | 0, 512, 1024 | 1536 |
+
+Reading order (L→R, T→B):
+1 Ready · 2 Anticipation · 3 Sword raised · 4 Swing begins · 5 Main slash · 6 Impact · 7 Follow-through · 8 Recovery · 9 Return pose (optional)
+
+Inspect with:
 
 ```bash
-godot --headless --path . --import
-# optional helper that writes .import stubs:
-python3 tools/write_pixel_import.py assets/sprites/attacks
+python3 tools/extract_pirate_attack.py
 ```
 
-Then open `res://scenes/animation/character_anim_test.tscn` and press **Space**.
+## Import (pixel-perfect)
+
+- Compress: **Lossless**
+- Mipmaps: **Off**
+- Project filter is already Nearest
+- `PlayerAnimController` forces `texture_filter = TEXTURE_FILTER_NEAREST`

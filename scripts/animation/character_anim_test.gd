@@ -1,77 +1,59 @@
 extends Node2D
-## Test harness for CharacterAnimationData → SpriteFrames → AnimatedSprite2D.
-##
-## Controls:
-##   Space          = play attack (once, then idle)
-##   Left / Right   = previous / next character
-##   1–7            = jump to a specific class
-##
-## Open this scene (F6) after dropping attack PNGs into assets/sprites/attacks/.
+## Demo: Pirate attack frames via PlayerAnimController state machine.
+## Space / attack action = start_attack once. Movement ignored while ATTACKING.
 
 
-@onready var character: AnimatedCharacter = $AnimatedSprite2D
+@onready var body: CharacterBody2D = $Player
 @onready var label: Label = $UI/Label
 @onready var hint: Label = $UI/Hint
 
+var _anim: PlayerAnimController
+var _pad: Vector2 = Vector2.ZERO
+
 
 func _ready() -> void:
-	if character:
-		character.character_changed.connect(_on_character_changed)
-		character.attack_started.connect(func(): _flash("ATTACK"))
-		character.attack_finished.connect(func(): _flash("idle"))
-		_on_character_changed(character.get_character_name())
-	if hint:
-		hint.text = "Space: attack   ←/→: switch class   1-7: pick class"
+	_anim = PlayerAnimController.new()
+	_anim.name = "Anim"
+	_anim.debug_attacks = true
+	body.add_child(_anim)
+	var warrior := Warrior.new({"faction": "pirate", "variant": 0})
+	var loaded := FactionAttackLoader.build_for_warrior(warrior)
+	_anim.configure(body, loaded["frames"], 2.0, loaded.get("trail_frame_indices", []), Color.WHITE)
+	_anim.attack_finished.connect(func():
+		label.text = "Pirate [idle] frames=%s" % str(loaded.get("phases_used", []))
+	)
+	_anim.attack_started.connect(func():
+		label.text = "Pirate [ATTACKING]"
+	)
+	label.text = "Pirate ok=%s source=%s" % [str(loaded.get("ok", false)), str(loaded.get("source_path", "MISSING"))]
+	hint.text = "Space: attack   Arrows: move (locked during attack)\nDrop pirate_attack.png into assets/sprites/attacks/"
+	print("[AnimTest] ", loaded)
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("ui_accept") or (event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_SPACE):
-		if character:
-			character.play_attack()
+	if event.is_action_pressed("attack") or (event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_SPACE):
+		_anim.start_attack()
 		get_viewport().set_input_as_handled()
+
+
+func _physics_process(_delta: float) -> void:
+	if _anim.is_attacking():
+		_anim.lock_body_position_if_attacking()
 		return
-	if event is InputEventKey and event.pressed and not event.echo:
-		match event.keycode:
-			KEY_LEFT:
-				_step_character(-1)
-			KEY_RIGHT:
-				_step_character(1)
-			KEY_1:
-				character.set_character("WhiteMage")
-			KEY_2:
-				character.set_character("BlackMage")
-			KEY_3:
-				character.set_character("Brawler")
-			KEY_4:
-				character.set_character("Samurai")
-			KEY_5:
-				character.set_character("Viking")
-			KEY_6:
-				character.set_character("Rogue")
-			KEY_7:
-				character.set_character("Nimrod")
-
-
-func _step_character(dir: int) -> void:
-	var names := CharacterAnimationLibrary.all_names()
-	if names.is_empty() or character == null:
-		return
-	var idx := 0
-	for i in names.size():
-		if str(names[i]) == character.get_character_name():
-			idx = i
-			break
-	idx = (idx + dir) % names.size()
-	if idx < 0:
-		idx += names.size()
-	character.set_character(str(names[idx]))
-
-
-func _on_character_changed(character_name: String) -> void:
-	if label:
-		label.text = character_name
-
-
-func _flash(state: String) -> void:
-	if label and character:
-		label.text = "%s  [%s]" % [character.get_character_name(), state]
+	_pad = Vector2.ZERO
+	if Input.is_action_pressed("ui_left"):
+		_pad.x -= 1
+	if Input.is_action_pressed("ui_right"):
+		_pad.x += 1
+	if Input.is_action_pressed("ui_up"):
+		_pad.y -= 1
+	if Input.is_action_pressed("ui_down"):
+		_pad.y += 1
+	if _pad != Vector2.ZERO:
+		_anim.set_facing(_pad)
+		_anim.set_moving(true)
+		body.velocity = _pad.normalized() * 120.0
+	else:
+		_anim.set_moving(false)
+		body.velocity = Vector2.ZERO
+	body.move_and_slide()

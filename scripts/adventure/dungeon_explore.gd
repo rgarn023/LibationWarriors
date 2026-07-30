@@ -40,7 +40,7 @@ var _pad_dir: Vector2 = Vector2.ZERO
 var _facing: Vector2 = Vector2.DOWN
 var _anim_t: float = 0.0
 var _anim_frame: int = 0
-var _player_sprite: Sprite2D
+var _player_anim: PlayerAnimController
 var _player_sheet: Texture2D
 var _attack_cd: float = 0.0
 var _special_cd: float = 0.0
@@ -49,8 +49,6 @@ var _enemies: Array = []
 var _pickups: Array = []
 var _torch_t: float = 0.0
 var _cam: Camera2D
-var _attack_anim_t: float = 0.0
-var _attack_anim_max: float = 0.28
 var _attack_anim_special: bool = false
 var _attack_style: String = "slash"
 var _player_base_scale: float = 0.42
@@ -59,12 +57,14 @@ var _pending_melee: bool = false
 var _pending_ranged: bool = false
 var _pending_special: bool = false
 var _door_dirs: Array = []
-var _sword_arc: Node2D = null
+var _blade_trail: Node2D = null
+var _trail_frame_indices: Array = []
 var _exits: Array = [] ## {dir, target, locked, mouth: Rect2}
 var _retreat_dir: String = "" ## door that leads back the way you came
 var _room_art: Node2D
 var _controls_wired: bool = false
 var _weapon_profile: Dictionary = {}
+var _attack_debug: Dictionary = {}
 
 
 func _ready() -> void:
@@ -135,28 +135,36 @@ func _setup_player() -> void:
 	player.collision_mask = 1
 	player.add_to_group("dungeon_player")
 	_weapon_profile = _warrior.weapon_profile()
-	_player_sprite = player.get_node_or_null("Sprite") as Sprite2D
-	if _player_sprite == null:
-		_player_sprite = Sprite2D.new()
-		_player_sprite.name = "Sprite"
-		player.add_child(_player_sprite)
-	# Remove leftover outfit overlays from older builds
+	# Remove old Sprite2D / overlays from prior builds.
 	for child in player.get_children():
-		if str(child.name) == "OutfitGear":
+		if child is Sprite2D or str(child.name) in ["Sprite", "OutfitGear", "Anim"]:
 			child.queue_free()
-	_player_sprite.centered = true
-	_player_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_player_anim = PlayerAnimController.new()
+	_player_anim.name = "Anim"
+	player.add_child(_player_anim)
 	_player_base_scale = 0.42
-	_player_sprite.scale = Vector2(_player_base_scale, _player_base_scale)
 	if ResourceLoader.exists(_warrior.sheet_path()):
 		_player_sheet = load(_warrior.sheet_path())
-		_player_sprite.texture = _player_sheet
-		_player_sprite.region_enabled = true
-		_player_sprite.region_rect = Rect2(0, 0, 64, 80)
-	elif ResourceLoader.exists(_warrior.sprite_path()):
-		_player_sprite.texture = load(_warrior.sprite_path())
-	_player_sprite.modulate = _warrior.display_modulate()
-	AttackPose.reset(_player_sprite, _player_base_scale, _warrior.display_modulate())
+	var loaded := FactionAttackLoader.build_for_warrior(_warrior)
+	_attack_debug = loaded
+	_trail_frame_indices = loaded.get("trail_frame_indices", [])
+	_player_anim.configure(
+		player,
+		loaded.get("frames", SpriteFrames.new()),
+		_player_base_scale,
+		_trail_frame_indices,
+		_warrior.display_modulate()
+	)
+	_player_anim.attack_started.connect(_on_player_attack_started)
+	_player_anim.attack_finished.connect(_on_player_attack_finished)
+	_player_anim.frame_changed.connect(_on_player_attack_frame_changed)
+	_player_anim.set_facing(_facing)
+	print("[DungeonExplore] attack load: ok=%s note=%s source=%s phases=%s" % [
+		str(loaded.get("ok", false)),
+		str(loaded.get("note", "")),
+		str(loaded.get("source_path", "")),
+		str(loaded.get("phases_used", [])),
+	])
 	var col: CollisionShape2D = player.get_node_or_null("Collision")
 	if col and col.shape is RectangleShape2D:
 		(col.shape as RectangleShape2D).size = Vector2(10, 12)
@@ -184,9 +192,23 @@ func _physics_process(delta: float) -> void:
 		_special_cd -= delta
 	if _hurt_invuln > 0.0:
 		_hurt_invuln -= delta
-		_player_sprite.modulate.a = 0.5 if int(_hurt_invuln * 18.0) % 2 == 0 else 1.0
-	else:
-		_player_sprite.modulate.a = 1.0
+		if _player_anim:
+			_player_anim.modulate.a = 0.5 if int(_hurt_invuln * 18.0) % 2 == 0 else 1.0
+	elif _player_anim:
+		_player_anim.modulate.a = 1.0
+
+	# Attack must use just_pressed — never hold-to-retrigger / per-frame play.
+	if Input.is_action_just_pressed("attack"):
+		_on_attack()
+
+	var attacking := _player_anim != null and _player_anim.is_attacking()
+	if attacking:
+		# Keep CharacterBody2D + sprite pivot fixed; no move_and_slide during ATTACKING.
+		_player_anim.lock_body_position_if_attacking()
+		_check_enemy_contact()
+		_check_pickups()
+		_update_hud()
+		return
 
 	var dir := _pad_dir
 	if Input.is_action_pressed("ui_left") or Input.is_key_pressed(KEY_A):
@@ -197,29 +219,23 @@ func _physics_process(delta: float) -> void:
 		dir.y -= 1
 	if Input.is_action_pressed("ui_down") or Input.is_key_pressed(KEY_S):
 		dir.y += 1
-	if Input.is_key_pressed(KEY_Z) or Input.is_key_pressed(KEY_J):
-		_on_attack()
-	if Input.is_key_pressed(KEY_X) or Input.is_key_pressed(KEY_K):
-		_on_special()
 
-	if dir != Vector2.ZERO and _attack_anim_t <= 0.0:
+	if dir != Vector2.ZERO:
 		_facing = WeaponData.cardinal(dir)
+		if _player_anim:
+			_player_anim.set_facing(_facing)
+			_player_anim.set_moving(true)
 		_anim_t += delta
 		if _anim_t >= 0.12:
 			_anim_t = 0.0
 			_anim_frame = (_anim_frame + 1) % 4
-			_set_player_frame(_anim_frame)
-	elif _attack_anim_t <= 0.0:
-		_set_player_frame(0)
+			_set_player_walk_frame(_anim_frame)
+	else:
+		if _player_anim:
+			_player_anim.set_moving(false)
+		_set_player_walk_frame(0)
 
-	if _attack_anim_t > 0.0:
-		_attack_anim_t -= delta
-		_animate_attack_pose()
-
-	# Slow during swing
-	var busy := _attack_anim_t > 0.0
-	var move_mul := 0.3 if busy else 1.0
-	player.velocity = dir.normalized() * (98.0 * move_mul)
+	player.velocity = dir.normalized() * 98.0
 	player.move_and_slide()
 	_clamp_player_in_room()
 	_check_enemy_contact()
@@ -229,40 +245,81 @@ func _physics_process(delta: float) -> void:
 	_update_hud()
 
 
-func _animate_attack_pose() -> void:
-	var remaining := clampf(_attack_anim_t / maxf(0.001, _attack_anim_max), 0.0, 1.0)
-	var elapsed := 1.0 - remaining
-	AttackPose.apply(_player_sprite, _facing, remaining, _attack_anim_special, _attack_style, _player_base_scale)
-	# Strike frame: damage / projectile (visual arc already playing on SwordArc)
-	if not _slash_spawned and elapsed >= 0.28:
-		_slash_spawned = true
-		var profile := _weapon_profile if not _weapon_profile.is_empty() else _warrior.weapon_profile()
-		var col: Color = WeaponData.finish_color(profile.get("color", _warrior.outfit_accent()), _warrior.variant_weapon_style)
-		var origin := player.position + _facing * (12.0 if _attack_style != "cast" else 6.0)
-		if _pending_ranged:
-			COMBAT_FX.spawn_cast_burst(world, origin, _facing, col)
-			_fire_player_projectile(_pending_special, profile, col)
-		elif _pending_melee:
-			COMBAT_FX.spawn_hit_spark(world, origin + _facing * 10.0, col)
-			_do_facing_melee(_pending_special, profile, col)
-		_pending_melee = false
-		_pending_ranged = false
-	if _attack_anim_special:
-		_player_sprite.modulate = _warrior.outfit_accent().lerp(_warrior.display_modulate(), elapsed)
-	if _attack_anim_t <= 0.0:
-		AttackPose.reset(_player_sprite, _player_base_scale, _warrior.display_modulate())
-		_player_sprite.modulate.a = 1.0
-		_slash_spawned = false
-		_pending_melee = false
-		_pending_ranged = false
-		_sword_arc = null
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("attack"):
+		_on_attack()
+		get_viewport().set_input_as_handled()
+	elif event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_X or event.keycode == KEY_K:
+			_on_special()
+			get_viewport().set_input_as_handled()
 
 
-func _set_player_frame(frame: int) -> void:
-	if _player_sheet == null or not _player_sprite.region_enabled:
+func _set_player_walk_frame(frame: int) -> void:
+	## Idle/walk uses SpriteFrames "idle"; advance frame manually for walk cycle.
+	if _player_anim == null or _player_anim.is_attacking():
 		return
-	_player_sprite.region_rect = Rect2(frame * 64, 0, 64, 80)
-	_player_sprite.flip_h = WeaponData.flip_h_for(_facing)
+	if _player_anim.animation != "idle":
+		_player_anim.play("idle")
+	_player_anim.frame = clampi(frame, 0, maxi(0, _player_anim.sprite_frames.get_frame_count("idle") - 1))
+	_player_anim.flip_h = WeaponData.flip_h_for(_facing)
+
+
+func _on_player_attack_started() -> void:
+	_slash_spawned = false
+	player.velocity = Vector2.ZERO
+
+
+func _on_player_attack_finished() -> void:
+	_slash_spawned = false
+	_pending_melee = false
+	_pending_ranged = false
+	if _blade_trail != null and is_instance_valid(_blade_trail):
+		_blade_trail.queue_free()
+		_blade_trail = null
+	if _player_anim:
+		_player_anim.set_facing(_facing)
+		_player_anim.set_moving(false)
+
+
+func _on_player_attack_frame_changed() -> void:
+	if _player_anim == null or not _player_anim.is_attacking():
+		return
+	var f := _player_anim.frame
+	# Tiny blade trail only on configured main-slash / impact frames — once.
+	if not _slash_spawned and f in _trail_frame_indices:
+		_slash_spawned = true
+		_spawn_small_blade_trail()
+		_resolve_attack_hit()
+	elif not _slash_spawned and _trail_frame_indices.is_empty() and f >= 2:
+		_slash_spawned = true
+		_resolve_attack_hit()
+
+
+func _spawn_small_blade_trail() -> void:
+	if _blade_trail != null and is_instance_valid(_blade_trail):
+		return
+	var profile := _weapon_profile if not _weapon_profile.is_empty() else _warrior.weapon_profile()
+	var col: Color = WeaponData.finish_color(profile.get("color", _warrior.outfit_accent()), _warrior.variant_weapon_style)
+	var fx := BladeTrailFx.new()
+	player.add_child(fx)
+	fx.position = Vector2.ZERO
+	fx.play(_facing, 34.0, col)
+	_blade_trail = fx
+
+
+func _resolve_attack_hit() -> void:
+	var profile := _weapon_profile if not _weapon_profile.is_empty() else _warrior.weapon_profile()
+	var col: Color = WeaponData.finish_color(profile.get("color", _warrior.outfit_accent()), _warrior.variant_weapon_style)
+	var origin := player.position + _facing * (12.0 if _attack_style != "cast" else 6.0)
+	if _pending_ranged:
+		COMBAT_FX.spawn_cast_burst(world, origin, _facing, col)
+		_fire_player_projectile(_pending_special, profile, col)
+	elif _pending_melee:
+		COMBAT_FX.spawn_hit_spark(world, origin + _facing * 8.0, col)
+		_do_facing_melee(_pending_special, profile, col)
+	_pending_melee = false
+	_pending_ranged = false
 
 
 func _clamp_player_in_room() -> void:
@@ -678,25 +735,39 @@ func _on_player_down() -> void:
 
 
 func _on_attack() -> void:
-	if _transitioning or _attack_cd > 0.0 or _warrior == null or _attack_anim_t > 0.0:
+	if _transitioning or _warrior == null:
+		return
+	if _player_anim != null and _player_anim.is_attacking():
+		print("[DungeonExplore] IGNORE attack input — already ATTACKING")
+		return
+	if _attack_cd > 0.0:
 		return
 	_facing = WeaponData.cardinal(_facing)
-	_attack_cd = 0.4
+	if _player_anim:
+		_player_anim.set_facing(_facing)
+	_attack_cd = 0.35
 	_attack_anim_special = false
 	_slash_spawned = false
 	_perform_attack(false)
 
 
 func _on_special() -> void:
-	if _transitioning or _special_cd > 0.0 or _warrior == null or _attack_anim_t > 0.0:
+	if _transitioning or _warrior == null:
+		return
+	if _player_anim != null and _player_anim.is_attacking():
+		print("[DungeonExplore] IGNORE special — already ATTACKING")
+		return
+	if _special_cd > 0.0:
 		return
 	if not _warrior.spend_special_energy():
 		_show_message("Not enough energy for %s!" % _warrior.special_move)
 		_update_hud()
 		return
 	_facing = WeaponData.cardinal(_facing)
+	if _player_anim:
+		_player_anim.set_facing(_facing)
 	_special_cd = 0.75
-	_attack_cd = 0.48
+	_attack_cd = 0.4
 	_attack_anim_special = true
 	_slash_spawned = false
 	GameState.save_adventure_warrior(_warrior)
@@ -725,30 +796,20 @@ func _perform_attack(is_special: bool) -> void:
 	else:
 		_pending_ranged = false
 		_pending_melee = true
-	_attack_anim_max = 0.34 if is_special else 0.28
-	_attack_anim_t = _attack_anim_max
-	var col: Color = WeaponData.finish_color(profile.get("color", _warrior.outfit_accent()), _warrior.variant_weapon_style)
-	_spawn_sword_arc(shape, col, is_special)
-
-
-func _spawn_sword_arc(shape: String, col: Color, is_special: bool) -> void:
-	if _sword_arc != null and is_instance_valid(_sword_arc):
-		_sword_arc.queue_free()
-	var arc := SwordArc.new()
-	# Parent to sprite so the blade follows body lean / wind-up rotation.
-	var host: Node2D = _player_sprite if _player_sprite else player
-	host.add_child(arc)
-	arc.position = Vector2.ZERO
-	# Counter sprite scale so the arc reads at world size (~character height).
-	var s := _player_base_scale if _player_base_scale > 0.01 else 0.42
-	arc.scale = Vector2(1.0 / s, 1.0 / s)
-	# Sheets face left; flip_h mirrors when facing right. Always draw the arc in
-	# native (left) space so flip_h carries it to the correct world side.
-	var face_for_arc := _facing
-	if absf(face_for_arc.x) >= absf(face_for_arc.y):
-		face_for_arc = Vector2.LEFT
-	arc.play(face_for_arc, shape, col, is_special, _attack_style)
-	_sword_arc = arc
+	# Sprite-frame attack — no SwordArc / AttackPose procedural swing.
+	if _player_anim == null:
+		print("[DungeonExplore] missing PlayerAnimController")
+		_pending_melee = false
+		_pending_ranged = false
+		return
+	if _player_anim.sprite_frames == null or not _player_anim.sprite_frames.has_animation("attack") \
+			or _player_anim.sprite_frames.get_frame_count("attack") < 1:
+		print("[DungeonExplore] no attack frames for %s — place individual attack PNG under assets/sprites/attacks/" % _warrior.faction)
+		_show_message("Attack sheet missing for %s" % _warrior.faction)
+		_pending_melee = false
+		_pending_ranged = false
+		return
+	_player_anim.start_attack()
 
 
 func _fire_player_projectile(is_special: bool, profile: Dictionary, col: Color) -> void:
