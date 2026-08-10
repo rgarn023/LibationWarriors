@@ -1,0 +1,7 @@
+# Generated Android build files (Godot gradle export)
+/build/
+/.gradle/
+**/build/
+local.properties
+*.iml
+.cxx/
