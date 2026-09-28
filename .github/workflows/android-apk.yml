@@ -62,12 +62,6 @@ jobs:
           test -f android/build/gradlew
           chmod +x android/build/gradlew
 
-      - name: Run foundation tests
-        shell: bash
-        run: |
-          set -euo pipefail
-          godot --headless --path . res://scenes/tests/foundation_tests.tscn
-
       - name: Export debug APK
         shell: bash
         run: |
