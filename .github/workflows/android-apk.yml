@@ -11,7 +11,7 @@ permissions:
 
 env:
   GODOT_VERSION: "4.7.1"
-  EXPORT_NAME: "LibationWarriors-v001-debug.apk"
+  EXPORT_NAME: "LibationWarriors-v001-dev-debug.apk"
 
 jobs:
   build-android:
@@ -67,7 +67,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p build
-          godot --headless --verbose --path . --export-debug "Android" "build/${EXPORT_NAME}"
+          godot --headless --verbose --path . --export-debug "Android Dev" "build/${EXPORT_NAME}"
           test -s "build/${EXPORT_NAME}"
           sha256sum "build/${EXPORT_NAME}" | tee "build/${EXPORT_NAME}.sha256"
           stat -c '%n %s bytes' "build/${EXPORT_NAME}" | tee "build/${EXPORT_NAME}.size.txt"
@@ -75,10 +75,10 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: LibationWarriors-v001-debug
+          name: LibationWarriors-v001-dev-debug
           path: |
-            build/LibationWarriors-v001-debug.apk
-            build/LibationWarriors-v001-debug.apk.sha256
-            build/LibationWarriors-v001-debug.apk.size.txt
+            build/LibationWarriors-v001-dev-debug.apk
+            build/LibationWarriors-v001-dev-debug.apk.sha256
+            build/LibationWarriors-v001-dev-debug.apk.size.txt
           if-no-files-found: error
           retention-days: 30
