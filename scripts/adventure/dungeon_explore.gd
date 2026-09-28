@@ -405,9 +405,17 @@ func _build_room(room_id: int, spawn: Vector2) -> void:
 		elif kind == "boss":
 			_spawn_enemy(wdict, true, Vector2(ROOM_W * TILE * 0.5, ROOM_H * TILE * 0.5))
 		else:
-			_spawn_enemy(wdict, false, Vector2(ROOM_W * TILE * 0.55, ROOM_H * TILE * 0.5))
-			if randf() < 0.4:
-				_spawn_enemy(_clone_enemy_dict(wdict, 1), false, Vector2(ROOM_W * TILE * 0.38, ROOM_H * TILE * 0.62))
+			var enemy_count := clampi(int(room.get("enemy_count", 1)), 1, 5)
+			var spawn_points := [
+				Vector2(ROOM_W * TILE * 0.55, ROOM_H * TILE * 0.50),
+				Vector2(ROOM_W * TILE * 0.38, ROOM_H * TILE * 0.62),
+				Vector2(ROOM_W * TILE * 0.68, ROOM_H * TILE * 0.66),
+				Vector2(ROOM_W * TILE * 0.34, ROOM_H * TILE * 0.38),
+				Vector2(ROOM_W * TILE * 0.70, ROOM_H * TILE * 0.34),
+			]
+			for enemy_index in enemy_count:
+				var enemy_data := wdict if enemy_index == 0 else _clone_enemy_dict(wdict, enemy_index)
+				_spawn_enemy(enemy_data, false, spawn_points[enemy_index])
 
 	player.position = spawn
 	player.z_index = 20

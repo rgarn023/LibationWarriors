@@ -16,7 +16,6 @@ layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-mouse_filter = 2
 color = Color(0.07, 0.08, 0.1, 1)
 
 [node name="SafeRoot" type="Control" parent="."]
@@ -38,43 +37,45 @@ theme_override_constants/margin_bottom = 12
 
 [node name="VBox" type="VBoxContainer" parent="SafeRoot/Margin"]
 layout_mode = 2
-theme_override_constants/separation = 10
+theme_override_constants/separation = 8
 
 [node name="Title" type="Label" parent="SafeRoot/Margin/VBox"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.85, 0.62, 0.22, 1)
 theme_override_font_sizes/font_size = 32
-text = "Adventure"
+text = "EXPLORE"
 horizontal_alignment = 1
 
 [node name="Hint" type="Label" parent="SafeRoot/Margin/VBox"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.75, 0.7, 0.62, 1)
-theme_override_font_sizes/font_size = 15
-text = "Choose one warrior. Explore a random or event dungeon."
+theme_override_font_sizes/font_size = 14
+text = "Choose an owned warrior and difficulty."
 horizontal_alignment = 1
-autowrap_mode = 3
 
 [node name="EventBanner" type="Label" parent="SafeRoot/Margin/VBox"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.85, 0.7, 0.4, 1)
-theme_override_font_sizes/font_size = 14
-text = ""
+theme_override_font_sizes/font_size = 13
 horizontal_alignment = 1
 autowrap_mode = 3
 
 [node name="DungeonMode" type="OptionButton" parent="SafeRoot/Margin/VBox"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 48)
+custom_minimum_size = Vector2(0, 46)
+layout_mode = 2
+
+[node name="Difficulty" type="OptionButton" parent="SafeRoot/Margin/VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 46)
 layout_mode = 2
 
 [node name="DungeonName" type="Label" parent="SafeRoot/Margin/VBox"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.55, 0.75, 0.7, 1)
-theme_override_font_sizes/font_size = 16
-text = "Awaiting dungeon..."
+theme_override_font_sizes/font_size = 15
 horizontal_alignment = 1
 autowrap_mode = 3
 
@@ -84,7 +85,7 @@ theme_override_constants/separation = 12
 
 [node name="PreviewHost" type="Control" parent="SafeRoot/Margin/VBox/PreviewRow"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(140, 175)
+custom_minimum_size = Vector2(120, 150)
 layout_mode = 2
 
 [node name="PreviewText" type="VBoxContainer" parent="SafeRoot/Margin/VBox/PreviewRow"]
@@ -95,7 +96,7 @@ size_flags_horizontal = 3
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.95, 0.92, 0.85, 1)
-theme_override_font_sizes/font_size = 22
+theme_override_font_sizes/font_size = 20
 text = "—"
 autowrap_mode = 3
 
@@ -103,15 +104,13 @@ autowrap_mode = 3
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.75, 0.7, 0.62, 1)
-theme_override_font_sizes/font_size = 15
-text = ""
+theme_override_font_sizes/font_size = 14
 
 [node name="PreviewFaction" type="Label" parent="SafeRoot/Margin/VBox/PreviewRow/PreviewText"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.65, 0.6, 0.55, 1)
 theme_override_font_sizes/font_size = 13
-text = ""
 autowrap_mode = 3
 
 [node name="EmptyLabel" type="Label" parent="SafeRoot/Margin/VBox"]
@@ -120,12 +119,11 @@ layout_mode = 2
 theme_override_colors/font_color = Color(0.75, 0.4, 0.35, 1)
 text = "No warriors yet — scan a bottle first."
 horizontal_alignment = 1
-autowrap_mode = 3
 
 [node name="Scroll" type="ScrollContainer" parent="SafeRoot/Margin/VBox"]
 layout_mode = 2
 size_flags_vertical = 3
-custom_minimum_size = Vector2(0, 280)
+custom_minimum_size = Vector2(0, 190)
 
 [node name="WarriorList" type="VBoxContainer" parent="SafeRoot/Margin/VBox/Scroll"]
 unique_name_in_owner = true
@@ -137,10 +135,10 @@ theme_override_constants/separation = 6
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 58)
 layout_mode = 2
-text = "Enter Dungeon"
+text = "Generate Dungeon"
 
 [node name="BackBtn" type="Button" parent="SafeRoot/Margin/VBox"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 52)
+custom_minimum_size = Vector2(0, 50)
 layout_mode = 2
 text = "Back"

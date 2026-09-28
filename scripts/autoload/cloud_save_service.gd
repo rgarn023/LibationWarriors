@@ -84,16 +84,33 @@ func sync_warrior(warrior: Warrior) -> Dictionary:
 
 	var lookup := await SupabaseClient.rest_request(
 		HTTPClient.METHOD_GET,
-		"warrior_blueprints?select=id,barcode_hash&barcode_hash=eq.%s&limit=1" % hash
+		"warrior_blueprints?select=id,barcode_hash,base_data&barcode_hash=eq.%s&limit=1" % hash
 	)
 	if not lookup.get("ok", false):
 		return lookup
 	var rows: Variant = lookup.get("data", [])
 	if typeof(rows) != TYPE_ARRAY or rows.is_empty():
 		return {"ok": false, "message": "Blueprint could not be resolved after acquisition."}
-	var blueprint_id := str(rows[0].get("id", ""))
+	var resolved_blueprint: Dictionary = rows[0]
+	var blueprint_id := str(resolved_blueprint.get("id", ""))
 	if blueprint_id.is_empty():
 		return {"ok": false, "message": "Blueprint ID missing."}
+
+	# If another user claimed this barcode first, their immutable global blueprint wins.
+	var canonical_base: Variant = resolved_blueprint.get("base_data", {})
+	if typeof(canonical_base) == TYPE_DICTIONARY and not canonical_base.is_empty():
+		var canonical_warrior := Warrior.new(canonical_base)
+		canonical_warrior.barcode = canonical
+		canonical_warrior.barcode_hash = hash
+		canonical_warrior.level = warrior.level
+		canonical_warrior.xp = warrior.xp
+		canonical_warrior.equipment = warrior.equipment.duplicate(true)
+		canonical_warrior.regular_attack_override = warrior.regular_attack_override.duplicate(true)
+		canonical_warrior.special_attack_override = warrior.special_attack_override.duplicate(true)
+		canonical_warrior.progression = warrior.progression.duplicate(true)
+		canonical_warrior._recompute_stats_from_level()
+		canonical_warrior.reset_hp()
+		GameState.merge_cloud_warrior(canonical_warrior)
 
 	var owned := {
 		"user_id": SupabaseClient.user_id(),
