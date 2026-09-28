@@ -84,7 +84,7 @@ func update_warrior(warrior: Warrior) -> void:
 func set_party_slot(index: int, barcode: String) -> bool:
 	if index < 0 or index >= PARTY_SIZE:
 		return false
-	var key := barcode.strip_edges()
+	var key := _collection_key(barcode) if not barcode.strip_edges().is_empty() else ""
 	if key != "" and not collection.has(key):
 		return false
 	if key != "":
@@ -216,8 +216,18 @@ func merge_cloud_warrior(warrior: Warrior) -> void:
 	if warrior.barcode_hash.is_empty():
 		warrior.barcode_hash = BarcodeIdentity.sha256_hex(key)
 	var existing := get_warrior(key)
-	if existing != null and existing.level > warrior.level:
-		return
+	if existing != null:
+		var existing_is_newer := existing.level > warrior.level or (existing.level == warrior.level and existing.xp > warrior.xp)
+		if existing_is_newer:
+			# Canonical cloud base identity still wins, but never discard newer local progression.
+			warrior.level = existing.level
+			warrior.xp = existing.xp
+			warrior.equipment = existing.equipment.duplicate(true)
+			warrior.regular_attack_override = existing.regular_attack_override.duplicate(true)
+			warrior.special_attack_override = existing.special_attack_override.duplicate(true)
+			warrior.progression = existing.progression.duplicate(true)
+			warrior._recompute_stats_from_level()
+			warrior.reset_hp()
 	collection[key] = warrior.to_dict()
 	collection_changed.emit()
 

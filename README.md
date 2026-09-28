@@ -1,72 +1,68 @@
 # Libation Warriors
 
-Godot **4.7.1** mobile game: scan bottle barcodes to summon unique 16-bit **Libation Warriors**. Beverage type chooses the faction. Brand names and logos are never shown or stored.
+Android-first Godot action RPG/collector where scanning a real beverage barcode reveals a deterministic warrior.
 
-## Factions
+> **Development branch:** \`cursor/pirate-master-poses-0762\`  
+> **Godot:** 4.7.x project (developed against 4.7.1)  
+> **Android package:** \`com.libationwarriors.game\`
 
-| Beverage | Faction |
-|---|---|
-| Rum | Pirate |
-| Bourbon | Militiaman |
-| Tequila | Bandit |
-| Scotch | Druid |
-| Vodka | Barbarian |
-| Brandy / Cognac | Paladin |
-| Gin | Alchemist |
-| Liqueur / premade cocktails / other spirits listed as such | Bard |
-| Red wine | Red Mage |
-| White wine | White Mage |
-| Other wine | Black Mage |
-| Beer | Brawler |
-| Sake | Samurai |
-| Mead | Viking |
-| Any other alcohol | Rogue |
-| Non-alcoholic | Nimrod |
+## Current foundation
 
-## Features
+The September 28, 2026 foundation pass preserves the existing scanner, collection, dungeon renderer, Android plugin, safe-area code, and Pirate animation work while adding:
 
-- Deterministic warrior generation from barcode (name, palette, ATK/DEF/HP, regular + special moves)
-- One warrior per unique barcode (no duplicates)
-- Collection browser
-- Parties of 3
-- Local turn-based battles (attack / special / defend)
-- Online lobby (host/join via IP + ENet)
-- Authentic 32×32 16-bit style sprites for all 16 factions
+- 5-second CG splash framework using the original logo frames
+- Supabase email/password auth + persistent refresh session
+- versioned relational schema/RLS migration
+- local + cloud save synchronization foundation
+- canonical UPC/EAN → SHA-256 → deterministic seed identity
+- global immutable warrior blueprint + per-user progression model
+- database and client duplicate protection
+- modular product lookup with no random unknown-faction fallback
+- deterministic Pirate appearance-component signature
+- extensible attack/equipment override fields
+- responsive original bar/tavern Main Hub
+- primary routes: SCAN / COLLECTION / EXPLORE / BATTLE
+- Explore difficulty selection
+- seeded 10–25 room connected dungeon generation
+- centralized encounter-budget scaling
+- versioned Android export destination under \`build/\`
+- deterministic foundation test scene
 
-## Download Android APK
+## Important setup
 
-**Direct download (this branch):**  
-https://github.com/rgarn023/LibationWarriors/raw/cursor/libation-warriors-game-0762/export/LibationWarriors.apk
+The original Charoite Games GIF was not present during this handoff and is **not regenerated**. Re-upload it and follow \`assets/branding/README.md\`.
 
-**Browse file on GitHub:**  
-https://github.com/rgarn023/LibationWarriors/blob/cursor/libation-warriors-game-0762/export/LibationWarriors.apk
+Supabase client setup is documented in \`docs/SUPABASE_SETUP.md\`. Never commit a service-role/secret key.
 
-| | |
-|---|---|
-| File | `export/LibationWarriors.apk` |
-| Package | `com.libationwarriors.game` |
-| Version | 1.2.0 (debug-signed) |
-| Min Android | API 24 |
+## Architecture
 
-### Mobile notes
+See:
 
-- UI uses safe-area margins so text/buttons clear notches, punch-hole cameras, and gesture bars.
-- **Scan with Camera** opens Google ML Kit Code Scanner for bottle UPCs (Play Services required).
-- Brands/logos are never shown or stored.
+- \`docs/ARCHITECTURE.md\`
+- \`docs/CHARACTER_SPRITE_SPEC.md\`
+- \`docs/CHARACTER_ANIMATION_SETUP.md\`
 
-### Rebuild
+## Tests
 
-```bash
-export PATH="$HOME/bin:$PATH"
-export ANDROID_HOME="$HOME/android-sdk"
-godot --headless --path . --export-debug "Android" export/LibationWarriors.apk
-```
+Run:
 
-## Controls (mobile)
+\`scenes/tests/foundation_tests.tscn\`
 
-1. **Scan Bottle** — enter barcode, pick beverage type (optional category hint via Open Food Facts fields that exclude brand display), summon warrior  
-2. **Collection** — view owned warriors  
-3. **Party of Three** — assign 3 unique warriors  
-4. **Battle** — local practice or online host/join  
+The test scene validates deterministic barcode identity and repeated dungeon generation/reachability.
 
-Demo bottles are included on the scanner screen for quick testing.
+## Build output
+
+The Android preset targets:
+
+\`build/LibationWarriors-v001-debug.apk\`
+
+A filename in the export preset is **not** proof that an APK has been built. Report an APK only after an actual export succeeds and the file size/SHA-256 are measured.
+
+## Known unfinished milestone items
+
+- original CG splash frames must be supplied
+- Supabase migration must be applied to the confirmed project
+- true authored UP/DOWN Pirate attack animation is still required
+- player/enemy HIT + DEFEATED state integration needs completion
+- current dungeon D-pad should become an analog multi-touch joystick
+- emulator and physical Galaxy QA have not yet been performed for this foundation pass
