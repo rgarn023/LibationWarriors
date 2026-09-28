@@ -247,13 +247,14 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _set_player_walk_frame(frame: int) -> void:
-	## Idle/walk uses SpriteFrames "idle"; advance frame manually for walk cycle.
+	## Legacy sheets reuse the "idle" strip as their 4-frame locomotion cycle.
+	## Direction-specific walk_* animations are owned entirely by the controller
+	## and must never be replaced by this compatibility path.
 	if _player_anim == null or _player_anim.is_attacking():
 		return
 	if _player_anim.animation != "idle":
-		_player_anim.play("idle")
+		return
 	_player_anim.frame = clampi(frame, 0, maxi(0, _player_anim.sprite_frames.get_frame_count("idle") - 1))
-	# Facing is applied only via PlayerAnimController (flip_h, never scale.x).
 	_player_anim.set_facing(_facing)
 
 
