@@ -63,6 +63,6 @@ A filename in the export preset is **not** proof that an APK has been built. Rep
 - original CG splash frames must be supplied
 - Supabase migration must be applied to the confirmed project
 - true authored UP/DOWN Pirate attack animation is still required
-- player/enemy HIT + DEFEATED state integration needs completion
-- current dungeon D-pad should become an analog multi-touch joystick
+- true authored UP/DOWN Pirate attack animation is still required
+- enemy attack/HIT/DEFEATED states still need genuine authored multi-frame art
 - emulator and physical Galaxy QA have not yet been performed for this foundation pass

@@ -185,9 +185,11 @@ Properties:
 
 ## Combat state
 
-The current real-time dungeon already prevents attack restart while attacking and resolves the player hit on authored attack-frame indices rather than at button press. Hit direction uses cardinal UP/DOWN/LEFT/RIGHT.
+The player controller now exposes the required structural states: IDLE, WALK, ATTACK, SPECIAL_ATTACK, HIT, and DEFEATED. It prefers direction-specific animation names such as `attack_up` and `hit_down`, while preserving the legacy Pirate side-facing fallback. Attack restart is blocked while attacking, damage resolves only on active/contact frames through `CombatTiming`, and one swing is limited to one damage resolution.
 
-However, the current Pirate authored animation asset is still side-facing and horizontally mirrored. True authored UP and DOWN body/weapon attack sequences, plus complete HIT/DEFEATED player state integration, remain required before the “full directional combat demonstration” milestone can be called complete.
+The enemy controller now also tracks IDLE/WALK/ATTACK/SPECIAL_ATTACK/HIT/DEFEATED state structurally, but its legacy attack remains procedural `AttackPose`/SwordArc animation.
+
+The current Pirate authored attack asset is still fundamentally side-facing and horizontally mirrored. True authored UP and DOWN body/weapon attack sequences, plus authored enemy HIT/DEFEATED/attack strips, remain required before the “full directional combat demonstration” milestone can be called complete.
 
 Do not substitute a static character plus a floating slash for that work.
 
@@ -199,7 +201,7 @@ See \`docs/CHARACTER_SPRITE_SPEC.md\`.
 
 The project remains portrait-first at 720×1280 logical resolution with \`canvas_items\` + \`expand\`, safe-area handling, nearest texture filtering, and Android camera/network permissions.
 
-Current dungeon movement uses touch directional buttons. Replacing that D-pad with a true analog virtual joystick while preserving multi-touch attack/special input is still pending.
+Dungeon movement now uses a safe-area-contained analog `VirtualJoystick` that tracks one touch pointer independently, so a second finger can press Attack or Special. Keyboard/editor movement remains available.
 
 ## Android export
 
@@ -224,6 +226,7 @@ The repo change does not prove a successful APK build. A build must be produced 
 - unique room coordinates
 - same seed → same room graph
 - cardinal direction math
+- active-frame hit timing and one-hit-per-swing gating
 
 Database uniqueness/RLS should also be tested against the actual Supabase project after the migration is deployed.
 
@@ -233,7 +236,6 @@ The highest-priority unfinished work is:
 
 1. add the original CG GIF frames
 2. configure/confirm the correct Supabase project and apply the migration
-3. author true UP/DOWN Pirate attack sequences and finish HIT/DEFEATED state wiring for player + enemy
-4. replace dungeon D-pad with a safe-area-aware analog joystick
-5. run Godot tests, Android emulator QA, and physical Galaxy QA
-6. build and checksum the versioned debug APK
+3. author true UP/DOWN Pirate attack sequences plus authored enemy attack/HIT/DEFEATED strips
+4. run Godot tests, Android emulator QA, and physical Galaxy QA
+5. build and checksum the versioned debug APK

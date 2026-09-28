@@ -6,6 +6,16 @@ signal damaged_player(amount: int, from_pos: Vector2)
 
 const PROJECTILE_SCRIPT := preload("res://scripts/adventure/dungeon_projectile.gd")
 
+enum CombatState {
+	IDLE,
+	WALK,
+	ATTACK,
+	SPECIAL_ATTACK,
+	HIT,
+	DEFEATED,
+}
+
+var combat_state := CombatState.IDLE
 var warrior: Warrior
 var is_boss: bool = false
 var speed: float = 38.0
@@ -90,6 +100,8 @@ func _physics_process(delta: float) -> void:
 		_sprite.modulate.a = 0.45 if int(_hurt_flash * 20.0) % 2 == 0 else 1.0
 	else:
 		_sprite.modulate.a = 1.0
+		if combat_state == CombatState.HIT:
+			combat_state = CombatState.IDLE
 
 	if _attack_anim_t > 0.0:
 		_attack_anim_t -= delta
@@ -102,6 +114,7 @@ func _physics_process(delta: float) -> void:
 		if _attack_anim_t <= 0.0:
 			AttackPose.reset(_sprite, _base_scale, warrior.display_modulate())
 			_sword_arc = null
+			combat_state = CombatState.IDLE
 	else:
 		_anim_t += delta
 		if _anim_t >= 0.14:
@@ -166,6 +179,7 @@ func _try_attack(dist: float) -> void:
 
 
 func _begin_attack(ranged: bool) -> void:
+	combat_state = CombatState.SPECIAL_ATTACK if ranged else CombatState.ATTACK
 	_attack_cd = 0.85 if is_boss else 1.05
 	_strike_done = false
 	_pending_ranged = ranged
@@ -235,14 +249,19 @@ func take_hit(amount: int, from_pos: Vector2) -> void:
 	warrior.current_hp = maxi(0, warrior.current_hp - amount)
 	invuln = 0.28
 	_hurt_flash = 0.35
+	combat_state = CombatState.HIT
 	var dir := (global_position - from_pos).normalized()
 	if dir == Vector2.ZERO:
 		dir = Vector2.RIGHT
 	knockback = dir * (140.0 if is_boss else 180.0)
 	if warrior.current_hp <= 0:
 		_alive = false
+		combat_state = CombatState.DEFEATED
+		velocity = Vector2.ZERO
 		died.emit(self, is_boss, global_position)
-		queue_free()
+		# Hold the final authored frame briefly. A real defeated strip should
+		# replace this timing once enemy defeat art exists.
+		get_tree().create_timer(0.18).timeout.connect(queue_free)
 
 
 func is_alive_enemy() -> bool:

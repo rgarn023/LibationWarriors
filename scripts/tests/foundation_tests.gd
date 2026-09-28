@@ -14,6 +14,7 @@ func _run() -> void:
 	_test_warrior_identity()
 	_test_dungeons()
 	_test_direction_math()
+	_test_combat_timing()
 	if failures.is_empty():
 		print("[FoundationTests] PASS — %d assertions" % assertions)
 		get_tree().quit(0)
@@ -122,3 +123,14 @@ func _test_direction_math() -> void:
 	_expect(WeaponData.cardinal(Vector2(-9, 1)) == Vector2.LEFT, "left-facing cardinal resolution failed")
 	_expect(WeaponData.cardinal(Vector2(1, -9)) == Vector2.UP, "up-facing cardinal resolution failed")
 	_expect(WeaponData.cardinal(Vector2(1, 9)) == Vector2.DOWN, "down-facing cardinal resolution failed")
+
+
+func _test_combat_timing() -> void:
+	var active := [3, 4]
+	_expect(not CombatTiming.should_resolve_hit(0, active, false), "wind-up frame resolved damage")
+	_expect(not CombatTiming.should_resolve_hit(2, active, false), "pre-contact frame resolved damage")
+	_expect(CombatTiming.should_resolve_hit(3, active, false), "active contact frame did not resolve damage")
+	_expect(not CombatTiming.should_resolve_hit(4, active, true), "one swing resolved damage more than once")
+	_expect(not CombatTiming.should_resolve_hit(7, active, false), "recovery frame resolved damage")
+	_expect(not CombatTiming.should_resolve_hit(1, [], false, 2), "fallback wind-up frame resolved damage")
+	_expect(CombatTiming.should_resolve_hit(2, [], false, 2), "fallback active frame did not resolve damage")

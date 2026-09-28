@@ -188,8 +188,14 @@ func _physics_process(delta: float) -> void:
 
 	var attacking := _player_anim != null and _player_anim.is_attacking()
 	if attacking:
-		# Keep CharacterBody2D + sprite pivot fixed; no move_and_slide during ATTACKING.
+		# Keep CharacterBody2D + sprite pivot fixed; no move_and_slide during ATTACK/SPECIAL_ATTACK.
 		_player_anim.lock_body_position_if_attacking()
+		_check_enemy_contact()
+		_check_pickups()
+		_update_hud()
+		return
+	if _player_anim != null and not _player_anim.can_move():
+		player.velocity = Vector2.ZERO
 		_check_enemy_contact()
 		_check_pickups()
 		_update_hud()
@@ -273,12 +279,9 @@ func _on_player_attack_frame_changed() -> void:
 	if _player_anim == null or not _player_anim.is_attacking():
 		return
 	var f := _player_anim.frame
-	# No separate slash FX — Pirate source art already contains the trail.
-	# Resolve hit once on the strike frame index (or fallback mid-animation).
-	if not _slash_spawned and f in _trail_frame_indices:
-		_slash_spawned = true
-		_resolve_attack_hit()
-	elif not _slash_spawned and _trail_frame_indices.is_empty() and f >= 2:
+	# One attack instance gets one damage resolution. Wind-up/recovery frames
+	# never apply damage when authored active-frame metadata is available.
+	if CombatTiming.should_resolve_hit(f, _trail_frame_indices, _slash_spawned):
 		_slash_spawned = true
 		_resolve_attack_hit()
 
@@ -593,8 +596,10 @@ func _on_enemy_damaged_player(amount: int, from_pos: Vector2) -> void:
 	GameState.save_adventure_warrior(_warrior)
 	if not _warrior.is_alive():
 		_on_player_down()
+		return
+	if _player_anim:
+		_player_anim.play_hit()
 	_update_hud()
-	# Small knock visual
 	var away := (player.position - from_pos).normalized()
 	if away != Vector2.ZERO:
 		player.position += away * 4.0
@@ -709,8 +714,14 @@ func _check_enemy_contact() -> void:
 
 
 func _on_player_down() -> void:
+	if _transitioning:
+		return
+	_transitioning = true
+	if _player_anim:
+		_player_anim.play_defeated()
 	_warrior.current_hp = 1
 	GameState.save_adventure_warrior(_warrior)
+	_update_hud()
 	_show_message("Defeated... retreating.")
 	await get_tree().create_timer(1.2).timeout
 	GameState.end_adventure()
