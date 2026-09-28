@@ -23,10 +23,7 @@ const COMBAT_FX := preload("res://scripts/adventure/combat_fx.gd")
 @onready var attack_btn: Button = %AttackBtn
 @onready var special_btn: Button = %SpecialBtn
 @onready var leave_btn: Button = %LeaveBtn
-@onready var pad_up: Button = %PadUp
-@onready var pad_down: Button = %PadDown
-@onready var pad_left: Button = %PadLeft
-@onready var pad_right: Button = %PadRight
+@onready var joystick: VirtualJoystick = %Joystick
 
 var _dungeon: Dictionary = {}
 var _theme: Dictionary = {}
@@ -101,20 +98,8 @@ func _wire_controls() -> void:
 	if leave_btn:
 		leave_btn.pressed.connect(_on_leave)
 		UITheme.style_button(leave_btn)
-	_wire_pad(pad_up, Vector2(0, -1))
-	_wire_pad(pad_down, Vector2(0, 1))
-	_wire_pad(pad_left, Vector2(-1, 0))
-	_wire_pad(pad_right, Vector2(1, 0))
-
-
-func _wire_pad(btn: Button, dir: Vector2) -> void:
-	if btn == null:
-		return
-	btn.button_down.connect(func(): _pad_dir = dir)
-	btn.button_up.connect(func():
-		if _pad_dir == dir:
-			_pad_dir = Vector2.ZERO
-	)
+	if joystick:
+		joystick.direction_changed.connect(func(dir: Vector2): _pad_dir = dir)
 
 
 func _setup_camera() -> void:
@@ -235,7 +220,7 @@ func _physics_process(delta: float) -> void:
 			_player_anim.set_moving(false)
 		_set_player_walk_frame(0)
 
-	player.velocity = dir.normalized() * 98.0
+	player.velocity = dir.limit_length(1.0) * 98.0
 	player.move_and_slide()
 	_clamp_player_in_room()
 	_check_enemy_contact()

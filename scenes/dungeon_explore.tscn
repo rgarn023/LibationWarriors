@@ -1,6 +1,7 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scripts/adventure/dungeon_explore.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/ui/virtual_joystick.gd" id="2"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_player"]
 size = Vector2(10, 12)
@@ -102,43 +103,12 @@ offset_right = -8.0
 offset_bottom = -10.0
 theme_override_constants/separation = 8
 
-[node name="Pad" type="GridContainer" parent="HUD/SafeRoot/Bottom"]
-layout_mode = 2
-columns = 3
-theme_override_constants/h_separation = 4
-theme_override_constants/v_separation = 4
-
-[node name="PadSpacer1" type="Control" parent="HUD/SafeRoot/Bottom/Pad"]
-custom_minimum_size = Vector2(54, 54)
-layout_mode = 2
-
-[node name="PadUp" type="Button" parent="HUD/SafeRoot/Bottom/Pad"]
+[node name="Joystick" type="Control" parent="HUD/SafeRoot/Bottom"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(54, 54)
+custom_minimum_size = Vector2(190, 190)
 layout_mode = 2
-text = "▲"
-
-[node name="PadSpacer2" type="Control" parent="HUD/SafeRoot/Bottom/Pad"]
-custom_minimum_size = Vector2(54, 54)
-layout_mode = 2
-
-[node name="PadLeft" type="Button" parent="HUD/SafeRoot/Bottom/Pad"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(54, 54)
-layout_mode = 2
-text = "◀"
-
-[node name="PadDown" type="Button" parent="HUD/SafeRoot/Bottom/Pad"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(54, 54)
-layout_mode = 2
-text = "▼"
-
-[node name="PadRight" type="Button" parent="HUD/SafeRoot/Bottom/Pad"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(54, 54)
-layout_mode = 2
-text = "▶"
+mouse_filter = 0
+script = ExtResource("2")
 
 [node name="Actions" type="VBoxContainer" parent="HUD/SafeRoot/Bottom"]
 layout_mode = 2
