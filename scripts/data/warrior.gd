@@ -3,6 +3,7 @@ extends RefCounted
 ## A unique libation warrior bound to a single barcode.
 
 var barcode: String = ""
+var barcode_hash: String = ""
 var name: String = ""
 var faction: String = "rogue"
 var category: int = FactionData.Category.OTHER_ALCOHOL
@@ -28,6 +29,12 @@ var variant_pattern: int = 0 ## 0..5 pattern / marking style
 var variant_crest: int = 0 ## 0..4 crest / emblem
 var variant_weapon_style: int = 0 ## 0..3 weapon finish
 var variant_hue_shift: float = 0.0 ## -0.08..0.08
+var appearance_components: Dictionary = {}
+var appearance_signature: String = ""
+var equipment: Dictionary = {}
+var regular_attack_override: Dictionary = {}
+var special_attack_override: Dictionary = {}
+var progression: Dictionary = {}
 var base_attack: int = 10
 var base_defense: int = 10
 var base_max_hp: int = 100
@@ -45,6 +52,7 @@ func _init(data: Dictionary = {}) -> void:
 
 func from_dict(data: Dictionary) -> void:
 	barcode = str(data.get("barcode", ""))
+	barcode_hash = str(data.get("barcode_hash", ""))
 	name = str(data.get("name", "Unknown"))
 	faction = str(data.get("faction", "rogue"))
 	category = int(data.get("category", FactionData.Category.OTHER_ALCOHOL))
@@ -69,6 +77,12 @@ func from_dict(data: Dictionary) -> void:
 	variant_crest = int(data.get("variant_crest", 0))
 	variant_weapon_style = int(data.get("variant_weapon_style", 0))
 	variant_hue_shift = float(data.get("variant_hue_shift", 0.0))
+	appearance_components = _dict_from(data.get("appearance_components", {}))
+	appearance_signature = str(data.get("appearance_signature", ""))
+	equipment = _dict_from(data.get("equipment", {}))
+	regular_attack_override = _dict_from(data.get("regular_attack_override", {}))
+	special_attack_override = _dict_from(data.get("special_attack_override", {}))
+	progression = _dict_from(data.get("progression", {}))
 	base_attack = int(data.get("base_attack", attack))
 	base_defense = int(data.get("base_defense", defense))
 	base_max_hp = int(data.get("base_max_hp", max_hp))
@@ -92,6 +106,7 @@ func from_dict(data: Dictionary) -> void:
 func to_dict() -> Dictionary:
 	return {
 		"barcode": barcode,
+		"barcode_hash": barcode_hash,
 		"name": name,
 		"faction": faction,
 		"category": category,
@@ -116,6 +131,12 @@ func to_dict() -> Dictionary:
 		"variant_crest": variant_crest,
 		"variant_weapon_style": variant_weapon_style,
 		"variant_hue_shift": variant_hue_shift,
+		"appearance_components": appearance_components,
+		"appearance_signature": appearance_signature,
+		"equipment": equipment,
+		"regular_attack_override": regular_attack_override,
+		"special_attack_override": special_attack_override,
+		"progression": progression,
 		"base_attack": base_attack,
 		"base_defense": base_defense,
 		"base_max_hp": base_max_hp,
@@ -123,6 +144,57 @@ func to_dict() -> Dictionary:
 		"base_regular_power": base_regular_power,
 		"base_special_power": base_special_power,
 	}
+
+
+func to_blueprint_dict() -> Dictionary:
+	return {
+		"name": name,
+		"faction": faction,
+		"category": category,
+		"bottle_palette_name": bottle_palette_name,
+		"tint_primary": [tint_primary.r, tint_primary.g, tint_primary.b, tint_primary.a],
+		"tint_secondary": [tint_secondary.r, tint_secondary.g, tint_secondary.b, tint_secondary.a],
+		"tint_accent": [tint_accent.r, tint_accent.g, tint_accent.b, tint_accent.a],
+		"regular_move": regular_move,
+		"special_move": special_move,
+		"seed_value": seed_value,
+		"variant_pattern": variant_pattern,
+		"variant_crest": variant_crest,
+		"variant_weapon_style": variant_weapon_style,
+		"variant_hue_shift": variant_hue_shift,
+		"appearance_components": appearance_components,
+		"appearance_signature": appearance_signature,
+		"base_attack": base_attack,
+		"base_defense": base_defense,
+		"base_max_hp": base_max_hp,
+		"base_max_energy": base_max_energy,
+		"base_regular_power": base_regular_power,
+		"base_special_power": base_special_power,
+		"attack": base_attack,
+		"defense": base_defense,
+		"max_hp": base_max_hp,
+		"max_energy": base_max_energy,
+		"regular_power": base_regular_power,
+		"special_power": base_special_power,
+	}
+
+
+func regular_attack_data() -> Dictionary:
+	var out := {"name": regular_move, "power": regular_power, "effects": []}
+	for key in regular_attack_override.keys():
+		out[key] = regular_attack_override[key]
+	return out
+
+
+func special_attack_data() -> Dictionary:
+	var out := {"name": special_move, "power": special_power, "effects": []}
+	for key in special_attack_override.keys():
+		out[key] = special_attack_override[key]
+	return out
+
+
+func _dict_from(value: Variant) -> Dictionary:
+	return value.duplicate(true) if typeof(value) == TYPE_DICTIONARY else {}
 
 
 func _color_from(value) -> Color:

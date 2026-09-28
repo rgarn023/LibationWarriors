@@ -2,21 +2,21 @@ extends Node
 ## Deterministically generates unique warriors from barcodes. Never stores brand names.
 
 func barcode_seed(barcode: String) -> int:
-	var clean := barcode.strip_edges()
-	var h := 2166136261
-	for i in clean.length():
-		h = int((h ^ clean.unicode_at(i)) * 16777619) & 0x7FFFFFFF
-	return h
+	return BarcodeIdentity.seed_from_barcode(barcode)
 
 
-func generate(barcode: String, category: int, packaging_colors: Dictionary = {}) -> Warrior:
-	var seed := barcode_seed(barcode)
+func generate(barcode: String, category: int, _packaging_colors: Dictionary = {}) -> Warrior:
+	var clean := BarcodeIdentity.canonicalize(barcode)
+	if clean.is_empty():
+		clean = barcode.strip_edges().to_upper()
+	var seed := barcode_seed(clean)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed
 
 	var faction := FactionData.faction_for_category(category)
 	var warrior := Warrior.new()
-	warrior.barcode = barcode.strip_edges()
+	warrior.barcode = clean
+	warrior.barcode_hash = BarcodeIdentity.sha256_hex(clean)
 	warrior.faction = faction
 	warrior.category = category
 	warrior.seed_value = seed
@@ -31,7 +31,8 @@ func generate(barcode: String, category: int, packaging_colors: Dictionary = {})
 	if rng.randf() < 0.45:
 		warrior.name = "%s %s" % [warrior.name, suffix]
 
-	_apply_packaging_or_fallback_colors(warrior, rng, packaging_colors)
+	# Base identity must never depend on mutable product imagery.
+	_apply_packaging_or_fallback_colors(warrior, rng, {})
 
 	# Strong per-barcode visual variants
 	warrior.variant_pattern = rng.randi_range(0, 5)
@@ -55,6 +56,7 @@ func generate(barcode: String, category: int, packaging_colors: Dictionary = {})
 	var specs: Array = FactionData.SPECIAL_MOVES.get(faction, ["Special"])
 	warrior.regular_move = regs[rng.randi() % regs.size()]
 	warrior.special_move = specs[rng.randi() % specs.size()]
+	AppearanceData.assign_to(warrior, rng)
 
 	return warrior
 

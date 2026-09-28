@@ -42,15 +42,17 @@ func _show_detail(w: Warrior) -> void:
 	_selected = w
 	detail_panel.visible = true
 	detail_name.text = "Lv.%d  %s" % [w.level, w.name]
-	detail_info.text = "%s · %s\nXP %d / %d\nPalette: %s\n%s\nATK %d  DEF %d  HP %d\nRegular: %s (%d)\nSpecial: %s (%d)\nBarcode: %s" % [
+	var regular := w.regular_attack_data()
+	var special := w.special_attack_data()
+	detail_info.text = "%s · %s\nXP %d / %d\nWarrior ID: %s\nAppearance: %s\nATK %d  DEF %d  HP %d\nRegular: %s (%d)\nSpecial: %s (%d)\nEquipment slots: %d" % [
 		w.faction_display(), w.category_display(),
 		w.xp, w.xp_to_next_level(),
-		w.bottle_palette_name,
-		w.variant_label(),
+		w.barcode_hash.substr(0, 10).to_upper(),
+		w.appearance_signature if not w.appearance_signature.is_empty() else w.variant_label(),
 		w.attack, w.defense, w.max_hp,
-		w.regular_move, w.regular_power,
-		w.special_move, w.special_power,
-		w.barcode,
+		str(regular.get("name", w.regular_move)), int(regular.get("power", w.regular_power)),
+		str(special.get("name", w.special_move)), int(special.get("power", w.special_power)),
+		w.equipment.size(),
 	]
 	WarriorPortrait.apply_to_texture_rect(detail_sprite, w)
 	detail_sprite.custom_minimum_size = Vector2(120, 160)
