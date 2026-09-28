@@ -1,0 +1,81 @@
+name: Android APK
+
+on:
+  push:
+    branches:
+      - cursor/pirate-master-poses-0762
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GODOT_VERSION: "4.7.1"
+  EXPORT_NAME: "LibationWarriors-v001-debug.apk"
+
+jobs:
+  build-android:
+    name: Build Android debug APK
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    container:
+      image: barichello/godot-ci:4.7.1
+
+    steps:
+      - name: Checkout current branch
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Prepare Godot CI home
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.local/share/godot/export_templates"
+          mkdir -p "$HOME/.config/godot"
+          cp -a /root/.local/share/godot/export_templates/4.7.1.stable "$HOME/.local/share/godot/export_templates/"
+          cp -a /root/.config/godot/. "$HOME/.config/godot/"
+          godot --version
+
+      - name: Ensure Android SDK 34
+        shell: bash
+        run: |
+          set -euo pipefail
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+
+      - name: Install Gradle Android build template
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --headless --path . --install-android-build-template
+          test -f android/build/gradlew
+          chmod +x android/build/gradlew
+
+      - name: Import and validate project
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --headless --path . --import --quit
+          godot --headless --path . res://scenes/tests/foundation_tests.tscn
+
+      - name: Export debug APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          godot --headless --verbose --path . --export-debug "Android" "build/\${EXPORT_NAME}"
+          test -s "build/\${EXPORT_NAME}"
+          sha256sum "build/\${EXPORT_NAME}" | tee "build/\${EXPORT_NAME}.sha256"
+          stat -c '%n %s bytes' "build/\${EXPORT_NAME}" | tee "build/\${EXPORT_NAME}.size.txt"
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: LibationWarriors-v001-debug
+          path: |
+            build/LibationWarriors-v001-debug.apk
+            build/LibationWarriors-v001-debug.apk.sha256
+            build/LibationWarriors-v001-debug.apk.size.txt
+          if-no-files-found: error
+          retention-days: 30
