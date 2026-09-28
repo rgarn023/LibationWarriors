@@ -1,0 +1,20 @@
+# Ignore Godot editor cache
+.godot/
+.import/
+*.translation
+
+# Signing leftovers
+*.idsig
+*.keystore
+
+# OS / editor
+.DS_Store
+*~
+*.tmp
+
+local.properties
+
+# Godot Android gradle template (regenerated on export)
+android/build/
+assets/refs/
+config/supabase.public.json
