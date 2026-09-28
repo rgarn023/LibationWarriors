@@ -24,12 +24,17 @@ func _ready() -> void:
 	SaveSystem.load_game()
 
 
+func _collection_key(barcode: String) -> String:
+	var canonical := BarcodeIdentity.canonicalize(barcode)
+	return canonical if not canonical.is_empty() else barcode.strip_edges().to_upper()
+
+
 func has_warrior(barcode: String) -> bool:
-	return collection.has(barcode.strip_edges())
+	return collection.has(_collection_key(barcode))
 
 
 func get_warrior(barcode: String) -> Warrior:
-	var key := barcode.strip_edges()
+	var key := _collection_key(barcode)
 	if not collection.has(key):
 		return null
 	return Warrior.new(collection[key])
@@ -44,9 +49,12 @@ func get_all_warriors() -> Array[Warrior]:
 
 
 func unlock_warrior(warrior: Warrior, from_scan: bool = false) -> Dictionary:
-	var key := warrior.barcode.strip_edges()
+	var key := _collection_key(warrior.barcode)
 	if key.is_empty():
 		return {"ok": false, "reason": "empty_barcode"}
+	warrior.barcode = key
+	if warrior.barcode_hash.is_empty():
+		warrior.barcode_hash = BarcodeIdentity.sha256_hex(key)
 	if collection.has(key):
 		return {"ok": false, "reason": "duplicate", "warrior": Warrior.new(collection[key])}
 	collection[key] = warrior.to_dict()
@@ -56,16 +64,21 @@ func unlock_warrior(warrior: Warrior, from_scan: bool = false) -> Dictionary:
 		SaveSystem.save_game()
 	collection_changed.emit()
 	warrior_unlocked.emit(warrior)
+	CloudSaveService.queue_warrior_sync(warrior)
 	return {"ok": true, "warrior": warrior}
 
 
 func update_warrior(warrior: Warrior) -> void:
-	var key := warrior.barcode.strip_edges()
+	var key := _collection_key(warrior.barcode)
 	if key.is_empty() or not collection.has(key):
 		return
+	warrior.barcode = key
+	if warrior.barcode_hash.is_empty():
+		warrior.barcode_hash = BarcodeIdentity.sha256_hex(key)
 	collection[key] = warrior.to_dict()
 	SaveSystem.save_game()
 	collection_changed.emit()
+	CloudSaveService.queue_warrior_sync(warrior)
 
 
 func set_party_slot(index: int, barcode: String) -> bool:
@@ -81,6 +94,7 @@ func set_party_slot(index: int, barcode: String) -> bool:
 	party[index] = key
 	SaveSystem.save_game()
 	party_changed.emit()
+	CloudSaveService.queue_profile_sync()
 	return true
 
 
@@ -111,11 +125,24 @@ func to_save_dict() -> Dictionary:
 
 
 func from_save_dict(data: Dictionary) -> void:
-	collection = data.get("collection", {})
+	var raw_collection: Dictionary = data.get("collection", {})
+	collection = {}
+	for old_key in raw_collection.keys():
+		var raw_data: Variant = raw_collection[old_key]
+		if typeof(raw_data) != TYPE_DICTIONARY:
+			continue
+		var warrior := Warrior.new(raw_data)
+		var source_code := warrior.barcode if not warrior.barcode.is_empty() else str(old_key)
+		var key := _collection_key(source_code)
+		warrior.barcode = key
+		if warrior.barcode_hash.is_empty():
+			warrior.barcode_hash = BarcodeIdentity.sha256_hex(key)
+		collection[key] = warrior.to_dict()
 	var raw_party: Array = data.get("party", ["", "", ""])
 	party = ["", "", ""]
 	for i in mini(PARTY_SIZE, raw_party.size()):
-		party[i] = str(raw_party[i])
+		var saved_code := str(raw_party[i])
+		party[i] = _collection_key(saved_code) if not saved_code.is_empty() else ""
 	if data.has("scan_guard"):
 		ScanGuard.from_save_dict(data.get("scan_guard", {}))
 	collection_changed.emit()
@@ -177,3 +204,43 @@ func end_adventure() -> void:
 	adventure_warrior_barcode = ""
 	adventure_dungeon = {}
 	pending_adventure_battle.clear()
+
+
+func merge_cloud_warrior(warrior: Warrior) -> void:
+	if warrior == null:
+		return
+	var key := _collection_key(warrior.barcode)
+	if key.is_empty():
+		return
+	warrior.barcode = key
+	if warrior.barcode_hash.is_empty():
+		warrior.barcode_hash = BarcodeIdentity.sha256_hex(key)
+	var existing := get_warrior(key)
+	if existing != null and existing.level > warrior.level:
+		return
+	collection[key] = warrior.to_dict()
+	collection_changed.emit()
+
+
+func party_barcode_hashes() -> Array:
+	var out: Array = []
+	for code in party:
+		if code.is_empty():
+			out.append("")
+		else:
+			var w := get_warrior(code)
+			out.append(w.barcode_hash if w != null else BarcodeIdentity.sha256_hex(code))
+	return out
+
+
+func apply_cloud_party_hashes(hashes: Variant) -> void:
+	if typeof(hashes) != TYPE_ARRAY:
+		return
+	var by_hash := {}
+	for w in get_all_warriors():
+		by_hash[w.barcode_hash] = w.barcode
+	var next_party: Array[String] = ["", "", ""]
+	for i in mini(PARTY_SIZE, hashes.size()):
+		next_party[i] = str(by_hash.get(str(hashes[i]), ""))
+	party = next_party
+	party_changed.emit()
