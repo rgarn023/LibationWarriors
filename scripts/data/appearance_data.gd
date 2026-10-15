@@ -2,8 +2,30 @@ class_name AppearanceData
 extends RefCounted
 ## Deterministic component pools. IDs map to synchronized sprite layers as art is added.
 
+const ARCHETYPES := {
+	"pirate": "Sea Corsair", "militiaman": "Frontier Sentinel",
+	"bandit": "Sunset Outlaw", "druid": "Highland Mystic",
+	"barbarian": "Frost Reaver", "paladin": "Gilded Warden",
+	"alchemist": "Botanical Artificer", "bard": "Velvet Virtuoso",
+	"red_mage": "Crimson Arcanist", "white_mage": "Ivory Oracle",
+	"black_mage": "Void Hexer", "brawler": "Iron Bruiser",
+	"samurai": "Blossom Ronin", "viking": "Runestone Raider",
+	"rogue": "Midnight Stalker", "nimrod": "Fizz Fool",
+}
+
+static func gender_for_seed(seed: int) -> String:
+	# Intentionally independent of caller, current time, and local RNG.
+	return "female" if (seed & 1) == 1 else "male"
+
+static func archetype_for(faction: String) -> String:
+	return str(ARCHETYPES.get(faction, "Wandering Warrior"))
+
 const DEFAULT_POOLS := {
 	"body": ["body_01", "body_02", "body_03"],
+	"silhouette": ["athletic", "lean", "stocky", "regal"],
+	"face": ["face_01", "face_02", "face_03", "face_04"],
+	"skin": ["skin_01", "skin_02", "skin_03", "skin_04", "skin_05"],
+	"headwear": ["hood", "circlet", "none", "helm"],
 	"head": ["head_01", "head_02", "head_03", "head_04"],
 	"hair": ["hair_01", "hair_02", "hair_03", "hair_04"],
 	"outfit": ["outfit_01", "outfit_02", "outfit_03", "outfit_04"],
@@ -13,6 +35,9 @@ const DEFAULT_POOLS := {
 
 const PIRATE_POOLS := {
 	"body": ["body_01", "body_02", "body_03", "body_04"],
+	"silhouette": ["athletic", "lean", "stocky", "regal"],
+	"face": ["face_01", "face_02", "face_03", "face_04"],
+	"skin": ["skin_01", "skin_02", "skin_03", "skin_04", "skin_05"],
 	"head": ["head_01", "head_02", "head_03", "head_04", "head_05", "head_06", "head_07"],
 	"hair": ["hair_01", "hair_02", "hair_03", "hair_04", "hair_05", "hair_06"],
 	"facial_hair": ["none", "stubble_01", "beard_01", "beard_02", "mustache_01"],
@@ -46,5 +71,9 @@ static func assign_to(warrior: Warrior, rng: RandomNumberGenerator) -> void:
 		var selected := str(choices[rng.randi() % choices.size()])
 		components[str(key)] = selected
 		signature.append("%s=%s" % [str(key), selected])
+	components["gender"] = warrior.gender
+	components["archetype"] = warrior.base_archetype
+	signature.append("gender=%s" % warrior.gender)
+	signature.append("archetype=%s" % warrior.base_archetype)
 	warrior.appearance_components = components
 	warrior.appearance_signature = "|".join(signature)

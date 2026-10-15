@@ -12,6 +12,7 @@ func _ready() -> void:
 func _run() -> void:
 	_test_barcode_identity()
 	_test_warrior_identity()
+	_test_gender_and_base_design()
 	_test_dungeons()
 	_test_direction_math()
 	_test_combat_timing()
@@ -161,3 +162,26 @@ func _test_corrupted_paths() -> void:
 	_expect(CorruptedPathRules.duration_bonus_tier(168 * 3600) == 168, "weekly tier missing")
 	_expect(CorruptedPathRules.capped_daily_gold(900, 50, 200, 500, 750) == 450, "daily cap not respected")
 	_expect(CorruptedPathRules.capped_daily_gold(900, 300, 700, 800, 750) == 50, "weekly cap not respected")
+
+
+func _test_gender_and_base_design() -> void:
+	var seen_male := false
+	var seen_female := false
+	for i in range(100):
+		var upc := "%012d" % (100000000000 + i)
+		var a := WarriorFactory.generate(upc, FactionData.Category.GIN)
+		var b := WarriorFactory.generate(upc, FactionData.Category.GIN)
+		_expect(a.gender == b.gender, "one UPC generated different genders")
+		_expect(a.base_archetype == b.base_archetype, "one UPC generated different archetypes")
+		_expect(a.appearance_signature == b.appearance_signature, "one UPC generated different designs")
+		_expect(a.to_blueprint_dict() == b.to_blueprint_dict(), "blueprint differed between players")
+		_expect(a.gender in ["male", "female"], "invalid warrior gender")
+		_expect(a.design_version == 2, "design version missing")
+		var reloaded := Warrior.new(a.to_blueprint_dict())
+		_expect(reloaded.gender == a.gender, "blueprint gender lost on restore")
+		_expect(reloaded.appearance_components == a.appearance_components, "blueprint art identity lost on restore")
+		seen_male = seen_male or a.gender == "male"
+		seen_female = seen_female or a.gender == "female"
+	_expect(seen_male and seen_female, "male and female warriors were not both generated")
+	var soda := WarriorFactory.generate("4012345678901", FactionData.Category.NON_ALCOHOLIC)
+	_expect(soda.faction == "nimrod", "nonalcoholic generated a non-Nimrod")

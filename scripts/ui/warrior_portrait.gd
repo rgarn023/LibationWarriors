@@ -32,17 +32,13 @@ static func make_portrait(warrior: Warrior, size: Vector2 = Vector2(120, 150)) -
 	tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	tr.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var path := warrior.preview_path()
-	if ResourceLoader.exists(path):
-		tr.texture = load(path)
-	elif ResourceLoader.exists(warrior.sprite_path()):
-		tr.texture = load(warrior.sprite_path())
-	tr.modulate = warrior.display_modulate()
+	tr.texture = WarriorBaseArt.texture_for(warrior)
+	tr.modulate = Color.WHITE
 	root.add_child(tr)
 
 	var footer := Label.new()
 	var wp := warrior.weapon_profile()
-	footer.text = "Lv%d · %s" % [warrior.level, str(wp.get("shape", "blade")).capitalize()]
+	footer.text = "Lv%d · %s · %s" % [warrior.level, warrior.gender.capitalize(), str(wp.get("shape", "blade")).capitalize()]
 	footer.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	footer.position = Vector2(0, h * 0.86)
 	footer.size = Vector2(w, h * 0.14)
@@ -66,9 +62,6 @@ static func _rect(root: Control, color: Color, x: float, y: float, rw: float, rh
 static func apply_to_texture_rect(tr: TextureRect, warrior: Warrior) -> void:
 	if tr == null or warrior == null:
 		return
-	if ResourceLoader.exists(warrior.preview_path()):
-		tr.texture = load(warrior.preview_path())
-	elif ResourceLoader.exists(warrior.sprite_path()):
-		tr.texture = load(warrior.sprite_path())
+	tr.texture = WarriorBaseArt.texture_for(warrior)
 	tr.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	tr.modulate = warrior.display_modulate()
+	tr.modulate = Color.WHITE

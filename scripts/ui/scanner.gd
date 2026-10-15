@@ -168,7 +168,8 @@ func _finish_processing(message: String) -> void:
 func _show_result(warrior: Warrior, duplicate: bool) -> void:
 	result_panel.visible = true
 	result_name.text = "Lv.%d  %s" % [warrior.level, warrior.name]
-	result_faction.text = "%s · %s · ID %s" % [
+	result_faction.text = "%s · %s · %s · ID %s" % [
+		warrior.gender.capitalize(),
 		warrior.faction_display(),
 		warrior.category_display(),
 		warrior.barcode_hash.substr(0, 10).to_upper(),

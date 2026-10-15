@@ -20,6 +20,9 @@ func generate(barcode: String, category: int, _packaging_colors: Dictionary = {}
 	warrior.faction = faction
 	warrior.category = category
 	warrior.seed_value = seed
+	warrior.gender = AppearanceData.gender_for_seed(seed)
+	warrior.base_archetype = AppearanceData.archetype_for(faction)
+	warrior.design_version = 2
 	warrior.level = 1
 	warrior.xp = 0
 

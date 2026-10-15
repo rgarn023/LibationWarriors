@@ -11,7 +11,7 @@ permissions:
 
 env:
   GODOT_VERSION: "4.7.1"
-  EXPORT_NAME: "LibationWarriors-v002-dev-debug.apk"
+  EXPORT_NAME: "LibationWarriors-v003-dev-debug.apk"
 
 jobs:
   build-android:
@@ -81,10 +81,10 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: LibationWarriors-v002-dev-debug
+          name: LibationWarriors-v003-dev-debug
           path: |
-            build/LibationWarriors-v002-dev-debug.apk
-            build/LibationWarriors-v002-dev-debug.apk.sha256
-            build/LibationWarriors-v002-dev-debug.apk.size.txt
+            build/LibationWarriors-v003-dev-debug.apk
+            build/LibationWarriors-v003-dev-debug.apk.sha256
+            build/LibationWarriors-v003-dev-debug.apk.size.txt
           if-no-files-found: error
           retention-days: 30

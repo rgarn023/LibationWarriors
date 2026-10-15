@@ -7,6 +7,10 @@ var barcode_hash: String = ""
 var name: String = ""
 var faction: String = "rogue"
 var category: int = FactionData.Category.OTHER_ALCOHOL
+## Base gender and visual archetype are immutable for a normalized UPC.
+var gender: String = "male"
+var base_archetype: String = ""
+var design_version: int = 2
 var bottle_palette_name: String = ""
 var tint_primary: Color = Color.WHITE
 var tint_secondary: Color = Color.GRAY
@@ -71,6 +75,9 @@ func from_dict(data: Dictionary) -> void:
 	special_power = int(data.get("special_power", 20))
 	regular_power = int(data.get("regular_power", 12))
 	seed_value = int(data.get("seed_value", 0))
+	gender = str(data.get("gender", AppearanceData.gender_for_seed(seed_value)))
+	base_archetype = str(data.get("base_archetype", AppearanceData.archetype_for(faction)))
+	design_version = int(data.get("design_version", 1))
 	level = maxi(1, int(data.get("level", 1)))
 	xp = maxi(0, int(data.get("xp", 0)))
 	variant_pattern = int(data.get("variant_pattern", 0))
@@ -110,6 +117,12 @@ func to_dict() -> Dictionary:
 		"name": name,
 		"faction": faction,
 		"category": category,
+		"gender": gender,
+		"base_archetype": base_archetype,
+		"design_version": design_version,
+		"gender": gender,
+		"base_archetype": base_archetype,
+		"design_version": design_version,
 		"bottle_palette_name": bottle_palette_name,
 		"tint_primary": [tint_primary.r, tint_primary.g, tint_primary.b, tint_primary.a],
 		"tint_secondary": [tint_secondary.r, tint_secondary.g, tint_secondary.b, tint_secondary.a],
