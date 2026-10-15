@@ -63,7 +63,7 @@ func _test_dungeons() -> void:
 	for difficulty in ["easy", "normal", "hard"]:
 		for level in [1, 10, 30]:
 			for seed in range(1, 31):
-				var actual_seed := seed * 7919 + level * 101
+				var actual_seed: int = int(seed) * 7919 + int(level) * 101
 				var dungeon := DungeonGenerator.generate(level, actual_seed, {}, difficulty)
 				var rooms: Array = dungeon.get("rooms", [])
 				_expect(rooms.size() >= 10 and rooms.size() <= 25, "room count outside 10..25")
@@ -91,7 +91,7 @@ func _reachable(rooms: Array, start_id: int) -> Dictionary:
 	var queue: Array[int] = [start_id]
 	seen[start_id] = true
 	while not queue.is_empty():
-		var cur := queue.pop_front()
+		var cur: int = queue.pop_front()
 		var doors: Dictionary = rooms[cur].get("doors", {})
 		for direction in doors.keys():
 			var next_id := int(doors[direction])
