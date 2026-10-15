@@ -66,7 +66,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          godot --headless --path . --script res://scripts/tests/foundation_tests.gd
+          godot --headless --path . res://scenes/tests/foundation_tests.tscn
 
       - name: Export debug APK
         shell: bash
