@@ -66,10 +66,15 @@ func _setup_dev_demos() -> void:
 	demo_header.text = "DEV deterministic demos"
 	for child in demo_box.get_children():
 		child.queue_free()
-	for d in [
-		{"label": "Demo Rum", "code": "DEMO-RUM-88001", "cat": FactionData.Category.RUM},
-		{"label": "Demo Beer", "code": "DEMO-BEER-88006", "cat": FactionData.Category.BEER},
-	]:
+	# A development-only, deterministic sample from EVERY faction, so that
+	# the redesigned male/female UPC-based base portraits can be inspected.
+	# Not scanned or verified ownership; never becomes a production claim.
+	for c in FactionData.all_categories():
+		var d := {
+			"label": "Preview " + FactionData.category_label(int(c)),
+			"code": "DEMO-BASE-%02d" % int(c),
+			"cat": int(c),
+		}
 		var b := Button.new()
 		b.text = d.label
 		b.custom_minimum_size = Vector2(0, 48)
