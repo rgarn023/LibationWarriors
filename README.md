@@ -6,6 +6,13 @@ Android-first Godot action RPG/collector where scanning a real beverage barcode 
 > **Godot:** 4.7.x project (developed against 4.7.1)  
 > **Android package:** \`com.libationwarriors.game\`
 
+## Verified scanning backend and v2 character redesign
+
+- Every UPC has an immutable base blueprint including male/female gender, name, visual components, and base stats. New procedural 64×80 portraits are available for all 16 factions.
+- Production clients no longer insert warrior blueprints or ownership directly. Debug warriors remain local only.
+- Added a fail-closed verified-acquisition Edge Function and server-only location and challenge schema. **Not deployed**: the available Supabase project is inactive and not confirmed for this game, native photo/location integrity adapters and third-party checks are not yet integrated.
+- This APK is a prototype, not a working production verification service or a finished 4-player game.
+
 ## October 15 development milestone
 
 See [game vision and implementation status](docs/LIBATION_WARRIORS_GAME_VISION.md) for the locked scan-location, handwritten verification, rupture/wormhole, four-player lobby, corrupted-path and fusion requirements. This debug APK supports developer-only unverified scanning; **public UPC acquisition is blocked until live server verification exists**. The solo dungeon has a 10-second READY countdown. The APK is not a finished online/live-map product.

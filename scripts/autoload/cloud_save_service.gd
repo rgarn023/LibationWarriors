@@ -64,23 +64,11 @@ func sync_warrior(warrior: Warrior) -> Dictionary:
 		hash = BarcodeIdentity.sha256_hex(canonical)
 		warrior.barcode_hash = hash
 
-	var base_payload := warrior.to_blueprint_dict()
-	var blueprint_insert := {
-		"barcode_hash": hash,
-		"normalized_barcode": canonical,
-		"faction": warrior.faction,
-		"category": warrior.category,
-		"seed_value": warrior.seed_value,
-		"base_data": base_payload,
-	}
-	var insert_result := await SupabaseClient.rest_request(
-		HTTPClient.METHOD_POST,
-		"warrior_blueprints?on_conflict=barcode_hash&select=id,barcode_hash",
-		[blueprint_insert],
-		"resolution=ignore-duplicates,return=representation"
-	)
-	if not insert_result.get("ok", false):
-		return insert_result
+	# A device must NEVER mint a global blueprint. Only the trusted, proof-
+	# verified Edge Function may insert a blueprint/ownership row.
+	# Legacy debug warriors remain local and cannot become verified claims.
+	if DevBuild.allow_dev_tools():
+		return {"ok": true, "message": "Developer warriors are local-only."}
 
 	var lookup := await SupabaseClient.rest_request(
 		HTTPClient.METHOD_GET,
@@ -112,10 +100,9 @@ func sync_warrior(warrior: Warrior) -> Dictionary:
 		canonical_warrior.reset_hp()
 		GameState.merge_cloud_warrior(canonical_warrior)
 
+	# Only existing, server-granted ownership can receive progression updates.
+	# No client-side INSERT or UPSERT of user_warriors.
 	var owned := {
-		"user_id": SupabaseClient.user_id(),
-		"blueprint_id": blueprint_id,
-		"barcode_value": canonical,
 		"level": warrior.level,
 		"xp": warrior.xp,
 		"equipment": warrior.equipment,
@@ -125,10 +112,10 @@ func sync_warrior(warrior: Warrior) -> Dictionary:
 		"updated_at": Time.get_datetime_string_from_system(true),
 	}
 	return await SupabaseClient.rest_request(
-		HTTPClient.METHOD_POST,
-		"user_warriors?on_conflict=user_id,blueprint_id",
-		[owned],
-		"resolution=merge-duplicates,return=minimal"
+		HTTPClient.METHOD_PATCH,
+		"user_warriors?user_id=eq.%s&blueprint_id=eq.%s" % [SupabaseClient.user_id(), blueprint_id],
+		owned,
+		"return=minimal"
 	)
 
 

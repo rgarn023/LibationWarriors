@@ -14,6 +14,7 @@ config/icon="res://assets/icons/app_icon.png"
 
 BarcodeIdentity="*res://scripts/autoload/barcode_identity.gd"
 SupabaseClient="*res://scripts/autoload/supabase_client.gd"
+VerifiedAcquisition="*res://scripts/autoload/verified_acquisition.gd"
 CloudSaveService="*res://scripts/autoload/cloud_save_service.gd"
 ProductResolver="*res://scripts/autoload/product_resolver.gd"
 DevBuild="*res://scripts/autoload/dev_build.gd"

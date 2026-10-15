@@ -178,6 +178,8 @@ func _test_gender_and_base_design() -> void:
 		_expect(a.gender in ["male", "female"], "invalid warrior gender")
 		_expect(a.design_version == 2, "design version missing")
 		var reloaded := Warrior.new(a.to_blueprint_dict())
+		_expect(a.to_blueprint_dict().has("gender"), "serialized blueprint missing gender")
+		_expect(a.to_blueprint_dict().has("base_archetype"), "serialized blueprint missing archetype")
 		_expect(reloaded.gender == a.gender, "blueprint gender lost on restore")
 		_expect(reloaded.appearance_components == a.appearance_components, "blueprint art identity lost on restore")
 		seen_male = seen_male or a.gender == "male"

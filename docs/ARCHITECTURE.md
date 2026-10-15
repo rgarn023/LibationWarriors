@@ -239,3 +239,8 @@ The highest-priority unfinished work is:
 3. author true UP/DOWN Pirate attack sequences plus authored enemy attack/HIT/DEFEATED strips
 4. run Godot tests, Android emulator QA, and physical Galaxy QA
 5. build and checksum the versioned debug APK
+
+
+## October 15 verified-acquisition security revision
+
+Do **not** follow the legacy client-insert example above for production: the v2 scanner restricts production claims, and the new Edge backend plus migration make ownership creation server-only. Client cloud save no longer inserts global blueprints or new user_warriors records. Unverified debug warriors remain local. Gender, faction archetype and appearance components are persisted in canonical UPC blueprints. See docs/VERIFIED_ACQUISITION_BACKEND.md.

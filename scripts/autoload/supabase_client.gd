@@ -118,6 +118,17 @@ func sign_out() -> void:
 	_clear_session()
 
 
+func function_request(name: String, payload: Dictionary) -> Dictionary:
+	# Only authenticated Edge Function calls are possible here.
+	var response := await _request(HTTPClient.METHOD_POST, "/functions/v1/" + name.uri_encode(), payload, true)
+	if not response.get("ok", false):
+		return response
+	var data: Variant = response.get("data", {})
+	if typeof(data) != TYPE_DICTIONARY or not bool(data.get("ok", false)):
+		return {"ok": false, "message": str(data.get("message", "Verification rejected.")) if typeof(data) == TYPE_DICTIONARY else "Verification failed."}
+	return response
+
+
 func rest_request(method: int, endpoint: String, body: Variant = null, prefer: String = "") -> Dictionary:
 	return await _request(method, "/rest/v1/" + endpoint.trim_prefix("/"), body, true, prefer)
 
