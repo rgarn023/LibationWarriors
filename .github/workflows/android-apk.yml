@@ -66,7 +66,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          timeout 120s godot --headless --path . res://scenes/tests/foundation_tests.tscn
+          timeout 120s godot --headless --path . --script res://scripts/tests/foundation_runner.gd
 
       - name: Export debug APK
         shell: bash
