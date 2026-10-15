@@ -187,3 +187,11 @@ func _test_gender_and_base_design() -> void:
 	_expect(seen_male and seen_female, "male and female warriors were not both generated")
 	var soda := WarriorFactory.generate("4012345678901", FactionData.Category.NON_ALCOHOLIC)
 	_expect(soda.faction == "nimrod", "nonalcoholic generated a non-Nimrod")
+	# Actual collection art should render for both genders and every faction
+	# without requiring downloaded sprites or user-specific random seeds.
+	for c in FactionData.all_categories():
+		var w := WarriorFactory.generate("DEMO-BASE-%02d" % int(c), int(c))
+		var portrait := WarriorBaseArt.texture_for(w)
+		_expect(portrait != null and portrait.get_width() == 64 and portrait.get_height() == 80,
+			"new base portrait is missing for " + w.faction)
+
