@@ -66,7 +66,12 @@ grant all on public.scan_verified_claims_private to service_role;
 
 -- No direct client claim or blueprint creation, even for signed-in users.
 revoke insert, delete on public.warrior_blueprints from authenticated;
-revoke insert, delete on public.user_warriors from authenticated;
+revoke insert, delete, update on public.user_warriors from authenticated;
+-- Player progression updates cannot change barcode, blueprint, or ownership.
+-- Server validation of XP/loot is a separate production milestone.
+grant update (level, xp, equipment, regular_attack_override,
+  special_attack_override, progression, updated_at)
+  on public.user_warriors to authenticated;
 drop policy if exists "blueprints_insert_hash_matches_barcode" on public.warrior_blueprints;
 drop policy if exists "user_warriors_insert_own" on public.user_warriors;
 drop policy if exists "user_warriors_delete_own" on public.user_warriors;
