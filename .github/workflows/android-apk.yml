@@ -11,7 +11,7 @@ permissions:
 
 env:
   GODOT_VERSION: "4.7.1"
-  EXPORT_NAME: "LibationWarriors-v001-dev-debug.apk"
+  EXPORT_NAME: "LibationWarriors-v002-dev-debug.apk"
 
 jobs:
   build-android:
@@ -61,6 +61,12 @@ jobs:
           printf '%s\n' '4.7.1.stable' > android/.build_version
           test -f android/build/gradlew
           chmod +x android/build/gradlew
+
+      - name: Run Godot foundation tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --headless --path . --script res://scripts/tests/foundation_tests.gd
 
       - name: Export debug APK
         shell: bash

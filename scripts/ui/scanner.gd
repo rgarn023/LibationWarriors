@@ -48,7 +48,7 @@ func _refresh_limits() -> void:
 
 
 func _update_camera_ui() -> void:
-	camera_hint.text = "Camera only — UPC/EAN. Unknown products are never assigned a random faction."
+	camera_hint.text = "Development scan: UPC/EAN. Public release will require registered location and live handwritten proof." if DevBuild.allow_dev_tools() else "Production verification is required before warrior acquisition. Currently unavailable."
 	if not UpcScanner.can_scan_camera() and not DevBuild.allow_dev_tools():
 		status_label.text = "Camera scanning requires the Android build."
 		btn_camera.disabled = true
@@ -114,6 +114,13 @@ func _on_camera_barcode(raw_code: String) -> void:
 		_finish_processing(str(gate.get("message", "Summon blocked.")))
 		return
 
+	# Production scans MUST NOT mint a warrior from UPC alone. A trusted
+	# server verification of registered location + handwritten live proof
+	# is required before this branch may enable public acquisitions.
+	if not DevBuild.allow_dev_tools():
+		_finish_processing("Verified acquisition requires location and live handwritten-code proof. Not enabled in this build.")
+		return
+
 	var resolved := await ProductResolver.resolve(code)
 	if not resolved.get("ok", false):
 		_finish_processing(str(resolved.get("message", "Product could not be resolved.")))
@@ -127,6 +134,10 @@ func _on_camera_barcode(raw_code: String) -> void:
 
 
 func _summon_verified(code: String, category: int) -> void:
+	# Never trust a client-supplied category in a public build.
+	if not DevBuild.allow_dev_tools():
+		_finish_processing("Unverified warrior acquisition is disabled.")
+		return
 	var canonical := BarcodeIdentity.canonicalize(code)
 	if canonical.is_empty():
 		_finish_processing("Invalid barcode identity.")

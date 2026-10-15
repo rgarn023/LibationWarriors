@@ -15,6 +15,7 @@ extends Control
 @onready var back_btn: Button = %BackBtn
 @onready var empty_label: Label = %EmptyLabel
 
+var _launching := false
 var _selected: Warrior = null
 var _preview_seed: int = 0
 var _mode_themes: Array = []
@@ -110,8 +111,17 @@ func _update_dungeon_preview() -> void:
 
 
 func _on_start() -> void:
-	if _selected == null:
+	if _selected == null or _launching:
 		return
+	# Solo-ready slice: real four-player roster and two-minute join window
+	# require server matchmaking, so do not pretend this is online co-op.
+	_launching = true
+	start_btn.disabled = true
+	for remaining in range(RuptureLobbyRules.READY_COUNTDOWN_SECONDS, 0, -1):
+		start_btn.text = "SOLO READY - ENTERING IN %d" % remaining
+		await get_tree().create_timer(1.0).timeout
+		if not is_inside_tree():
+			return
 	var dungeon := DungeonGenerator.generate(_selected.level, 0, _selected_theme(), _selected_difficulty())
 	GameState.begin_adventure(_selected.barcode, dungeon)
 	get_tree().change_scene_to_file("res://scenes/dungeon_explore.tscn")

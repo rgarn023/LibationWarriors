@@ -15,6 +15,8 @@ func _run() -> void:
 	_test_dungeons()
 	_test_direction_math()
 	_test_combat_timing()
+	_test_rupture_lobby()
+	_test_corrupted_paths()
 	if failures.is_empty():
 		print("[FoundationTests] PASS — %d assertions" % assertions)
 		get_tree().quit(0)
@@ -134,3 +136,28 @@ func _test_combat_timing() -> void:
 	_expect(not CombatTiming.should_resolve_hit(7, active, false), "recovery frame resolved damage")
 	_expect(not CombatTiming.should_resolve_hit(1, [], false, 2), "fallback wind-up frame resolved damage")
 	_expect(CombatTiming.should_resolve_hit(2, [], false, 2), "fallback active frame did not resolve damage")
+
+
+func _test_rupture_lobby() -> void:
+	_expect(RuptureLobbyRules.may_join(0), "empty lobby rejected a join")
+	_expect(RuptureLobbyRules.may_join(3), "three-player lobby rejected fourth player")
+	_expect(not RuptureLobbyRules.may_join(4), "five-player lobby was allowed")
+	_expect(not RuptureLobbyRules.all_ready([]), "empty roster counted as ready")
+	_expect(RuptureLobbyRules.all_ready([{"ready": true}]), "solo ready did not start")
+	_expect(not RuptureLobbyRules.all_ready([{"ready": true}, {"ready": false}]), "mixed readiness started lobby")
+	_expect(RuptureLobbyRules.entry_countdown_seconds([{"ready": true}]) == 10, "ready countdown not ten seconds")
+	_expect(RuptureLobbyRules.entry_countdown_seconds([{"ready": false}]) == 120, "unready lobby not two minutes")
+	_expect(RuptureLobbyRules.encounter_multiplier(4) > RuptureLobbyRules.encounter_multiplier(1), "party size did not raise difficulty")
+
+
+func _test_corrupted_paths() -> void:
+	_expect(CorruptedPathRules.may_create(4, 4), "eligible last path blocked")
+	_expect(not CorruptedPathRules.may_create(5, 0), "sixth user path allowed")
+	_expect(not CorruptedPathRules.may_create(0, 5), "sixth location path allowed")
+	_expect(CorruptedPathRules.ranked_player_indices([4, 13, 7]) == [1, 2, 0], "scores not ranked correctly")
+	_expect(CorruptedPathRules.duration_bonus_tier(12 * 3600 - 1) == 0, "early bonus awarded")
+	_expect(CorruptedPathRules.duration_bonus_tier(12 * 3600) == 12, "12-hour bonus missing")
+	_expect(CorruptedPathRules.duration_bonus_tier(56 * 3600) == 56, "56-hour tier missing")
+	_expect(CorruptedPathRules.duration_bonus_tier(168 * 3600) == 168, "weekly tier missing")
+	_expect(CorruptedPathRules.capped_daily_gold(900, 50, 200, 500, 750) == 450, "daily cap not respected")
+	_expect(CorruptedPathRules.capped_daily_gold(900, 300, 700, 800, 750) == 50, "weekly cap not respected")
