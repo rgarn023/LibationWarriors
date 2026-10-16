@@ -20,7 +20,7 @@ const fs=require('fs');
  const featureCollection={type:'FeatureCollection',features:[
   {type:'Feature',properties:{kind:'park'},geometry:{type:'Polygon',coordinates:[[[-76.285,36.7695],[-76.282,36.7695],[-76.282,36.7725],[-76.285,36.7725],[-76.285,36.7695]]]}},
   {type:'Feature',properties:{kind:'water'},geometry:{type:'Polygon',coordinates:[[[-76.28348,36.7693],[-76.28320,36.7693],[-76.28312,36.7703],[-76.28327,36.7711],[-76.28318,36.7726],[-76.28354,36.7726],[-76.28367,36.7711],[-76.28349,36.7703],[-76.28348,36.7693]]]}},
-  {type:'Feature',properties:{kind:'forest'},geometry:{type:'Polygon',coordinates:[[[-76.2852,36.7716],[-76.2849,36.7716],[-76.2849,36.7723],[-76.2852,36.7723],[-76.2852,36.7716]]]}},
+  {type:'Feature',properties:{kind:'forest'},geometry:{type:'Polygon',coordinates:[[[-76.28455,36.77185],[-76.28405,36.77185],[-76.28405,36.77265],[-76.28455,36.77265],[-76.28455,36.77185]]]}},
   {type:'Feature',properties:{kind:'sand'},geometry:{type:'Polygon',coordinates:[[[-76.28355,36.7717],[-76.28368,36.7717],[-76.28368,36.7723],[-76.28355,36.7723],[-76.28355,36.7717]]]}},
   {type:'Feature',properties:{kind:'building'},geometry:{type:'Polygon',coordinates:[[[-76.28448,36.7713],[-76.28430,36.7713],[-76.28430,36.77148],[-76.28448,36.77148],[-76.28448,36.7713]]]}},
   {type:'Feature',properties:{kind:'road'},geometry:{type:'LineString',coordinates:[[-76.287,36.7706],[-76.285,36.7708],[-76.281,36.7713],[-76.277,36.772]]}},
