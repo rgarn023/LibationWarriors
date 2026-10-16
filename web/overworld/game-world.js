@@ -79,6 +79,7 @@
   }
   function classify(f){
     const layer=f.layer||{}, id=String(layer.id||'').toLowerCase();
+    if(id.startsWith('lw-'))return '';
     const p=f.properties||{};
     const cls=String(p.class||'').toLowerCase();
     const category=(id+' '+cls+' '+String(p.subclass||'')).toLowerCase();
@@ -263,7 +264,7 @@
   function paint(now){
     state.dirty=false;
     if(!state.ready||!state.map||!state.canvas||!state.ctx)return;
-    if(now-state.lastDraw<33){schedule();return}
+    if(now-state.lastDraw<25){setTimeout(schedule,30);return}
     state.lastDraw=now;
     const ctx=state.ctx,w=state.canvas.width,h=state.canvas.height;
     if(!w||!h)return;
@@ -283,7 +284,8 @@
     for(const item of groups.building)drawPolygon(ctx,item);
     // Decorations are deliberately sparse: preserves sight lines to real streets
     // and avoids the old full-screen animated clutter.
-    if(groups.water.length===0||state.decor.length<90)drawDecoration(ctx);
+    // Keep vegetation sparse and behind actual water; not yet painted here.
+    // drawDecoration(ctx) is reserved for geography-validated clusters.
   }
   function schedule(){
     if(state.dirty)return;
@@ -298,7 +300,6 @@
       if(!map||state.map===map&&state.attached)return;
       state.map=map;state.attached=true;ensure();
       map.on('move',schedule);
-      map.on('render',schedule);
       map.on('idle',scheduleSnapshot);
       map.on('sourcedata',()=>{
         if(!state.ready) scheduleSnapshot();
