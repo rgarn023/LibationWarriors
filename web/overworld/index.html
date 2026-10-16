@@ -281,6 +281,14 @@ body:not(.game-ready) #gameWorld{opacity:0;pointer-events:none}
  padding:5px 12px;border-radius:22px;pointer-events:none;white-space:nowrap}
 @media(max-width:530px){#gameHint{top:calc(env(safe-area-inset-top) + 112px)}}
 
+
+/* More world, less UI: button icons remain labeled for assistive technology. */
+#footnav .navbtn{font-size:0!important;width:57px;height:57px;max-width:57px;min-height:57px;
+ box-shadow:0 4px 9px #1f4e4160}
+#footnav .navbtn .em{font-size:25px}
+#locationReadout.visible{display:none!important}
+#footnav{background:linear-gradient(0deg,#295e5090,transparent 90%);}
+#gameHint{opacity:.72;font-size:9px}
 </style>
 </head>
 <body>
@@ -292,7 +300,7 @@ body:not(.game-ready) #gameWorld{opacity:0;pointer-events:none}
 <div id="zoomLevel" aria-live="polite">Z 13</div><div id="liveLocationBanner" role="status" aria-live="polite"></div><div id="locationReadout" role="status" aria-live="polite"></div><div id="mapStats"><div class="eyebrow pixfont">◉ NEARBY REALM</div><div id="regionName" class="city">Finding GPS...</div><div class="tiny" id="venueCount">Looking for nearby venues…</div></div>
 <div id="toast" role="status"></div>
 <div id="caption">16-BIT MAP STYLE · LIVE OSM GEOGRAPHY WHEN ONLINE · GAMEPLAY SIMULATED</div>
-<nav id="footnav" aria-label="Main game panels"><button class="navbtn active" data-panel="map"><span class="em">🗺️</span>WORLD</button><button class="navbtn" data-panel="summon"><span class="em">💠</span>SUMMON</button><button class="navbtn" data-panel="collection"><span class="em">⚔️</span>WARRIORS</button><button class="navbtn" data-panel="paths"><span class="em">👾</span>SHADOWS</button><button class="navbtn" data-panel="settings"><span class="em">⚙️</span>OPTIONS</button></nav>
+<nav id="footnav" aria-label="Main game panels"><button class="navbtn active" data-panel="map" aria-label="map" title="map"><span class="em">🗺️</span>WORLD</button><button class="navbtn" data-panel="summon" aria-label="summon" title="summon"><span class="em">💠</span>SUMMON</button><button class="navbtn" data-panel="collection" aria-label="Warriors" title="Warriors"><span class="em">⚔️</span>WARRIORS</button><button class="navbtn" data-panel="paths" aria-label="Shadows" title="Shadows"><span class="em">👾</span>SHADOWS</button><button class="navbtn" data-panel="settings" aria-label="settings" title="settings"><span class="em">⚙️</span>OPTIONS</button></nav>
 <div id="drawerWrap"><div id="shade" aria-hidden="true"></div><aside id="drawer" role="dialog" aria-label="Game panel"><div class="grab"></div><button class="close" id="closeDrawer" aria-label="Close">✕</button><main id="drawerContent"></main></aside></div>
 <script>
 (()=>{
@@ -307,9 +315,15 @@ let gpsDrawnPosition=null,gpsTransitionFrame=null,lastGpsReceiveAt=0,lastGpsCame
 let cameraBearing=0,cameraTilt=ADVENTURE_PITCH,acceptedGpsAccuracy=Infinity,lastAcceptedSpeed=0;
 let lastSceneryMode='light';
 const AVATAR_KEY='libation-overworld-avatar-v1';
-const defaultAvatar={skin:1,hair:0,outfit:1,hairStyle:1,body:1};
+const defaultAvatar={skin:1,hair:1,outfit:2,hairStyle:0,body:1};
 let avatarConfig={...defaultAvatar};
-try{const saved=JSON.parse(localStorage.getItem(AVATAR_KEY)||'{}');for(const k of Object.keys(defaultAvatar)){const v=Number(saved[k]);if(Number.isInteger(v)&&v>=0&&v<5)avatarConfig[k]=v}}catch(_){}
+try{
+ const saved=JSON.parse(localStorage.getItem(AVATAR_KEY)||'{}');
+ const wasOldDefault=saved.skin===1&&saved.hair===0&&saved.outfit===1&&saved.hairStyle===1&&saved.body===1;
+ if(!wasOldDefault)for(const k of Object.keys(defaultAvatar)){
+  const v=Number(saved[k]);if(Number.isInteger(v)&&v>=0&&v<5)avatarConfig[k]=v
+ }
+}catch(_){}
 function saveAvatar(){try{localStorage.setItem(AVATAR_KEY,JSON.stringify(avatarConfig))}catch(_){}}
 
 function toast(s){const e=$('#toast');e.textContent=s;e.classList.add('toast-visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>e.classList.remove('toast-visible'),4200)}
@@ -423,9 +437,11 @@ function makeCustomAvatarSprite(frame=0,facing=avatarFacing){
  shape(hair[2],[[24,13],[28,9],[35,9],[40,12],[38,15],[32,13],[28,16],[24,16]]);
  shape(hair[3],[[29,10],[36,10],[38,12],[31,12]]);
  if(back){
-  shape(hair[1],[[22,15],[40,15],[46,27],[43,42],[37,45],[25,44],[20,35]]);
-  shape(hair[2],[[26,21],[34,20],[35,39],[29,41],[26,34]]);
-  block(hair[3],27,23,3,9);
+  // Layered short back-of-head contours leave the cloak and shoulders visible.
+  shape(hair[1],[[22,15],[40,15],[45,23],[43,32],[38,35],[29,35],[24,32],[20,25]]);
+  shape(hair[2],[[25,18],[37,17],[42,23],[38,29],[29,30],[24,25]]);
+  block(hair[3],27,19,5,3);block(hair[3],35,24,3,3);
+  shape(hair[0],[[24,30],[28,33],[31,34],[29,36],[24,35]]);
  }else{
   shape(hair[0],[[19,16],[22,13],[28,15],[26,23],[22,29],[19,24]]);
   shape(hair[2],[[23,13],[29,10],[34,13],[29,18],[25,20]]);
@@ -695,7 +711,7 @@ function worldSeedScenery(){
  }).filter(v=>Number.isFinite(v.minLat));
  for(let y=-9;y<=9;y++)for(let x=-9;x<=9;x++){
   const gy=baseY+y,gx=baseX+x,r=localHash(gx,gy);
-  if(r<.64)continue;
+  if(r<.49)continue;
   const lat=(gy+.20+localHash(gx+23,gy)*.60)*dy;
   const lon=(gx+.20+localHash(gx,gy+19)*.60)*dx;
   if(geoMeters(origin,[lon,lat])>320)continue;
@@ -706,8 +722,8 @@ function worldSeedScenery(){
    return worldNearLine([lon,lat],road.coords,11);
   });
   if(near)continue;
-  positions.push({lon,lat,kind:r>.91?'tree':r>.78?'bush':'grass',variant:Math.floor(r*11)%3});
-  if(positions.length>=105)break;
+  positions.push({lon,lat,kind:r>.78?'tree':r>.61?'bush':'grass',variant:Math.floor(r*11)%3});
+  if(positions.length>=135)break;
  }
  worldState.scenery=positions;
 }
@@ -806,12 +822,17 @@ function worldBackdrop(ctx,w,h){
   ctx.beginPath();ctx.moveTo(xx-15,h*.37);ctx.lineTo(xx,cy);ctx.lineTo(xx+w/8,h*.37);ctx.fill();
  }
  ctx.fillStyle='#8fc18b';ctx.fillRect(0,h*.32,w,h);
- // Fine low-frequency grass fields and glades, not a screen-aligned stripe filter.
- const sz=26;
- for(let y=h*.34;y<h;y+=sz)for(let x=0;x<w;x+=sz){
-  const k=localHash(Math.floor(x/sz),Math.floor(y/sz));
-  ctx.fillStyle=k>.72?'#97c68c':k<.25?'#82b980':'#8dc18a';
-  ctx.fillRect(x,y,sz+1,sz+1);
+ // Scattered SNES-style grass and flowers, never large checkerboard squares.
+ ctx.fillStyle='#8cbe8f';ctx.fillRect(0,h*.34,w,h);
+ const dx=Math.floor(((worldState.camera?.[0]||0)*120000)%17);
+ const dy=Math.floor(((worldState.camera?.[1]||0)*120000)%17);
+ for(let y=h*.34;y<h;y+=23)for(let x=0;x<w;x+=23){
+  const q=localHash(Math.floor(x/23)+dx,Math.floor(y/23)+dy);
+  if(q<.25)continue;
+  const bx=x+q*13,by=y+q*10;
+  ctx.fillStyle=q>.85?'#d6d995':'#5a9b66';
+  ctx.fillRect(bx,by,2,5);ctx.fillRect(bx+4,by+2,2,3);
+  if(q>.9){ctx.fillStyle='#fae3b7';ctx.fillRect(bx+2,by,3,3)}
  }
 }
 function worldPaint(ctx,w,h,now){
@@ -884,10 +905,6 @@ function worldPaint(ctx,w,h,now){
    ctx.beginPath();ctx.ellipse(obj.x,obj.y,28,9,0,0,Math.PI*2);ctx.stroke();
   }
  }
- // Only a tiny positional cue, not a fake player portrait or map pin.
- ctx.fillStyle='#143f3ca8';ctx.fillRect(w*.5-32,h-96,64,19);
- ctx.font='bold 10px monospace';ctx.textAlign='center';ctx.fillStyle='#f7efd0';
- ctx.fillText('GPS  ·  EXPLORE',w*.5,h-83);
 }
 function worldFrame(now){
  if(!worldState.started)return;
