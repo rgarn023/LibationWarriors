@@ -1610,7 +1610,7 @@ function styleOverworld(){
    }else if(/sand|beach|dune/.test(id)){
     set('fill-color','#e0bf8d');
    }else if(/building/.test(id)){
-    set('fill-color','#dfbf98');set('fill-outline-color','#ae9775');
+    set('fill-color','#86b7ba');set('fill-outline-color','#789da1');set('fill-opacity',0.16);
    }else if(/residential|industrial|commercial|landuse/.test(id)){
     set('fill-color','#b3d49d');
    }
@@ -1895,30 +1895,25 @@ function addGeographicLandmarkArt(){
 // Fantasy roof tiles follow *actual* building polygons; they do not add
 // duplicated cottages, false walls, or giant unverified building heights.
 // OSM footprint shapes remain exact under all GPS zoom and camera changes.
-function makeFantasyRoofTile(name){
- const colors={
-  'lw-roof-clay':['#b47d60','#7a544d','#d49a75','#574747'],
-  'lw-roof-slate':['#6c7b7c','#49565e','#90a5a2','#3f454d'],
-  'lw-roof-ochre':['#b69b73','#8d795e','#d6bd8d','#5e5650']
- }[name];
- const canvas=document.createElement('canvas');
- canvas.width=48;canvas.height=48;
- const g=canvas.getContext('2d',{willReadFrequently:true});
- g.imageSmoothingEnabled=false;
- const rect=(c,x,y,w,h)=>{g.fillStyle=c;g.fillRect(x,y,w,h)};
- rect(colors[0],0,0,48,48);
- // Distinct staggered tiles, not a stretched picture of a whole cottage.
- // Muted contrast keeps dense town blocks readable on mobile.
+// Keep building boundaries as subtle mapped polygons, not cottage icons,
+// tall extrusions, or solid decorative roofs. Every vertex is from real data.
+function makeBuildingHatch(){
+ const c=document.createElement('canvas');c.width=64;c.height=64;
+ const g=c.getContext('2d',{willReadFrequently:true});g.imageSmoothingEnabled=false;
+ g.clearRect(0,0,64,64);
+ // Mostly transparent flecks; no picture of a house, no invented buildings.
  for(let row=0;row<8;row++){
-  const y=row*6,offset=row%2?8:0;
-  rect(colors[1],0,y+4,48,1);
-  for(let x=-16+offset;x<48;x+=16){
-   rect(colors[3],x,y,1,5);
-   rect(colors[2],x+2,y+1,10,1);
-   rect(colors[1],x+13,y+3,2,1);
+  for(let col=0;col<8;col++){
+   const x=col*8+(row%2?3:1),y=row*8+2;
+   g.fillStyle='rgba(65,112,124,0.19)';
+   g.fillRect(x,y,3,1);
+   if((row+col)%3===0){
+    g.fillStyle='rgba(216,240,233,0.24)';
+    g.fillRect(x+2,y+3,2,1);
+   }
   }
  }
- return g.getImageData(0,0,48,48);
+ return g.getImageData(0,0,64,64);
 }
 function addGeographicBuildingDepth(){
  if(!map||!map.getStyle())return;
@@ -1927,8 +1922,6 @@ function addGeographicBuildingDepth(){
   (l.type==='fill'||l.type==='fill-extrusion')&&
   /building|house/i.test(l.id)&&
   !/outline|shadow|label|entrance|housenumber|number/i.test(l.id));
- // Distinct filters may represent different real mapped building sets, but
- // duplicate fill/extrusion versions of the *same* set must be drawn once.
  const selected=[],seen=new Set();
  for(const l of candidates){
   const key=[l.source,l['source-layer']||'',JSON.stringify(l.filter||null),
@@ -1941,16 +1934,13 @@ function addGeographicBuildingDepth(){
   host.dataset.geographicBuildings='no-building-source';
   host.dataset.buildingLayers='0';
   host.dataset.buildingPresentation='none';
-  console.warn('No mapped building polygons in the current geographic source');
+  console.warn('No real building polygons available from geographic data');
   return;
  }
  try{
-  for(const kind of ['lw-roof-clay','lw-roof-slate','lw-roof-ochre'])
-   if(!map.hasImage(kind))map.addImage(kind,makeFantasyRoofTile(kind),{pixelRatio:1});
- }catch(err){
-  console.warn('Cannot register rooftop pixel textures',err);
-  host.dataset.buildingPresentation='unavailable';
- }
+  if(!map.hasImage('lw-building-minor-hatch'))
+   map.addImage('lw-building-minor-hatch',makeBuildingHatch(),{pixelRatio:1});
+ }catch(err){console.warn('Building texture unavailable, outlines will still render',err)}
  const copy=(l,id,type,paint)=>{
   const spec={id,type,source:l.source,paint,
    filter:l.filter?['all',['==',['geometry-type'],'Polygon'],l.filter]:
@@ -1960,37 +1950,32 @@ function addGeographicBuildingDepth(){
   if(Number.isFinite(l.maxzoom))spec.maxzoom=l.maxzoom;
   return spec;
  };
- const roofStyle=[
-  'match',['coalesce',['get','building'],['get','class'],'other'],
-  'commercial','lw-roof-slate','industrial','lw-roof-slate',
-  'retail','lw-roof-slate','warehouse','lw-roof-slate',
-  'apartments','lw-roof-ochre','school','lw-roof-ochre',
-  'lw-roof-clay'
- ];
- const installed=[];
+ const installed=[],paintLayers=[];
  for(let n=0;n<selected.length;n++){
-  const l=selected[n],prefix='lw-visible-building-'+n;
-  const footprint=prefix+'-footprint',tiles=prefix+'-roof',outline=prefix+'-outline';
+  const l=selected[n],prefix='lw-visible-building-'+n,
+   footprint=prefix+'-footprint',hatch=prefix+'-hatch',outline=prefix+'-outline';
   try{
    const label=all.find(layer=>layer.type==='symbol')?.id;
    if(!map.getLayer(footprint))map.addLayer(copy(l,footprint,'fill',{
-    'fill-color':'#695b4b','fill-opacity':1
+    'fill-color':'#82b6b5','fill-opacity':0.20
    }),label);
-   if(!map.getLayer(tiles))map.addLayer(copy(l,tiles,'fill',{
-    'fill-pattern':roofStyle,'fill-opacity':0.95
-   }),label);
+   if(map.hasImage('lw-building-minor-hatch')&&!map.getLayer(hatch))
+    map.addLayer(copy(l,hatch,'fill',{
+     'fill-pattern':'lw-building-minor-hatch','fill-opacity':0.32
+    }),label);
    if(!map.getLayer(outline))map.addLayer(copy(l,outline,'line',{
-    'line-color':'#493d3b','line-opacity':0.94,
-    'line-width':['interpolate',['linear'],['zoom'],16,0.7,18,1.6,19,2.4]
+    'line-color':'#71979d','line-opacity':0.82,
+    'line-width':['interpolate',['linear'],['zoom'],16,0.6,18,1.15,19,1.7]
    }),label);
-   installed.push(footprint);
-  }catch(err){console.warn('Failed to draw true building roof geometry',l.id,err)}
+   installed.push(footprint);paintLayers.push([footprint,outline]);
+  }catch(err){console.warn('Mapped building outlines unavailable for',l.id,err)}
  }
- host.dataset.buildingPresentation=installed.length?'patterned-real-footprints':'unavailable';
- host.dataset.geographicDepth=installed.length?'roof-only':'unavailable';
+ host.dataset.buildingPresentation=installed.length?'subtle-outlined-footprints':'unavailable';
+ host.dataset.geographicDepth=installed.length?'flat-outlines':'unavailable';
  host.dataset.geographicBuildings=installed.length?'footprints-visible':'unavailable';
  host.dataset.buildingLayers=String(installed.length);
  host.dataset.blockExtrusions='removed';
+ host.dataset.buildingHatch=map.hasImage('lw-building-minor-hatch')?'subtle':'none';
  const audit=()=>{
   if(!map||!mapLoaded)return;
   try{
