@@ -1676,6 +1676,24 @@ function addGeographicTerrainTextures(){
     if(i%7===0)put(colors[3],x+1,y-2,2,1);
    }
   }
+  if(name==='lw-forest'){
+   // A forest can be *symbolized* by miniature canopies inside an actual
+   // woodland polygon. The motifs are not surveyed individual tree positions.
+   const pine=(x,y,size)=>{
+    put('#305f4b',x-3,y+size-4,7,4);
+    put('#6b6847',x-1,y+size-4,3,7);
+    for(let row=0;row<size-4;row+=4){
+     const w=Math.max(3,Math.floor(3+(row*.53)));
+     put('#2c5b43',x-w-1,y+row,w*2+2,4);
+     put(row%8===0?'#77ad72':'#4b8c61',x-w+1,y+row,w*2-2,3);
+     put('#9acb87',x-w+2,y+row,3,2);
+    }
+    put('#bbd4a1',x-2,y-2,4,3);
+   };
+   for(const [x,y,h] of [[26,18,23],[82,35,26],[51,85,27],[111,90,22]]){
+    pine(x,y,h);
+   }
+  }
   map.addImage(name,ctx.getImageData(0,0,extent,extent),{pixelRatio:1});
  }
  function copySource(layer, id, type, paint){
@@ -1736,10 +1754,11 @@ function addGeographicTerrainTextures(){
     map.addLayer(copySource(layer,id,'line',{
      'line-color':narrow?'#81744d':'#75674d',
      'line-opacity':0.85,
-     'line-width':['interpolate',['linear'],['zoom'],16,narrow?2.5:4,18,narrow?5.5:8,19,narrow?7:11]
+     'line-width':['interpolate',['linear'],['zoom'],16,narrow?3.5:5,18,narrow?9:14,19,narrow?11:17]
     }),layer.id);
    }
-   map.setPaintProperty(layer.id,'line-color',narrow?'#d9bc7d':'#d9c69a');
+   map.setPaintProperty(layer.id,'line-color',narrow?'#dbbc80':'#e5cf9f');
+   map.setPaintProperty(layer.id,'line-width',['interpolate',['linear'],['zoom'],16,narrow?2:3,18,narrow?5:8,19,narrow?7:10]);
    report.pathEdges.push(id);
   }
   host.dataset.terrainTiles='geographic';
