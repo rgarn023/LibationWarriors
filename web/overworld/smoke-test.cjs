@@ -26,6 +26,12 @@ const fs=require('fs');
   {type:'Feature',properties:{kind:'building'},geometry:{type:'Polygon',coordinates:[[[-76.28483,36.77149],[-76.28465,36.77149],[-76.28465,36.77166],[-76.28483,36.77166],[-76.28483,36.77149]]]}},
   {type:'Feature',properties:{kind:'building'},geometry:{type:'Polygon',coordinates:[[[-76.28398,36.77117],[-76.28380,36.77117],[-76.28380,36.77134],[-76.28398,36.77134],[-76.28398,36.77117]]]}},
   {type:'Feature',properties:{kind:'structure-3d'},geometry:{type:'Polygon',coordinates:[[[-76.28498,36.7711],[-76.28478,36.7711],[-76.28478,36.77126],[-76.28498,36.77126],[-76.28498,36.7711]]]}},
+  {type:'Feature',properties:{class:'beer',subclass:'pub',name:'Test Fixture Tavern'},
+   geometry:{type:'Point',coordinates:[-76.28408,36.77128]}},
+  {type:'Feature',properties:{class:'brewery',subclass:'brewery',name:'Test Fixture Brewery'},
+   geometry:{type:'Point',coordinates:[-76.28388,36.77143]}},
+  {type:'Feature',properties:{class:'restaurant',subclass:'restaurant',name:'Unverified Restaurant'},
+   geometry:{type:'Point',coordinates:[-76.28420,36.77090]}},
   {type:'Feature',properties:{kind:'road'},geometry:{type:'LineString',coordinates:[[-76.287,36.7706],[-76.285,36.7708],[-76.281,36.7713],[-76.277,36.772]]}},
   {type:'Feature',properties:{kind:'trail'},geometry:{type:'LineString',coordinates:[[-76.2847,36.769],[-76.2841,36.77],[-76.284,36.773]]}}
  ]};
@@ -46,13 +52,12 @@ const fs=require('fs');
  await page.route('**/styles/liberty**',route=>route.fulfill({
   status:200,contentType:'application/json',body:JSON.stringify(mockStyle)
  }));
- await page.route('**/api/interpreter**',route=>route.fulfill({
-  status:200,contentType:'application/json',body:JSON.stringify({elements:[
-    {type:'node',id:55101,lat:36.77128,lon:-76.28408,tags:{amenity:'pub',name:'Test Fixture Tavern'}},
-    {type:'node',id:55102,lat:36.77143,lon:-76.28388,tags:{craft:'brewery',name:'Test Fixture Brewery'}},
-    {type:'node',id:55103,lat:36.77090,lon:-76.28420,tags:{amenity:'restaurant',name:'Restaurant Without Alcohol Tag'}}
-   ]})
- }));
+ let attemptedExternalDirectory=0;
+ await page.route('**/api/interpreter**',route=>{
+  attemptedExternalDirectory++;
+  return route.abort('failed');
+ });
+
  await page.goto('http://127.0.0.1:8123/',{waitUntil:'domcontentloaded',timeout:30000});
  try{
   await page.waitForFunction(()=>{
@@ -132,6 +137,25 @@ const fs=require('fs');
  const anchored=m=>positioned(m)&&m.onScreen;
  await page.waitForFunction(()=>document.querySelectorAll('.pixel-marker.maplibregl-marker').length===2,
   null,{timeout:12000});
+ const portalSourceAudit=await page.evaluate(()=>({
+  names:[...document.querySelectorAll('.pixel-marker.maplibregl-marker')]
+   .map(m=>m.querySelector('.location-title')?.textContent),
+  status:document.querySelector('#venueCount')?.textContent,
+  provider:document.querySelector('#map')?.dataset.venueDirectory
+ }));
+ console.log('NETWORK-INDEPENDENT OSM PORTAL DATA:',JSON.stringify(portalSourceAudit));
+ if(attemptedExternalDirectory!==0||portalSourceAudit.provider!=='map-tiles'||
+   !portalSourceAudit.names.some(x=>/Test Fixture Tavern/.test(x||''))||
+   !portalSourceAudit.names.some(x=>/Test Fixture Brewery/.test(x||''))||
+   /failed to fetch|directory failed|unavailable/i.test(portalSourceAudit.status||''))
+  throw Error('Venue discovery still requires broken browser Overpass requests: '+
+   JSON.stringify({portalSourceAudit,attemptedExternalDirectory}));
+ await page.evaluate(()=>document.querySelector('#refreshBtn').click());
+ await page.waitForTimeout(250);
+ if(attemptedExternalDirectory!==0||
+   await page.locator('.pixel-marker.maplibregl-marker').count()!==2)
+  throw Error('Refreshing venues reintroduced browser cross-origin directory failures');
+
  // A close, tilted local-world camera is part of the gameplay contract.
  const readCamera=()=>page.locator('#map').evaluate(el=>({
    zoom:Number(el.dataset.cameraZoom),pitch:Number(el.dataset.cameraPitch),
@@ -314,7 +338,7 @@ const fs=require('fs');
  await page.waitForTimeout(150);
  await page.screenshot({path:'/tmp/libation-time-night.png',fullPage:false});
  const nighttime=await page.locator('#map canvas.maplibregl-canvas').evaluate(el=>getComputedStyle(el).filter);
- if(daytime!=='none'||sunset==='none'||nighttime==='none'||sunset===nighttime)
+ if(daytime==='none'||sunset==='none'||nighttime==='none'||sunset===nighttime)
   throw Error('Sunrise/sunset changes did not visibly recolor geographic world: '+
    JSON.stringify({daytime,sunset,nighttime}));
  await page.evaluate(()=>window.LibationWorldTime.apply(new Date()));
