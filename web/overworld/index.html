@@ -1225,7 +1225,7 @@ async function startLive(){
      $('#map').classList.add('map-live');$('#loadingMap').style.display='none';
      $('#demoMarkers').style.display='none';
      updateStatus('MAP<br>ONLINE',true);
-     styleOverworld();addGeographicTerrainTextures();addGeographicBuildingDepth();document.body.classList.remove('offline-scenic','game-geography-ready');document.body.classList.add('live-map','go-perspective','stable-map');
+     styleOverworld();addGeographicBuildingDepth();addGeographicTerrainTextures();document.body.classList.remove('offline-scenic','game-geography-ready');document.body.classList.add('live-map','go-perspective','stable-map');
      // Avoid creating hundreds of DOM/world objects on every viewport change.
      registerAdventureCameraControls();
      syncAdventureCameraState();
