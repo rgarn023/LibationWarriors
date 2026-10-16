@@ -49,6 +49,8 @@ jobs:
           PY
           node --check /tmp/libation-overworld-check.js
           node --check web/overworld/game-world.js
+          node --check web/overworld/dungeon.js
+          test -s web/overworld/dungeon.js
           test -s web/overworld/game-world.js
       - name: Browser smoke test of GPS game canvas
         shell: bash
@@ -67,6 +69,9 @@ jobs:
           path: |
             /tmp/libation-world-screenshot.png
             /tmp/libation-world-movement.png
+            /tmp/libation-dev-portals.png
+            /tmp/libation-dungeon-room.png
+            /tmp/libation-dungeon-victory.png
             /tmp/libation-world-touch-turn.png
             /tmp/libation-world-walking.png
             /tmp/libation-world-zoomed-in.png
