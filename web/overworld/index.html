@@ -147,10 +147,41 @@ body.walking #adventureAvatar .sprite{animation:travelSteps .54s steps(2,end) in
 #mapStats{border-color:#b0d2a2}
 #map .maplibregl-marker{will-change:transform}
 
+
+/* V9: The actual MapLibre marker is the only overworld avatar.
+   The grounding oval touches the GPS coordinate; no framed portrait or fixed overlay. */
+#adventureAvatar{display:none!important}
+#gpsMarker{
+  width:84px;height:116px;position:relative;
+  display:block;pointer-events:none;user-select:none;
+  filter:drop-shadow(2px 5px 2px #062c31a6);
+}
+#gpsMarker .gps-ground{
+  position:absolute;left:50%;bottom:0;transform:translateX(-50%);
+  width:52px;height:14px;background:#0a423663;
+  border:2px solid #d2e9a89c;border-radius:50%;
+  box-shadow:0 0 0 4px #8ee4b620;z-index:0;
+}
+#gpsMarker .sprite{
+  position:absolute;left:50%;bottom:8px;transform:translateX(-50%);
+  width:70px;height:94px;object-fit:contain;object-position:center bottom;
+  border:none;box-shadow:none;background:transparent;image-rendering:pixelated;
+  z-index:1;filter:drop-shadow(2px 3px 1px #1544369c)
+}
+#gpsMarker .gps-name{
+  position:absolute;left:50%;top:0;transform:translateX(-50%);
+  white-space:nowrap;font:900 9px monospace;letter-spacing:.7px;
+  padding:2px 6px;background:#163f39e0;color:#ffe6a5;
+  border:1px solid #d6cb8c;z-index:2;
+}
+body.following #gpsMarker{display:block!important}
+body.walking #gpsMarker .sprite{animation:travelSteps .48s steps(2,end) infinite}
+@media(prefers-reduced-motion:reduce){body.walking #gpsMarker .sprite{animation:none}}
+
 </style>
 </head>
 <body>
-<div id="scene"><div id="illustratedBackdrop"></div><canvas id="offlineCanvas"></canvas><div id="map" role="application" aria-label="Interactive real geographic map"></div><div id="demoMarkers"></div><div id="playerPin"><img class="playerImage" alt="Your warrior avatar"><div class="label">YOU</div><div class="playerBeacon"></div></div><div id="accuracyCircle"></div><div id="playerSpot">✦</div><div id="adventureAvatar" aria-label="Your live GPS overworld explorer"><div class="footprint"></div><img class="sprite" alt="Your customized 16-bit adventurer"><span class="nameplate">EXPLORER</span></div></div>
+<div id="scene"><div id="illustratedBackdrop"></div><canvas id="offlineCanvas"></canvas><div id="map" role="application" aria-label="Interactive real geographic map"></div><div id="demoMarkers"></div><div id="playerPin"><img class="playerImage" alt="Your warrior avatar"><div class="label">YOU</div><div class="playerBeacon"></div></div><div id="accuracyCircle"></div><div id="playerSpot">✦</div></div>
 <div id="grain"></div><div id="vignette"></div><div id="loadingMap" class="pixfont">LOADING REAL OVERWORLD...<br><span class="xsmall muted">Live map requires internet · GPS requires HTTPS</span></div>
 <header id="hud"><div class="brand"><div class="brandmark pixfont">cg</div><div><div class="brandname pixfont">LIBATION WARRIORS</div><div class="brandsub">CHAROITE GAMES · LIVE 16-BIT MAP</div></div></div><div class="hudright"><div class="coin">🟡 2,850</div><div id="online" class="online is-off">MAP<br>CONNECTING</div></div></header>
 <div id="topChips"><button class="chip active" data-filter="all"><span class="symbol">✦</span> ALL</button><button class="chip" data-filter="rupture"><span class="symbol">⚔</span> RUPTURES</button><button class="chip special" data-filter="challenge"><span class="symbol">✺</span> WORMHOLES</button><button class="chip right" id="searchButton">⌕ FIND</button></div>
@@ -168,6 +199,7 @@ const centerStart=[-76.273,36.768]; // Chesapeake, Virginia — default sample r
 const presets={"Chesapeake, VA":[-76.273,36.768],"Virginia Beach, VA":[-75.976,36.852],"New York, NY":[-73.985,40.748],"Boston, MA":[-71.06,42.356],"Tokyo, Japan":[139.701,35.658]};
 let provider='offline', map=null,gm=null,gmMarkers=[],markers=[],venues=[],demoVenues=[],selectedVenue=null,lastPosition=centerStart.slice(),currentFilter='all',mapLoading=false,mapLoaded=false,fetchSerial=0,fetchController=null,venueTimer=null,searchCity='Chesapeake, VA',activePanel='map',avatarKey='712340000032',claimed=new Set(),shadowPath=null,openedAt=Date.now(),countdownHandle=null,loadingHint='',currentGeolocation=null,gpsWatchId=null,gpsAccuracy=null,gpsMarker=null,gpsAccuracyCircle=null,offlineZoom=13,liveMapFailure=false,locationAccess='not-requested',venueCache=new Map(),lastVenueKey='',lastVenueLoadAt=0;
 let toastTimer=null,venueCountMode='idle',followPlayer=true;
+let gpsDrawnPosition=null,gpsTransitionFrame=null,lastGpsReceiveAt=0,lastGpsCameraAt=0;
 const AVATAR_KEY='libation-overworld-avatar-v1';
 const defaultAvatar={skin:1,hair:0,outfit:1,hairStyle:1,body:1};
 let avatarConfig={...defaultAvatar};
@@ -307,8 +339,7 @@ function makeCustomAvatarSprite(frame=0,facing=avatarFacing){
  return c.toDataURL('image/png');
 }
 function repaintCustomAvatar(){
- const front=$('#adventureAvatar .sprite');if(front)front.src=makeCustomAvatarSprite(avatarFrame,avatarFacing);
- const img=$('#gpsMarker .sprite');if(img)img.src=makeCustomAvatarSprite();
+ const img=$('#gpsMarker .sprite');if(img)img.src=makeCustomAvatarSprite(avatarFrame,avatarFacing);
  if(window._googlePlayer&&window.google?.maps){
   window._googlePlayer.setIcon({url:makeCustomAvatarSprite(),scaledSize:new google.maps.Size(52,70),anchor:new google.maps.Point(26,70)});
  }
@@ -411,26 +442,91 @@ $$('[data-filter]').forEach(b=>b.addEventListener('click',()=>setFilter(b.datase
 function position(){if(provider==='osm'&&map){const c=map.getCenter();return[c.lng,c.lat]}if(provider==='google'&&gm){const c=gm.getCenter();return[c.lng(),c.lat()]}return lastPosition;}
 function moveTo(lon,lat,z=14){followPlayer=false;refreshAdventureAvatar();lastPosition=[lon,lat];if(provider==='osm'&&map)map.flyTo({center:[lon,lat],zoom:z,speed:1.6});else if(provider==='google'&&gm){gm.panTo({lng:lon,lat});gm.setZoom(z)}else{offlineZoom=z;drawOffline()}updateZoom();updateGpsOverlay();}
 
-function refreshAdventureAvatar(){
- const follow=!!(followPlayer&&currentGeolocation&&provider==='osm'&&mapLoaded&&map);
- document.body.classList.toggle('following',follow);
- const icon=$('#adventureAvatar .sprite');
- if(icon&&!icon.getAttribute('src'))icon.src=makeCustomAvatarSprite(avatarFrame,avatarFacing);
- if(gpsMarker?.getElement)gpsMarker.getElement().style.display=follow?'none':'';
+// One georeferenced character sprite is kept in the MapLibre scene. The marker's
+// bottom-center anchor is its real GPS location, not a fixed viewport position.
+function ensureGeoreferencedAvatar(){
+ if(provider!=='osm'||!map||!mapLoaded||!currentGeolocation)return;
+ if(gpsMarker){
+  const el=gpsMarker.getElement?.();
+  if(el?.isConnected)return;
+  try{gpsMarker.remove()}catch(_){}
+  gpsMarker=null;
+ }
+ const el=document.createElement('div');
+ el.id='gpsMarker';
+ el.setAttribute('role','img');
+ el.setAttribute('aria-label','Your custom adventurer at your real GPS location');
+ el.innerHTML='<div class="gps-ground"></div><img class="sprite" alt="" src="'+
+   makeCustomAvatarSprite(avatarFrame,avatarFacing)+'"><span class="gps-name">YOU</span>';
+ gpsDrawnPosition=gpsDrawnPosition||currentGeolocation.slice();
+ gpsMarker=new maplibregl.Marker({element:el,anchor:'bottom',offset:[0,0]})
+   .setLngLat(gpsDrawnPosition).addTo(map);
 }
-function explorerCamera(isFirst=false){
+function refreshAdventureAvatar(){
+ document.body.classList.toggle('following',!!(followPlayer&&currentGeolocation&&provider==='osm'&&mapLoaded));
+ ensureGeoreferencedAvatar();
+}
+function geoMeters(a,b){
+ const r=6371000,rad=Math.PI/180;
+ const d1=(b[1]-a[1])*rad,d2=(b[0]-a[0])*rad;
+ const t=Math.sin(d1/2)**2+Math.cos(a[1]*rad)*Math.cos(b[1]*rad)*Math.sin(d2/2)**2;
+ return 2*r*Math.asin(Math.min(1,Math.sqrt(Math.max(0,t))));
+}
+function facingFromCoordinates(a,b,heading){
+ if(Number.isFinite(heading)){
+  const h=(heading+360)%360;
+  return h>=315||h<45?'up':h<135?'right':h<225?'down':'left';
+ }
+ const north=(b[1]-a[1])*111320;
+ const east=(b[0]-a[0])*111320*Math.cos(b[1]*Math.PI/180);
+ return Math.abs(east)>Math.abs(north)?(east>0?'right':'left'):(north>0?'up':'down');
+}
+function moveGeoreferencedAvatar(next,speed,heading){
+ if(provider!=='osm'||!map||!mapLoaded)return 0;
+ ensureGeoreferencedAvatar();
+ if(!gpsMarker)return 0;
+ if(gpsTransitionFrame!==null){cancelAnimationFrame(gpsTransitionFrame);gpsTransitionFrame=null}
+ const from=gpsDrawnPosition||next;
+ const delta=geoMeters(from,next);
+ const accuracy=Math.max(0,gpsAccuracy||0);
+ const jitterRadius=Math.max(2,Math.min(7,accuracy*.13));
+ if(delta>jitterRadius)avatarFacing=facingFromCoordinates(from,next,heading);
+ // Large location corrections should snap; never animate hundreds of meters
+ // across buildings and water or imply the player physically walked there.
+ const snap=delta>110||!Number.isFinite(delta);
+ if(snap||delta<jitterRadius){
+  if(snap||!gpsDrawnPosition){gpsDrawnPosition=next.slice();gpsMarker.setLngLat(next)}
+  avatarIsWalking=false;document.body.classList.remove('walking');
+  return snap?0:350;
+ }
+ const mps=Number.isFinite(speed)&&speed>.3?Math.min(12,speed):2.2;
+ const duration=Math.min(2400,Math.max(550,Math.round(delta/mps*1000)));
+ const began=performance.now();
+ avatarIsWalking=true;document.body.classList.add('walking');
+ function tick(now){
+  if(!gpsMarker||provider!=='osm'||!map){gpsTransitionFrame=null;return}
+  const v=Math.min(1,(now-began)/duration);
+  const t=v*v*(3-2*v);
+  gpsDrawnPosition=[from[0]+(next[0]-from[0])*t,from[1]+(next[1]-from[1])*t];
+  gpsMarker.setLngLat(gpsDrawnPosition);
+  updateGpsAccuracyHalo();
+  if(v<1){gpsTransitionFrame=requestAnimationFrame(tick)}
+  else{gpsTransitionFrame=null;gpsDrawnPosition=next.slice();
+    avatarIsWalking=false;document.body.classList.remove('walking')}
+ }
+ gpsTransitionFrame=requestAnimationFrame(tick);
+ return duration;
+}
+function explorerCamera(isFirst=false,duration=650){
  if(!currentGeolocation||provider!=='osm'||!map||!mapLoaded||!followPlayer)return;
- // Put the geolocated explorer in the lower-center of the actual map view.
  const h=map.getCanvas().clientHeight||window.innerHeight;
- const top=Math.round(h*.28),bottom=Math.round(h*.04);
- const screenY=(h+top-bottom)/2;
- $('#adventureAvatar').style.top=screenY+'px';
- map.easeTo({center:currentGeolocation,pitch:22,bearing:0,
-  zoom:isFirst?Math.max(16,map.getZoom()):map.getZoom(),
-  padding:{top,bottom,left:0,right:0},duration:isFirst?750:380});
+ // Top padding puts the GPS-anchored explorer in the lower-middle of the view.
+ const pad={top:Math.round(h*.24),bottom:Math.round(h*.09),left:0,right:0};
+ map.easeTo({center:currentGeolocation,pitch:24,bearing:0,
+   zoom:isFirst?Math.max(16,map.getZoom()):map.getZoom(),
+   padding:pad,duration:isFirst?850:Math.max(200,Math.min(2450,duration))});
  refreshAdventureAvatar();
 }
-
 function refreshSoon(force=false){clearTimeout(venueTimer);venueTimer=setTimeout(()=>loadVenues(force),650)};
 async function startLive(){
  if(!window.maplibregl){
@@ -442,7 +538,7 @@ async function startLive(){
  try{
    document.body.classList.remove('google-active');$('#map').style.display='block';map=new maplibregl.Map({container:'map',style:'https://tiles.openfreemap.org/styles/liberty',center:centerStart,zoom:13.2,attributionControl:true,preserveDrawingBuffer:false,pitch:0,dragRotate:false,touchPitch:false,minZoom:3,maxZoom:19,cooperativeGestures:false,renderWorldCopies:false,maxBounds:[[-179.95,-84.8],[179.95,84.8]]});
    provider='osm';map.getCanvas().setAttribute('aria-label','Real geographic map. Drag to pan and pinch to zoom.');
-   map.on('load',()=>{mapLoaded=true;hideBanner();$('#map').classList.add('map-live');$('#loadingMap').style.display='none';$('#demoMarkers').style.display='none';updateStatus('LIVE<br>WORLD',true);styleOverworld();if(currentGeolocation)explorerCamera(true);else map.easeTo({pitch:22,duration:450});document.body.classList.add('live-map');refreshSoon();updateZoom();updateGpsOverlay();});
+   map.on('load',()=>{mapLoaded=true;hideBanner();$('#map').classList.add('map-live');$('#loadingMap').style.display='none';$('#demoMarkers').style.display='none';updateStatus('LIVE<br>WORLD',true);styleOverworld();document.body.classList.add('live-map');if(currentGeolocation){moveGeoreferencedAvatar(currentGeolocation,0,null);explorerCamera(true)}else map.easeTo({pitch:24,duration:450});refreshSoon();updateZoom();updateGpsOverlay();});
    map.on('moveend',()=>{lastPosition=position();integrateMapTileVenues();refreshSoon();updateZoom()});
    map.on('idle',integrateMapTileVenues);
    map.on('dragstart',()=>{followPlayer=false;$('#locateBtn').classList.remove('active');refreshAdventureAvatar()});
@@ -600,7 +696,9 @@ function styleOverworld(){
 }
 function offline(reason){
  if(provider==='google')return;
- if(map){try{map.remove()}catch(_){}}map=null;provider='offline';mapLoaded=false;document.body.classList.remove('live-map','following');
+ if(gpsTransitionFrame!==null){cancelAnimationFrame(gpsTransitionFrame);gpsTransitionFrame=null}
+ if(gpsMarker){try{gpsMarker.remove()}catch(_){};gpsMarker=null}gpsDrawnPosition=null;
+ if(map){try{map.remove()}catch(_){}}map=null;provider='offline';mapLoaded=false;document.body.classList.remove('live-map','following','walking');
  $('#map').style.display='none';$('#loadingMap').style.display='none';$('#demoMarkers').style.display='block';updateStatus('OFFLINE<br>DEMO',false);
  makeDemo();drawOffline();updateRegion();mapBanner('⚠ Offline scenic illustration — not your real location.<button id="retryConnection" type="button" class="launchLocation">RETRY LIVE MAP</button>');$('#retryConnection').onclick=()=>{hideBanner();startLive()};toast(reason||'Live map unavailable. Check connection.');
 }
@@ -915,25 +1013,34 @@ async function loadGoogle(key){if(!key){toast('Enter a valid Google Maps API key
  }catch(e){toast('Google Maps could not initialize: '+e.message)}
 }
 $('#searchButton').onclick=()=>setPanel('find');$('#refreshBtn').onclick=()=>{if(provider==='offline')startLive();else loadVenues(true)};$('#zoomInBtn').onclick=()=>{if(provider==='osm'&&map)map.zoomIn({duration:270});else if(provider==='google')gm.setZoom(gm.getZoom()+1);else{offlineZoom=Math.min(19,offlineZoom+1);drawOffline();toast('Scenic illustration only; live map unavailable')}updateZoom()};$('#zoomOutBtn').onclick=()=>{if(provider==='osm'&&map)map.zoomOut({duration:270});else if(provider==='google')gm.setZoom(gm.getZoom()-1);else{offlineZoom=Math.max(3,offlineZoom-1);drawOffline();toast('Scenic illustration only; live map unavailable')}updateZoom()};
+function updateGpsAccuracyHalo(){
+ if(!currentGeolocation||!gpsDrawnPosition||provider!=='osm'||!map)return;
+ // Accuracy radius is always measured from the actual sprite coordinate and
+ // projected via MapLibre, so panning/zooming/pitch never detach it.
+ const point=map.project(gpsDrawnPosition);
+ const mPerLon=111320*Math.max(.2,Math.cos(gpsDrawnPosition[1]*Math.PI/180));
+ const meters=Math.max(0,gpsAccuracy||0);
+ const circumference=map.project([gpsDrawnPosition[0]+meters/mPerLon,gpsDrawnPosition[1]]);
+ const radius=Math.max(8,Math.min(400,Math.abs(circumference.x-point.x)));
+ const circle=$('#accuracyCircle');
+ circle.style.display='block';circle.style.left=point.x+'px';circle.style.top=point.y+'px';
+ circle.style.width=2*radius+'px';circle.style.height=2*radius+'px';
+}
 function updateGpsOverlay(){
  if(!currentGeolocation)return;
  refreshAdventureAvatar();
  if(provider==='osm'&&map){
-  if(!gpsMarker){
-   const e=document.createElement('div');e.id='gpsMarker';e.innerHTML='<img class="sprite" alt="16-bit warrior avatar" src="'+makeCustomAvatarSprite()+'"><div class="gpsTitle">YOUR LOCATION</div><div class="gpsArrow"></div>';
-   gpsMarker=new maplibregl.Marker({element:e,anchor:'bottom'}).setLngLat(currentGeolocation).addTo(map);
-  }else gpsMarker.setLngLat(currentGeolocation);
-  // Draw GPS accuracy in meters, not a fabricated pixel radius.
-  const center=map.project(currentGeolocation);
-  const earth=111320*Math.max(.2,Math.cos(currentGeolocation[1]*Math.PI/180));
-  const dx=(gpsAccuracy||0)/earth;const point=map.project([currentGeolocation[0]+dx,currentGeolocation[1]]);
-  const radius=Math.max(8,Math.min(500,Math.abs(point.x-center.x)));
-  const circle=$('#accuracyCircle');circle.style.display='block';circle.style.left=center.x+'px';circle.style.top=center.y+'px';circle.style.width=(radius*2)+'px';circle.style.height=(radius*2)+'px';
+  updateGpsAccuracyHalo();
   $('#playerSpot').style.display='none';$('#playerPin').style.display='none';
  }else if(provider==='google'&&gm){
-  if(gpsMarker&&gpsMarker.remove){gpsMarker.remove();gpsMarker=null}
-  if(!window._googlePlayer){window._googlePlayer=new google.maps.Marker({position:{lat:currentGeolocation[1],lng:currentGeolocation[0]},map:gm,title:'Your actual location',icon:{url:makeCustomAvatarSprite(),scaledSize:new google.maps.Size(52,70),anchor:new google.maps.Point(26,70)}})}
-  else window._googlePlayer.setPosition({lat:currentGeolocation[1],lng:currentGeolocation[0]});
+  if(gpsMarker){try{gpsMarker.remove()}catch(_){};gpsMarker=null;gpsDrawnPosition=null}
+  const position={lat:currentGeolocation[1],lng:currentGeolocation[0]};
+  if(!window._googlePlayer)window._googlePlayer=new google.maps.Marker({
+   position,map:gm,title:'Your real GPS adventurer',
+   icon:{url:makeCustomAvatarSprite(avatarFrame,avatarFacing),
+     scaledSize:new google.maps.Size(70,94),anchor:new google.maps.Point(35,94)}
+  });
+  else window._googlePlayer.setPosition(position);
   $('#accuracyCircle').style.display='none';
  }else{
   $('#accuracyCircle').style.display='none';
@@ -941,21 +1048,30 @@ function updateGpsOverlay(){
  }
 }
 function receivedGps(p){
+ const lon=Number(p.coords.longitude),lat=Number(p.coords.latitude);
+ if(!Number.isFinite(lon)||!Number.isFinite(lat)||Math.abs(lat)>85||Math.abs(lon)>180)return;
  const firstFix=!currentGeolocation;
- currentGeolocation=[p.coords.longitude,p.coords.latitude];gpsAccuracy=p.coords.accuracy;
- avatarIsWalking=Number.isFinite(p.coords.speed)&&p.coords.speed>.55;
- document.body.classList.toggle('walking',avatarIsWalking);
- if(Number.isFinite(p.coords.heading)&&p.coords.speed>.6){
-  const heading=(p.coords.heading+360)%360;
-  avatarFacing=heading>=315||heading<45?'up':heading<135?'right':heading<225?'down':'left';
- }
+ const previous=currentGeolocation?currentGeolocation.slice():null;
+ currentGeolocation=[lon,lat];gpsAccuracy=p.coords.accuracy;
  locationAccess='granted';$('#locateBtn').classList.remove('busy');$('#locateBtn').classList.add('active');
- $('#locationReadout').textContent='✦ GPS POSITION FOUND  ·  ±'+Math.round(gpsAccuracy)+' m  ·  PRIVATE';
+ $('#locationReadout').textContent='✦ GPS POSITION FOUND · ±'+Math.round(gpsAccuracy)+' m · PRIVATE';
  $('#locationReadout').classList.add('visible');hideBanner();
- if(provider==='osm'||provider==='google'){
-  searchCity='Near your position';if(firstFix||followPlayer){if(provider==='osm'&&map)explorerCamera(firstFix);else moveTo(currentGeolocation[0],currentGeolocation[1],Math.max(15,zoomNow()))}updateRegion();
- }else{mapBanner('✓ GPS found, but live map tiles are unavailable. This illustrated background is NOT geographic. <button id="retryConnection" class="launchLocation">RETRY LIVE MAP</button>');$('#retryConnection').onclick=()=>{hideBanner();startLive()}}
- updateGpsOverlay();toast('GPS location received. Your exact position is only displayed on this device.');
+ searchCity='Near your position';
+ if(provider==='osm'&&mapLoaded){
+  // Movement is animated at geographic coordinates; the map projection handles
+  // screen placement even when the player pans, zooms or rotates.
+  const duration=moveGeoreferencedAvatar(currentGeolocation,p.coords.speed,p.coords.heading);
+  if(firstFix||followPlayer)explorerCamera(firstFix,duration||600);
+  updateGpsOverlay();updateRegion();
+ }else if(provider==='google'&&gm){
+  updateGpsOverlay();
+  if(firstFix||followPlayer){gm.panTo({lng:lon,lat});if(firstFix)gm.setZoom(Math.max(16,gm.getZoom()))}
+  updateRegion();
+ }else{
+  mapBanner('✓ GPS found. Waiting for live geography to load; the illustrated background is NOT your real location.');
+ }
+ lastGpsReceiveAt=Date.now();
+ if(firstFix)toast('Live GPS explorer connected. Walk to move your avatar on the real map.');
 }
 function locationFailure(e){
  locationAccess='error';$('#locateBtn').classList.remove('busy');
@@ -966,7 +1082,7 @@ function locateMe(){
  followPlayer=true;
  if(!window.isSecureContext){mapBanner('⚠ Real GPS requires a secure HTTPS website. Android downloaded <code>content://</code> files may block location. Open the GitHub Pages HTTPS version instead.');toast('Use the HTTPS-hosted prototype for GPS on Android.');return}
  if(!navigator.geolocation){mapBanner('⚠ This browser does not support GPS. Try Chrome on Android over HTTPS.');return}
- if(currentGeolocation){if(provider==='osm'&&map)explorerCamera(true);else moveTo(...currentGeolocation,Math.max(15,zoomNow()));updateGpsOverlay();toast('Following your live GPS position.');return}
+ if(currentGeolocation){if(provider==='osm'&&map)explorerCamera(true);else if(provider==='google'&&gm){gm.panTo({lng:currentGeolocation[0],lat:currentGeolocation[1]});gm.setZoom(Math.max(15,gm.getZoom()))}updateGpsOverlay();toast('Following your live GPS adventurer.');return}
  $('#locateBtn').classList.add('busy');mapBanner('⌖ Requesting your phone’s precise location. Tap Allow when Chrome asks.');
  if(gpsWatchId!==null)navigator.geolocation.clearWatch(gpsWatchId);
  gpsWatchId=navigator.geolocation.watchPosition(receivedGps,locationFailure,{enableHighAccuracy:true,timeout:22000,maximumAge:15000});
@@ -980,7 +1096,6 @@ avatarAnimationTimer=setInterval(()=>{
  avatarFrame=(avatarFrame+1)%(avatarIsWalking?4:16);
  const frame=avatarIsWalking?avatarFrame:(avatarFrame%16===0?2:0);
  const src=makeCustomAvatarSprite(frame,avatarFacing);
- const front=$('#adventureAvatar .sprite');if(front)front.src=src;
  if(gpsMarker?.getElement){
   const el=gpsMarker.getElement(),img=el.querySelector('.sprite');if(img)img.src=src;
  }
