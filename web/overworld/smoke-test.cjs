@@ -37,7 +37,11 @@ const fs=require('fs');
   status:200,contentType:'application/json',body:JSON.stringify(mockStyle)
  }));
  await page.route('**/api/interpreter**',route=>route.fulfill({
-  status:200,contentType:'application/json',body:'{"elements":[]}'
+  status:200,contentType:'application/json',body:JSON.stringify({elements:[
+    {type:'node',id:55101,lat:36.77132,lon:-76.28440,tags:{amenity:'pub',name:'Test Fixture Tavern'}},
+    {type:'node',id:55102,lat:36.77160,lon:-76.28370,tags:{craft:'brewery',name:'Test Fixture Brewery'}},
+    {type:'node',id:55103,lat:36.77090,lon:-76.28420,tags:{amenity:'restaurant',name:'Restaurant Without Alcohol Tag'}}
+   ]})
  }));
  await page.goto('http://127.0.0.1:8123/',{waitUntil:'domcontentloaded',timeout:30000});
  try{
@@ -88,7 +92,62 @@ const fs=require('fs');
    return [img.naturalWidth,img.naturalHeight];
  });
  inspect.spriteDimensions=spriteDimensions;
+ // Verify actual map pixel placement, not merely DOM presence and CSS opacity.
+ // A former position:relative override displaced MapLibre markers off-screen.
+ async function inspectMarkerAnchors(){
+  return page.evaluate(()=>{
+   const host=document.querySelector('#map').getBoundingClientRect();
+   const examine=el=>{
+    if(!el)return {exists:false};
+    const r=el.getBoundingClientRect(),st=getComputedStyle(el);
+    const matches=[...(el.style.transform||'').matchAll(/translate\((-?[\d.]+)px,\s*(-?[\d.]+)px\)/g)];
+    const match=matches.at(-1);
+    return {exists:true,position:st.position,size:[r.width,r.height],
+     onScreen:r.bottom>host.top&&r.top<host.bottom&&r.right>host.left&&r.left<host.right,
+     anchorError:match?[Math.round(r.left+r.width/2-host.left-Number(match[1])),
+       Math.round(r.bottom-host.top-Number(match[2]))]:null};
+   };
+   const avatar=document.querySelector('#gpsMarker'),sprite=avatar?.querySelector('img.sprite');
+   const portals=[...document.querySelectorAll('.pixel-marker.maplibregl-marker')];
+   return {avatar:examine(avatar),sprite:{loaded:!!sprite?.complete,
+     width:sprite?.naturalWidth,height:sprite?.naturalHeight,
+     display:sprite?getComputedStyle(sprite).display:'missing'},
+    portals:portals.map(examine),portalTypes:portals.map(e=>e.className),
+    venueStatus:document.querySelector('#venueCount')?.textContent};
+  });
+ }
+ const anchored=m=>m.exists&&m.position==='absolute'&&m.onScreen&&
+   m.size[0]>=30&&m.size[1]>=50&&Array.isArray(m.anchorError)&&
+   m.anchorError.every(v=>Math.abs(v)<=4);
+ await page.waitForFunction(()=>document.querySelectorAll('.pixel-marker.maplibregl-marker').length===2,
+  null,{timeout:12000});
+ const pixelAudit=await inspectMarkerAnchors();
+ console.log('ON-SCREEN GEOGRAPHIC MARKER AUDIT:',JSON.stringify(pixelAudit));
+ if(!anchored(pixelAudit.avatar)||!pixelAudit.sprite.loaded||
+    pixelAudit.sprite.width<32||pixelAudit.sprite.height<32||
+    pixelAudit.sprite.display==='none'||!pixelAudit.portals.every(anchored))
+  throw Error('Player or portal sprite does not render at true GPS coordinates: '+JSON.stringify(pixelAudit));
+ await page.waitForTimeout(3500); // Allow location toast to clear.
  await page.screenshot({path:'/tmp/libation-world-screenshot.png',fullPage:false});
+ // Simulate actual location movement and then a horizontal camera swipe.
+ await context.setGeolocation({longitude:-76.2836,latitude:36.7712,accuracy:6});
+ await page.waitForTimeout(2900); // GPS interpolation runs at most 2400ms.
+ const moved=await inspectMarkerAnchors();
+ if(!anchored(moved.avatar)||!moved.portals.every(anchored))
+   throw Error('Geographic markers detached after GPS movement: '+JSON.stringify(moved));
+ const canvas=page.locator('#map canvas.maplibregl-canvas');
+ const bounds=await canvas.boundingBox();
+ await page.mouse.move(bounds.x+bounds.width*.5,bounds.y+bounds.height*.48);
+ await page.mouse.down();
+ await page.mouse.move(bounds.x+bounds.width*.75,bounds.y+bounds.height*.48,{steps:8});
+ await page.mouse.up();
+ await page.waitForTimeout(350);
+ const turned=await inspectMarkerAnchors();
+ if(!anchored(turned.avatar)||!turned.portals.every(anchored))
+   throw Error('Geographic markers detached after camera rotation: '+JSON.stringify(turned));
+ await page.screenshot({path:'/tmp/libation-world-movement.png',fullPage:false});
+ console.log('GPS MOVEMENT + CAMERA SWIPE:',JSON.stringify({moved,turned}));
+
  console.log('V15 STABLE GPS WORLD AUDIT:',JSON.stringify(inspect),
   'BROWSER ERRORS:',JSON.stringify(errors.slice(0,8)));
  if(inspect.mapOpacity<.99||inspect.baseOpacity<.99||
