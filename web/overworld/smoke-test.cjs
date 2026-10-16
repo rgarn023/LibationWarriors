@@ -477,7 +477,18 @@ const fs=require('fs');
  const positionAfter=await page.evaluate(()=>window.LibationDungeon.snapshot().player);
  if(positionAfter.x<=positionBefore.x)
   throw Error('Dungeon touch D-pad did not move the playable hero');
+ // A real directional sword strike must damage and kill a combat enemy,
+ // not just animate a button or increment simulated score.
+ const combatSet=await page.evaluate(()=>window.LibationDungeon.debugCombatEncounter());
+ if(!combatSet)throw Error('Developer combat fixture unavailable');
+ const beforeAttack=await page.evaluate(()=>window.LibationDungeon.snapshot());
  await page.locator('#lwDAttack').tap();
+ const afterAttack=await page.evaluate(()=>window.LibationDungeon.snapshot());
+ if(beforeAttack.enemies!==1||afterAttack.enemies!==0||
+   afterAttack.gold<4||!afterAttack.cleared)
+  throw Error('Sword attack did not defeat adjacent enemy and unlock room: '+
+   JSON.stringify({beforeAttack,afterAttack}));
+ console.log('REAL MOBILE DUNGEON SWORD COMBAT:',JSON.stringify({beforeAttack,afterAttack}));
  await page.waitForTimeout(150);
  if(!await page.locator('#lwDCanvas').isVisible())
   throw Error('Sword attack removed the actual playable dungeon canvas');
