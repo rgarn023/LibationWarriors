@@ -57,6 +57,24 @@ function render(now){
    }
   }
  }
+ // Wall torchlight and stone ornaments: dungeon art only, no implication
+ // that the actual real-world venue has these structures.
+ for(const cx of [3,8,13]){
+  const bx=cx*T;
+  rect('#2e484b',bx+7,7,18,6);
+  rect('#8b6554',bx+11,3,10,12);
+  rect('#e9a554',bx+14,1,6,9);
+  rect('#f7dc7f',bx+16,1,3,5);
+  rect('#65594b',bx+10,(H-1)*T+4,14,8);
+  rect('#9b9070',bx+12,(H-1)*T+2,10,3);
+ }
+ // Shallow engraved floor diamonds add scale without obstruction.
+ for(const [gx,gy] of [[5,3],[9,9],[13,3],[5,9]]){
+  if(s.walls.has(gx+','+gy))continue;
+  const px=gx*T+12,py=gy*T+12;
+  rect('#817966',px,py,8,2);rect('#dbbe8f',px+2,py+2,5,2);
+  rect('#817966',px+2,py+4,5,2);
+ }
  const dx=15*T,dy=6*T;
  rect(s.roomClear?'#b8eab8':'#42565a',dx+5,dy+5,23,27);
  rect(s.roomClear?'#8ce8bc':'#2c3a43',dx+9,dy+8,16,21);
