@@ -446,6 +446,76 @@ const fs=require('fs');
  await page.screenshot({path:'/tmp/libation-world-movement.png',fullPage:false});
  console.log('GPS MOVEMENT + CAMERA SWIPE:',JSON.stringify({moved,turned}));
 
+ // Developer mode and the actual dungeon are a separate, user-facing game.
+ // Toggle development features explicitly; they never alter the OSM venue list.
+ await page.locator('[data-panel="settings"]').click();
+ await page.locator('#devModeToggle').click();
+ await page.locator('#closeDrawer').click();
+ const initially=await page.evaluate(()=>window.LibationDeveloper.enabled());
+ if(!initially)throw Error('Settings failed to enable developer portals');
+ await page.locator('#devAddRupture').click();
+ await page.locator('#devAddWormhole').click();
+ await page.waitForTimeout(250);
+ const placed=await page.evaluate(()=>window.LibationDeveloper.portals());
+ const nowCount=await page.locator('.pixel-marker.maplibregl-marker').count();
+ if(placed.length!==2||nowCount!==4||placed[0].type!=='rupture'||placed[1].type!=='challenge')
+  throw Error('Developer portals did not appear as separate GPS markers: '+JSON.stringify({placed,nowCount}));
+ console.log('DEV GPS TEST PORTALS:',JSON.stringify(placed));
+ await page.screenshot({path:'/tmp/libation-dev-portals.png',fullPage:false});
+ // Select a real clickable portal marker, not an internal test-only function.
+ await page.locator('.pixel-marker.demo.maplibregl-marker').last().click({force:true});
+ await page.locator('#enterVenue').click();
+ await page.locator('#readyButton').click();
+ await page.waitForFunction(()=>window.LibationDungeon?.snapshot().active===true);
+ const first=await page.evaluate(()=>window.LibationDungeon.snapshot());
+ if(first.kind!=='challenge'||first.rooms!==14||first.enemies<1)
+  throw Error('Wormhole did not launch harder playable dungeon: '+JSON.stringify(first));
+ await page.screenshot({path:'/tmp/libation-dungeon-room.png',fullPage:false});
+ // Touch D-pad must actually move the hero, not just animate a fake video.
+ const positionBefore=await page.evaluate(()=>window.LibationDungeon.snapshot().player);
+ await page.locator('[data-dmove="right"]').tap();
+ const positionAfter=await page.evaluate(()=>window.LibationDungeon.snapshot().player);
+ if(positionAfter.x<=positionBefore.x)
+  throw Error('Dungeon touch D-pad did not move the playable hero');
+ await page.locator('#lwDAttack').tap();
+ await page.waitForTimeout(150);
+ if(!await page.locator('#lwDCanvas').isVisible())
+  throw Error('Sword attack removed the actual playable dungeon canvas');
+ // Complete all rooms through the explicitly labelled developer test hook.
+ // The player must still walk into the exit to progress and beat the boss.
+ const complete=await page.evaluate(()=>{
+  const d=window.LibationDungeon;
+  let failures=0;
+  for(let room=1;room<=14;room++){
+   if(!d.debugClearRoom())return {error:'developer room-clear hook missing',room};
+   for(let i=0;i<18;i++){
+    const state=d.snapshot();
+    if(state.room>room||state.completed)break;
+    d.move('right');
+   }
+   const state=d.snapshot();
+   if(!state.completed&&state.room!==room+1)failures++;
+  }
+  return {...d.snapshot(),failures};
+ });
+ if(!complete.completed||complete.failures||complete.room!==14)
+  throw Error('Dungeon did not progress through playable exit and boss: '+JSON.stringify(complete));
+ await page.screenshot({path:'/tmp/libation-dungeon-victory.png',fullPage:false});
+ await page.locator('#lwDReturn').click();
+ if((await page.evaluate(()=>window.LibationDungeon.snapshot())).active)
+  throw Error('Dungeon return did not restore the GPS overworld');
+ // Ruptures get 10 rooms, fewer enemies and more health than wormholes.
+ await page.locator('.pixel-marker.demo.maplibregl-marker').first().click({force:true});
+ await page.locator('#enterVenue').click();
+ await page.locator('#readyButton').click();
+ const rupture=await page.evaluate(()=>window.LibationDungeon.snapshot());
+ if(rupture.kind!=='rupture'||rupture.rooms!==10||rupture.maxHP!==18)
+  throw Error('Regular rupture failed to start: '+JSON.stringify(rupture));
+ await page.locator('#lwDExit').click();
+ await page.locator('#devPortalClear').click();
+ if((await page.locator('.pixel-marker.demo.maplibregl-marker').count())!==0)
+  throw Error('Developer portals were not cleared');
+ console.log('PLAYABLE DUNGEON TEST:',JSON.stringify({first,positionBefore,positionAfter,complete,rupture}));
  console.log('V15 STABLE GPS WORLD AUDIT:',JSON.stringify(inspect),
   'BROWSER ERRORS:',JSON.stringify(errors.slice(0,8)));
  if(inspect.mapOpacity<.99||inspect.baseOpacity<.99||
