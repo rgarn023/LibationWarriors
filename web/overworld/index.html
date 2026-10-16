@@ -1225,7 +1225,7 @@ async function startLive(){
      $('#map').classList.add('map-live');$('#loadingMap').style.display='none';
      $('#demoMarkers').style.display='none';
      updateStatus('MAP<br>ONLINE',true);
-     styleOverworld();addGeographicBuildingDepth();document.body.classList.remove('offline-scenic','game-geography-ready');document.body.classList.add('live-map','go-perspective','stable-map');
+     styleOverworld();addGeographicTerrainTextures();addGeographicBuildingDepth();document.body.classList.remove('offline-scenic','game-geography-ready');document.body.classList.add('live-map','go-perspective','stable-map');
      // Avoid creating hundreds of DOM/world objects on every viewport change.
      registerAdventureCameraControls();
      syncAdventureCameraState();
@@ -1523,6 +1523,56 @@ function styleOverworld(){
     set('line-opacity',1);
    }
   }
+ }
+}
+// Tile textures are registered with MapLibre (not a screen overlay): its
+// geographic projection keeps them attached to actual OSM terrain as the
+// player walks and turns. No artificial trees, roads or shorelines are added.
+function addGeographicTerrainTextures(){
+ if(!map||!map.isStyleLoaded())return;
+ const kinds={
+  'lw-ground':{base:'#a4cb8a',dark:'#7eae76',light:'#bfda99',count:12},
+  'lw-park':{base:'#7fbb79',dark:'#579d68',light:'#a2d78b',count:18},
+  'lw-water':{base:'#5daecd',dark:'#3894bb',light:'#98d6db',count:14}
+ };
+ try{
+  for(const [name,p] of Object.entries(kinds)){
+   if(map.hasImage(name))continue;
+   const c=document.createElement('canvas');c.width=64;c.height=64;
+   const ctx=c.getContext('2d',{willReadFrequently:true});
+   ctx.imageSmoothingEnabled=false;
+   ctx.fillStyle=p.base;ctx.fillRect(0,0,64,64);
+   for(let i=0;i<p.count;i++){
+    const seed=i*9173+(name==='lw-water'?139:name==='lw-park'?397:79);
+    const x=(Math.imul(seed+5,3173)>>>4)%60;
+    const y=(Math.imul(seed+17,1451)>>>5)%62;
+    ctx.fillStyle=i%3===0?p.light:p.dark;
+    if(name==='lw-water'){
+     ctx.fillRect(x,y,4+(i%4)*2,1);
+     if(i%3===0)ctx.fillRect(x+3,y+2,3,1);
+    }else{
+     ctx.fillRect(x,y,2,2);
+     ctx.fillRect(x-2,y+2,2,1);
+     ctx.fillRect(x+2,y+2,2,1);
+     if(i%5===0){ctx.fillStyle=p.light;ctx.fillRect(x+1,y-2,2,1)}
+    }
+   }
+   map.addImage(name,ctx.getImageData(0,0,64,64),{pixelRatio:1});
+  }
+  for(const layer of map.getStyle().layers||[]){
+   const id=String(layer.id).toLowerCase();
+   if(layer.type==='background'){
+    map.setPaintProperty(layer.id,'background-pattern','lw-ground');
+   }else if(layer.type==='fill'){
+    const kind=/water|ocean|lake|river|reservoir/.test(id)?'lw-water':
+     /park|forest|wood|garden|meadow|grass|nature|pitch/.test(id)?'lw-park':null;
+    if(kind)map.setPaintProperty(layer.id,'fill-pattern',kind);
+   }
+  }
+  $('#map').dataset.terrainTiles='geographic';
+ }catch(err){
+  console.warn('Native geographic terrain textures not available',err);
+  $('#map').dataset.terrainTiles='unavailable';
  }
 }
 // Real OSM building footprints become shallow game-style 3D forms when the
