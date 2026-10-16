@@ -159,12 +159,21 @@ const fs=require('fs');
  // Simulate actual location movement and then a horizontal camera swipe.
  await context.setGeolocation({longitude:-76.2838,latitude:36.77105,accuracy:6});
  await page.waitForFunction(()=>document.body.classList.contains('walking'),null,{timeout:4500});
- const walkingFirst=await page.locator('#gpsMarker img.sprite').getAttribute('src');
- await page.waitForTimeout(360);
- const walkingSecond=await page.locator('#gpsMarker img.sprite').getAttribute('src');
- if(walkingFirst===walkingSecond)
-  throw Error('Walking still uses a single static avatar frame');
- console.log('WALK FRAME CHANGED:',walkingFirst!==walkingSecond);
+ const walkingSamples=[];
+ for(let n=0;n<7;n++){
+  walkingSamples.push(await page.evaluate(()=>{
+   const img=document.querySelector('#gpsMarker img.sprite');
+   const src=img?.getAttribute('src')||'';
+   // Do not log huge PNG contents or anything resembling location coordinates.
+   return {len:src.length,tail:src.slice(-35),walking:document.body.classList.contains('walking'),
+    hidden:document.hidden,phase:img?.dataset.walkFrame||''};
+  }));
+  await page.waitForTimeout(155);
+ }
+ const walkUnique=new Set(walkingSamples.map(v=>v.tail));
+ console.log('WALK ANIMATION SAMPLES:',JSON.stringify(walkingSamples));
+ if(walkUnique.size<2)
+  throw Error('Walking still uses a single static avatar frame: '+JSON.stringify(walkingSamples));
  await page.waitForTimeout(2500); // GPS interpolation ends within 2400ms.
  const moved=await inspectMarkerAnchors();
  if(!anchored(moved.avatar)||!moved.portals.every(positioned))
