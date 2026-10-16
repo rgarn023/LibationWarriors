@@ -180,7 +180,8 @@ body.walking #gpsMarker .sprite{animation:travelSteps .48s steps(2,end) infinite
 
 
 /* GPS-based local-only RPG overworld. */
-#zoomInBtn,#zoomOutBtn,#zoomLevel,#searchButton{display:none!important}
+#zoomLevel,#searchButton{display:none!important}
+#zoomInBtn,#zoomOutBtn{display:grid!important;width:42px;height:42px;font-size:21px;border-radius:50%;background:#173d41db;border:2px solid #b3d4ad;color:#f9f0bc}
 #mapStats{background:#213f35e6;border:2px solid #ccb77c}
 #mapStats .eyebrow{color:#d7e6af}
 #mapStats .city{color:#ffedca}
@@ -373,12 +374,12 @@ body.live-map #map .maplibregl-ctrl-attrib{display:block!important}
 'use strict';
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const centerStart=[-76.273,36.768]; // Unused until GPS arrives.
-const LOCAL_ZOOM=18.25,LOCAL_RADIUS_METERS=1600,ADVENTURE_PITCH=63;
+const LOCAL_ZOOM=18.25,MIN_LOCAL_ZOOM=17.55,MAX_LOCAL_ZOOM=18.65,LOCAL_RADIUS_METERS=1600,ADVENTURE_PITCH=63;
 const presets={"Chesapeake, VA":[-76.273,36.768],"Virginia Beach, VA":[-75.976,36.852],"New York, NY":[-73.985,40.748],"Boston, MA":[-71.06,42.356],"Tokyo, Japan":[139.701,35.658]};
 let provider='offline', map=null,gm=null,gmMarkers=[],markers=[],venues=[],demoVenues=[],selectedVenue=null,lastPosition=centerStart.slice(),currentFilter='all',mapLoading=false,mapLoaded=false,fetchSerial=0,fetchController=null,venueTimer=null,searchCity='Your nearby overworld',activePanel='map',avatarKey='712340000032',claimed=new Set(),shadowPath=null,openedAt=Date.now(),countdownHandle=null,loadingHint='',currentGeolocation=null,gpsWatchId=null,gpsAccuracy=null,gpsMarker=null,gpsAccuracyCircle=null,offlineZoom=13,liveMapFailure=false,locationAccess='not-requested',venueCache=new Map(),lastVenueKey='',lastVenueLoadAt=0;
 let toastTimer=null,venueCountMode='idle',followPlayer=true;
 let gpsDrawnPosition=null,gpsTransitionFrame=null,lastGpsReceiveAt=0,lastGpsCameraAt=0;
-let cameraBearing=0,cameraTilt=ADVENTURE_PITCH,acceptedGpsAccuracy=Infinity,lastAcceptedSpeed=0;
+let cameraBearing=0,cameraTilt=ADVENTURE_PITCH,cameraZoom=LOCAL_ZOOM,acceptedGpsAccuracy=Infinity,lastAcceptedSpeed=0;
 let cameraGestureActive=false;
 let lastSceneryMode='light';
 const AVATAR_KEY='libation-overworld-avatar-v1';
@@ -1136,57 +1137,98 @@ function syncAdventureCameraState(){
 }
 function explorerCamera(isFirst=false,duration=650){
  if(!currentGeolocation||provider!=='osm'||!map||!mapLoaded||!followPlayer||cameraGestureActive)return;
- map.easeTo({center:gpsDrawnPosition||currentGeolocation,pitch:cameraTilt,bearing:cameraBearing,
-  zoom:LOCAL_ZOOM,padding:adventurePadding(),easing:t=>t*t*(3-2*t),
+ map.easeTo({center:currentGeolocation,pitch:cameraTilt,bearing:cameraBearing,
+  zoom:cameraZoom,padding:adventurePadding(),easing:t=>t*t*(3-2*t),
   duration:isFirst?700:Math.max(200,Math.min(1100,duration))});
  refreshAdventureAvatar();
 }
+function clampLocalZoom(z){return Math.max(MIN_LOCAL_ZOOM,Math.min(MAX_LOCAL_ZOOM,z))}
+function updateLocalZoomButtons(){
+ const plus=$('#zoomInBtn'),minus=$('#zoomOutBtn');
+ if(plus)plus.disabled=cameraZoom>=MAX_LOCAL_ZOOM-.01;
+ if(minus)minus.disabled=cameraZoom<=MIN_LOCAL_ZOOM+.01;
+}
+function changeLocalZoom(delta){
+ if(!map||!currentGeolocation||!mapLoaded)return;
+ cameraZoom=clampLocalZoom(Math.round((cameraZoom+delta)*100)/100);
+ map.stop();map.easeTo({center:gpsDrawnPosition||currentGeolocation,
+  zoom:cameraZoom,pitch:cameraTilt,bearing:cameraBearing,
+  padding:adventurePadding(),duration:260});
+ updateLocalZoomButtons();
+}
 function registerAdventureCameraControls(){
  if(!map)return;
- // Root-level pointer capture prevents touchswipes being lost to the nested
- // MapLibre canvas. Portal taps remain available.
+ // Capture input on the game surface, not MapLibre's nested WebGL canvas.
+ // Lock a one-finger gesture to turn OR pitch after its initial movement.
  const surface=$('#map');
- let gesture=null,pendingFrame=0;
+ const pointers=new Map();
+ let gesture=null,frame=0;
  surface.style.touchAction='none';
- const render=()=>{
-  pendingFrame=0;
-  if(!gesture||!mapLoaded||!currentGeolocation)return;
+ function draw(){
+  frame=0;
+  if(!gesture||!currentGeolocation||!mapLoaded)return;
   map.jumpTo({center:gpsDrawnPosition||currentGeolocation,bearing:cameraBearing,
-   pitch:cameraTilt,zoom:LOCAL_ZOOM,padding:adventurePadding()});
-  syncAdventureCameraState();
- };
+   pitch:cameraTilt,zoom:cameraZoom,padding:adventurePadding()});
+  updateLocalZoomButtons();
+ }
+ function requestDraw(){if(!frame)frame=requestAnimationFrame(draw)}
+ function startPinch(){
+  if(pointers.size<2)return;
+  const [a,b]=[...pointers.values()];
+  gesture={kind:'pinch',distance:Math.max(12,Math.hypot(a.x-b.x,a.y-b.y)),
+    zoom:cameraZoom};
+ }
  surface.addEventListener('pointerdown',e=>{
-  if(!currentGeolocation||!mapLoaded||gesture||
-     (e.pointerType==='mouse'&&e.button!==0)||
-     e.target.closest('.pixel-marker')||e.target.closest('button'))return;
+  if(!currentGeolocation||!mapLoaded||
+   (e.pointerType==='mouse'&&e.button!==0)||
+   e.target.closest('.pixel-marker')||e.target.closest('button'))return;
+  if(pointers.size>=2)return;
+  pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
   map.stop();cameraGestureActive=true;
-  gesture={id:e.pointerId,x:e.clientX,y:e.clientY,
-   bearing:map.getBearing(),pitch:map.getPitch()};
+  if(pointers.size===1)gesture={kind:'orbit',id:e.pointerId,x:e.clientX,y:e.clientY,
+   bearing:cameraBearing,pitch:cameraTilt,axis:null};
+  else startPinch();
   try{surface.setPointerCapture(e.pointerId)}catch(_){}
   e.preventDefault();e.stopPropagation();
  },true);
  surface.addEventListener('pointermove',e=>{
-  if(!gesture||e.pointerId!==gesture.id)return;
-  const dx=e.clientX-gesture.x,dy=e.clientY-gesture.y;
-  cameraBearing=(gesture.bearing+dx*.63+3600)%360;
-  cameraTilt=Math.max(48,Math.min(70,gesture.pitch-dy*.13));
-  if(!pendingFrame)pendingFrame=requestAnimationFrame(render);
-  e.preventDefault();e.stopPropagation();
+  if(!pointers.has(e.pointerId)||!gesture)return;
+  pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(gesture.kind==='pinch'&&pointers.size>=2){
+   const [a,b]=[...pointers.values()];
+   const distance=Math.max(12,Math.hypot(a.x-b.x,a.y-b.y));
+   cameraZoom=clampLocalZoom(gesture.zoom+Math.log2(distance/gesture.distance));
+  }else if(gesture.kind==='orbit'&&gesture.id===e.pointerId){
+   const dx=e.clientX-gesture.x,dy=e.clientY-gesture.y;
+   if(!gesture.axis&&Math.hypot(dx,dy)>9)
+    gesture.axis=Math.abs(dx)>=Math.abs(dy)?'turn':'tilt';
+   if(gesture.axis==='turn')cameraBearing=(gesture.bearing+dx*.42+3600)%360;
+   if(gesture.axis==='tilt')cameraTilt=Math.max(48,Math.min(70,gesture.pitch-dy*.087));
+  }
+  requestDraw();e.preventDefault();e.stopPropagation();
  },true);
- const stop=e=>{
-  if(!gesture||e.pointerId!==gesture.id)return;
-  if(pendingFrame){cancelAnimationFrame(pendingFrame);pendingFrame=0}
-  render();gesture=null;cameraGestureActive=false;
+ function finish(e){
+  if(!pointers.has(e.pointerId))return;
+  if(frame){cancelAnimationFrame(frame);frame=0;draw()}
+  pointers.delete(e.pointerId);
   try{if(surface.hasPointerCapture(e.pointerId))surface.releasePointerCapture(e.pointerId)}catch(_){}
+  if(pointers.size===1){
+   const [id,p]=pointers.entries().next().value;
+   gesture={kind:'orbit',id,x:p.x,y:p.y,bearing:cameraBearing,pitch:cameraTilt,axis:null};
+  }else if(pointers.size===0){gesture=null;cameraGestureActive=false}
   e.preventDefault();e.stopPropagation();
- };
- surface.addEventListener('pointerup',stop,true);
- surface.addEventListener('pointercancel',stop,true);
+ }
+ surface.addEventListener('pointerup',finish,true);
+ surface.addEventListener('pointercancel',finish,true);
  surface.addEventListener('lostpointercapture',e=>{
-  if(!gesture||gesture.id!==e.pointerId)return;
-  if(pendingFrame){cancelAnimationFrame(pendingFrame);pendingFrame=0}
-  gesture=null;cameraGestureActive=false;
+  // A system-cancelled touch must not leave the camera stuck in gesture mode.
+  if(pointers.has(e.pointerId)){
+   pointers.delete(e.pointerId);
+   if(frame){cancelAnimationFrame(frame);frame=0}
+   gesture=null;cameraGestureActive=false;
+  }
  });
+ updateLocalZoomButtons();
 }
 
 function refreshSoon(force=false){clearTimeout(venueTimer);venueTimer=setTimeout(()=>loadVenues(force),650)};
@@ -1213,7 +1255,7 @@ async function startLive(){
 
  try{
    document.body.classList.remove('google-active');$('#map').style.display='block';map=new maplibregl.Map({container:'map',style:'https://tiles.openfreemap.org/styles/liberty',
-     center:currentGeolocation,zoom:LOCAL_ZOOM,minZoom:LOCAL_ZOOM,maxZoom:LOCAL_ZOOM,
+     center:currentGeolocation,zoom:LOCAL_ZOOM,minZoom:MIN_LOCAL_ZOOM,maxZoom:MAX_LOCAL_ZOOM,
      attributionControl:true,preserveDrawingBuffer:false,pitch:ADVENTURE_PITCH,maxPitch:70,dragPan:false,dragRotate:false,
      touchPitch:false,minPitch:48,scrollZoom:false,doubleClickZoom:false,boxZoom:false,
      touchZoomRotate:false,cooperativeGestures:false,renderWorldCopies:false});
@@ -1955,7 +1997,7 @@ async function loadGoogle(key){if(!key){toast('Enter a valid Google Maps API key
  });updateStatus('GOOGLE<br>MAPS',true);refreshSoon();updateZoom();updateGpsOverlay();closeDrawer();
  }catch(e){toast('Google Maps could not initialize: '+e.message)}
 }
-$('#searchButton').onclick=()=>toast('Explore your local overworld by walking. Distant city browsing is disabled.');$('#refreshBtn').onclick=()=>{if(provider==='offline')startLive();else loadVenues(true)};$('#zoomInBtn').onclick=()=>toast('The RPG overworld uses a fixed scale.');$('#zoomOutBtn').onclick=()=>toast('The RPG overworld uses a fixed scale.');
+$('#searchButton').onclick=()=>toast('Explore your local overworld by walking. Distant city browsing is disabled.');$('#refreshBtn').onclick=()=>{if(provider==='offline')startLive();else loadVenues(true)};$('#zoomInBtn').onclick=()=>changeLocalZoom(.25);$('#zoomOutBtn').onclick=()=>changeLocalZoom(-.25);
 function updateGpsAccuracyHalo(){
  if(!currentGeolocation||!gpsDrawnPosition||provider!=='osm'||!map)return;
  // Accuracy radius is always measured from the actual sprite coordinate and
@@ -2008,10 +2050,10 @@ function receivedGps(p){
   const displacement=prior?geoMeters(prior,currentGeolocation):Infinity;
   const moving=Number.isFinite(p.coords.speed)&&p.coords.speed>.65;
   const precision=Math.max(Number(p.coords.accuracy)||0,acceptedGpsAccuracy===Infinity?0:acceptedGpsAccuracy);
-  const threshold=moving?Math.max(2.2,Math.min(6,precision*.25)):Math.max(9,Math.min(22,precision*1.25));
+  const threshold=precision<=12?(moving?2.0:3.2):precision<=25?(moving?3.5:5.5):Math.max(7,Math.min(22,precision*.65));
   if(!firstFix&&displacement<threshold){
    currentGeolocation=previous;
-   avatarIsWalking=false;document.body.classList.remove('walking');
+   if(gpsTransitionFrame===null){avatarIsWalking=false;document.body.classList.remove('walking')}
    updateGpsOverlay();updateRegion();return;
   }
   acceptedGpsAccuracy=Number(p.coords.accuracy)||8;
