@@ -1911,15 +1911,23 @@ function receivedGps(p){
  if(firstFix)toast('Live GPS explorer connected. Walk to move your avatar on the real map.');
 }
 function locationFailure(e){
- locationAccess='error';$('#locateBtn').classList.remove('busy');
- const explanation=(e?.code===1?'Location permission was denied. Allow location for this site in Chrome settings.':e?.code===3?'Location request timed out. Enable precise location and try again.':'Unable to determine your position. Check GPS and internet.');
+ const denied=e?.code===1;
+ locationAccess=denied?'denied':'paused';$('#locateBtn').classList.remove('busy');
+ const explanation=(denied?'Location permission was denied. Allow location for this site in Chrome settings.':e?.code===3?'Location request timed out. Enable precise location and try again.':'Unable to determine your position. Check GPS and internet.');
+ // A temporary watchPosition error must not replace a previously verified
+ // coordinate with a false "no GPS" screen or obscure a functioning map.
+ if(currentGeolocation&&!denied){
+  $('#locationReadout').textContent='⌖ GPS signal paused · showing last confirmed position';
+  $('#locateBtn').title='GPS temporarily paused. Tap to retry location tracking.';
+  return;
+ }
  mapBanner('⚠ '+escapeHTML(explanation));toast(explanation);
 }
 function locateMe(){
  followPlayer=true;
  if(!window.isSecureContext){mapBanner('⚠ Real GPS requires a secure HTTPS website. Android downloaded <code>content://</code> files may block location. Open the GitHub Pages HTTPS version instead.');toast('Use the HTTPS-hosted prototype for GPS on Android.');return}
  if(!navigator.geolocation){mapBanner('⚠ This browser does not support GPS. Try Chrome on Android over HTTPS.');return}
- if(currentGeolocation){if(provider==='osm'&&map)explorerCamera(true);else if(provider==='google'&&gm){gm.panTo({lng:currentGeolocation[0],lat:currentGeolocation[1]});gm.setZoom(Math.max(15,gm.getZoom()))}updateGpsOverlay();toast('Following your live GPS adventurer.');return}
+ if(currentGeolocation&&locationAccess==='granted'){if(provider==='osm'&&map)explorerCamera(true);else if(provider==='google'&&gm){gm.panTo({lng:currentGeolocation[0],lat:currentGeolocation[1]});gm.setZoom(Math.max(15,gm.getZoom()))}updateGpsOverlay();toast('Following your live GPS adventurer.');return}
  $('#locateBtn').classList.add('busy');mapBanner('⌖ Requesting your phone’s precise location. Tap Allow when Chrome asks.');
  if(gpsWatchId!==null)navigator.geolocation.clearWatch(gpsWatchId);
  gpsWatchId=navigator.geolocation.watchPosition(receivedGps,locationFailure,{enableHighAccuracy:true,timeout:22000,maximumAge:15000});
