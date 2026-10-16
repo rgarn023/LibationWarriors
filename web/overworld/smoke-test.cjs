@@ -136,6 +136,18 @@ const fs=require('fs');
  if(!(initialCamera.zoom>=18.1&&initialCamera.zoom<=18.4&&
    initialCamera.pitch>=59&&initialCamera.pitch<=68))
   throw Error('Camera regressed to distant overhead map: '+JSON.stringify(initialCamera));
+ // Local zoom is bounded; plus/minus buttons must change real map scale.
+ await page.locator('#zoomOutBtn').click();
+ await page.waitForTimeout(450);
+ const zoomedOut=await readCamera();
+ if(!(zoomedOut.zoom<initialCamera.zoom-.18&&zoomedOut.zoom>=17.54))
+  throw Error('Zoom-out control is still locked: '+JSON.stringify({initialCamera,zoomedOut}));
+ await page.locator('#zoomInBtn').click();
+ await page.waitForTimeout(450);
+ const restored=await readCamera();
+ if(Math.abs(restored.zoom-initialCamera.zoom)>.06)
+  throw Error('Zoom-in failed to restore close camera: '+JSON.stringify(restored));
+ console.log('LOCAL ZOOM CONTROLS:',JSON.stringify({initialCamera,zoomedOut,restored}));
  const pixelAudit=await inspectMarkerAnchors();
  console.log('ON-SCREEN GEOGRAPHIC MARKER AUDIT:',JSON.stringify(pixelAudit));
  if(!anchored(pixelAudit.avatar)||!pixelAudit.sprite.loaded||
@@ -146,7 +158,14 @@ const fs=require('fs');
  await page.screenshot({path:'/tmp/libation-world-screenshot.png',fullPage:false});
  // Simulate actual location movement and then a horizontal camera swipe.
  await context.setGeolocation({longitude:-76.2838,latitude:36.77105,accuracy:6});
- await page.waitForTimeout(2900); // GPS interpolation runs at most 2400ms.
+ await page.waitForFunction(()=>document.body.classList.contains('walking'),null,{timeout:4500});
+ const walkingFirst=await page.locator('#gpsMarker img.sprite').getAttribute('src');
+ await page.waitForTimeout(360);
+ const walkingSecond=await page.locator('#gpsMarker img.sprite').getAttribute('src');
+ if(walkingFirst===walkingSecond)
+  throw Error('Walking still uses a single static avatar frame');
+ console.log('WALK FRAME CHANGED:',walkingFirst!==walkingSecond);
+ await page.waitForTimeout(2500); // GPS interpolation ends within 2400ms.
  const moved=await inspectMarkerAnchors();
  if(!anchored(moved.avatar)||!moved.portals.every(positioned))
    throw Error('Geographic markers detached after GPS movement: '+JSON.stringify(moved));
@@ -175,9 +194,27 @@ const fs=require('fs');
  if(bearingDelta<45||Math.abs(afterTurn.pitch-beforeSwipe.pitch)>2)
   throw Error('Android finger drag did not reliably turn camera: '+JSON.stringify({beforeSwipe,afterTurn}));
  await page.screenshot({path:'/tmp/libation-world-touch-turn.png',fullPage:false});
+ // Two-finger pinch zooms only within the neighborhood-scale range.
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',
+  touchPoints:[{id:31,x:135,y:470},{id:32,x:250,y:470}]});
+ for(let i=1;i<=8;i++){
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',
+   touchPoints:[{id:31,x:135+i*4,y:470},{id:32,x:250-i*4,y:470}]});
+  await page.waitForTimeout(20);
+ }
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+ await page.waitForTimeout(250);
+ const pinched=await readCamera();
+ if(!(pinched.zoom<beforeSwipe.zoom-.25&&pinched.zoom>=17.54))
+  throw Error('Two-finger pinch failed to zoom out: '+JSON.stringify({beforeSwipe,pinched}));
+ console.log('TWO-FINGER PINCH:',JSON.stringify(pinched));
+ await page.locator('#zoomInBtn').click();
+ await page.locator('#zoomInBtn').click();
+ await page.locator('#zoomInBtn').click();
+ await page.waitForTimeout(500);
  await swipeTouch([90,650],[90,490]);
  const afterTilt=await readCamera();
- if(afterTilt.pitch<67||Math.abs(afterTilt.zoom-18.25)>.1)
+ if(afterTilt.pitch<67||Math.abs(afterTilt.zoom-18.25)>.15)
   throw Error('Android vertical swipe did not tilt camera toward the horizon: '+JSON.stringify(afterTilt));
  const turned=await inspectMarkerAnchors();
  if(!anchored(turned.avatar)||!turned.portals.every(positioned))
