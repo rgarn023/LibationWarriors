@@ -80,13 +80,23 @@ const fs=require('fs');
    features:window.LibationGameWorld.diagnostics().features,
    canvasSize:[c.width,c.height],canvasDisplay:getComputedStyle(c).display,
    colors:colors.size,hasGPSMarker:!!marker,
-   oldOverlayHidden:getComputedStyle(document.querySelector('#gameWorld')).display==='none'};
+   oldOverlayHidden:getComputedStyle(document.querySelector('#gameWorld')).display==='none',
+   fakeIllustrationHidden:getComputedStyle(document.querySelector('#illustratedBackdrop')).display==='none',
+   gpsOnMap:!!marker?.closest('.maplibregl-marker'),
+   liveGeographyReady:document.body.classList.contains('game-geography-ready')};
  });
+ const spriteDimensions=await page.evaluate(async()=>{
+   const img=new Image();img.src='./avatar_snes.png';await img.decode();
+   return [img.naturalWidth,img.naturalHeight];
+ });
+ inspect.spriteDimensions=spriteDimensions;
  await page.screenshot({path:'/tmp/libation-world-screenshot.png',fullPage:false});
- console.log('V13 WORLD AUDIT:',JSON.stringify(inspect),
+ console.log('V14 WORLD AUDIT:',JSON.stringify(inspect),
    'JS ERRORS:',JSON.stringify(errors.slice(0,12)));
  if(!inspect.mapLoaded||!inspect.geolocation||inspect.features<3||
-    inspect.colors<6||!inspect.hasGPSMarker||!inspect.oldOverlayHidden){
+    inspect.colors<6||!inspect.hasGPSMarker||!inspect.oldOverlayHidden||
+    !inspect.fakeIllustrationHidden||!inspect.liveGeographyReady||
+    inspect.spriteDimensions[0]!==192||inspect.spriteDimensions[1]!==66){
    throw Error('Georeferenced RPG world browser smoke test failed');
  }
  if(errors.some(e=>/Uncaught|ReferenceError|TypeError|SyntaxError/.test(e))){
