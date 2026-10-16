@@ -127,6 +127,8 @@ const fs=require('fs');
    zoom:Number(el.dataset.cameraZoom),pitch:Number(el.dataset.cameraPitch),
    bearing:Number(el.dataset.cameraBearing)
  }));
+ const texture=await page.locator('#map').getAttribute('data-terrain-tiles');
+ if(texture!=='geographic')throw Error('Native georeferenced terrain tile materials absent: '+texture);
  const depth=await page.locator('#map').getAttribute('data-geographic-depth');
  if(depth!=='on')throw Error('Grounded building footprint depth missing: '+depth);
  const initialCamera=await readCamera();
