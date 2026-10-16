@@ -374,7 +374,7 @@ body.live-map #map .maplibregl-ctrl-attrib{display:block!important}
 </head>
 <body>
 <div id="scene"><div id="skyHorizon" aria-hidden="true"></div><div id="illustratedBackdrop"></div><canvas id="offlineCanvas"></canvas><div id="map" role="application" aria-label="Geographic data layer"></div><canvas id="gameWorld" aria-label="Interactive local fantasy adventure overworld"></canvas><div id="demoMarkers"></div><div id="playerPin"><img class="playerImage" alt="Your warrior avatar"><div class="label">YOU</div><div class="playerBeacon"></div></div><div id="accuracyCircle"></div><div id="playerSpot">✦</div></div>
-<div id="grain"></div><div id="vignette"></div><div id="gameHint">DRAG TO TURN · SWIPE UP TO LOOK AHEAD</div><div id="loadingMap" class="pixfont">LOADING REAL OVERWORLD...<br><span class="xsmall muted">Live map requires internet · GPS requires HTTPS</span></div>
+<div id="grain"></div><div id="vignette"></div><div id="gameHint">DRAG TO TURN · SWIPE DOWN TO LOOK AHEAD</div><div id="loadingMap" class="pixfont">LOADING REAL OVERWORLD...<br><span class="xsmall muted">Live map requires internet · GPS requires HTTPS</span></div>
 <header id="hud"><div class="brand"><div class="brandmark pixfont">cg</div><div><div class="brandname pixfont">LIBATION WARRIORS</div><div class="brandsub">CHAROITE GAMES · LIVE 16-BIT MAP</div></div></div><div class="hudright"><div class="coin">🟡 2,850</div><div id="online" class="online is-off">MAP<br>CONNECTING</div></div></header>
 <div id="topChips"><button class="chip active" data-filter="all"><span class="symbol">✦</span> ALL</button><button class="chip" data-filter="rupture"><span class="symbol">⚔</span> RUPTURES</button><button class="chip special" data-filter="challenge"><span class="symbol">✺</span> WORMHOLES</button><button class="chip right" id="searchButton">⌕ FIND</button></div>
 <div id="leftSide"><button class="floatbtn tiny" id="avatarBtn" title="Customize your overworld avatar" aria-label="Customize your overworld avatar">✎</button><button class="floatbtn" id="locateBtn" title="Show my current GPS location" aria-label="Show my real current location">⌖</button><button class="floatbtn" id="zoomInBtn" title="Zoom in">+</button><button class="floatbtn" id="zoomOutBtn" title="Zoom out">-</button><button class="floatbtn tiny" id="refreshBtn" title="Refresh real venues">↻</button></div>
@@ -1269,8 +1269,8 @@ function registerAdventureCameraControls(){
    const dx=e.clientX-gesture.x,dy=e.clientY-gesture.y;
    if(!gesture.axis&&Math.hypot(dx,dy)>9)
     gesture.axis=Math.abs(dx)>=Math.abs(dy)?'turn':'tilt';
-   if(gesture.axis==='turn')cameraBearing=(gesture.bearing+dx*.42+3600)%360;
-   if(gesture.axis==='tilt')cameraTilt=Math.max(48,Math.min(70,gesture.pitch-dy*.087));
+   if(gesture.axis==='turn')cameraBearing=(gesture.bearing-dx*.42+3600)%360;
+   if(gesture.axis==='tilt')cameraTilt=Math.max(48,Math.min(70,gesture.pitch+dy*.087));
   }
   requestDraw();e.preventDefault();e.stopPropagation();
  },true);
