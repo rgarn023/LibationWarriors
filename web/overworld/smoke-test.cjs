@@ -69,7 +69,7 @@ const fs=require('fs');
  const inspect=await page.evaluate(()=>{
   const c=document.querySelector('#gameOverworldArt');
   const ctx=c.getContext('2d',{willReadFrequently:true});
-  const sample=ctx.getImageData(0,0,Math.min(c.width,260),Math.min(c.height,320)).data;
+  const sample=ctx.getImageData(0,0,c.width,c.height).data;
   const colors=new Set();
   for(let i=0;i<sample.length;i+=40)colors.add(
    sample[i]+','+sample[i+1]+','+sample[i+2]);
