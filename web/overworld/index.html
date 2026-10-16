@@ -631,6 +631,25 @@ function buildScenerySprite(kind=0,variant=0){
   p(col[4],10,11,4,3);p(col[4],23,14,3,2);
   p('#d6e9a0',16,6,4,2);p('#1d5641',15,26,5,4);
   p('#466441',7,33,5,3);p('#486e43',22,32,5,3);
+ }else if(kind==='house'){
+  // Small gabled village house, decorating real mapped building footprints only.
+  const roof=['#915a43','#76516b','#6d6754'][variant%3];
+  const roofHi=['#c8825b','#9b7495','#999172'][variant%3];
+  p('#243e40',3,37,27,5);p('#7e6853',5,20,23,18);
+  p('#ceb78a',7,23,19,14);p('#efdfb0',9,25,15,7);
+  p('#53473d',6,37,22,4);p('#877451',9,34,17,3);
+  // A layered A-frame roof with chunky SNES tile highlights.
+  for(let y=9;y<22;y++){
+   const inset=Math.round((21-y)*.72);
+   p('#3c3d45',inset,y,32-inset*2,2);
+   p(roof,inset+1,y,30-inset*2,2);
+   if(y%3===0)p(roofHi,inset+3,y+1,Math.max(3,24-inset*2),1);
+  }
+  p('#403c46',21,9,5,8);p('#9c7154',22,8,3,9);
+  p('#4b3d3c',12,29,8,10);p('#76523d',13,29,6,9);
+  p('#d6ad75',18,34,1,2);
+  p('#4c605d',22,26,4,5);p('#b4c69c',23,27,2,2);
+  p('#f4dda8',7,31,3,3);
  }else if(kind==='bush'){
   p('#29523d',4,30,25,9);p('#2e6844',3,28,26,9);
   p('#489452',7,24,21,11);p('#7db466',9,21,13,8);
@@ -664,7 +683,7 @@ function initScenery(){
  host.appendChild(sceneryCanvas);
  sceneryCtx=sceneryCanvas.getContext('2d',{alpha:true});
  sceneryCtx.imageSmoothingEnabled=false;
- for(const k of ['tree','bush','rock','flowers','grass']){
+ for(const k of ['tree','bush','rock','flowers','grass','house']){
   for(let v=0;v<3;v++)sceneryImages[k+v]=buildScenerySprite(k,v);
  }
  resizeScenery();
@@ -707,10 +726,11 @@ function rebuildScenery(){
   let layers=[];
   try{layers=map.queryRenderedFeatures([p.x,p.y])||[]}catch(_){}
   const ids=layers.map(f=>(f.layer?.id||'').toLowerCase());
-  if(ids.some(id=>/(water|lake|river|wetland|sea|ocean|building|road|highway|bridge|tunnel|path|street|motorway|primary|secondary)/.test(id)))continue;
+  if(ids.some(id=>/(water|lake|river|wetland|sea|ocean|road|highway|bridge|tunnel|path|street|motorway|primary|secondary)/.test(id)))continue;
+  const building=ids.some(id=>/(building|house|structure)/.test(id));
   const forest=ids.some(id=>/(forest|wood|park|vegetation|tree|natural)/.test(id));
   const urban=ids.some(id=>/(residential|urban|commercial|industrial|landuse)/.test(id));
-  const kind=forest?(seed>.47?'tree':'bush'):urban?(seed>.78?'tree':seed>.5?'bush':'grass'):(seed>.85?'rock':seed>.6?'bush':seed>.43?'flowers':'grass');
+  const kind=building?(seed>.38?'house':'flowers'):forest?(seed>.47?'tree':'bush'):urban?(seed>.82?'tree':seed>.5?'bush':'grass'):(seed>.85?'rock':seed>.6?'bush':seed>.43?'flowers':'grass');
   items.push({lon,lat,kind,variant:Math.floor(localHash(ni+30,ei+19)*3)});
   if(items.length>=170)break;
  }
@@ -730,8 +750,8 @@ function drawScenery(){
    if(v.x<-35||v.y<-45||v.x>w+35||v.y>h+45)continue;
    const img=sceneryImages[item.kind+item.variant];
    if(!img)continue;
-   const ww=item.kind==='tree'?44:item.kind==='bush'?31:item.kind==='rock'?24:26;
-   const hh=item.kind==='tree'?57:item.kind==='bush'?37:item.kind==='rock'?28:33;
+   const ww=item.kind==='tree'?44:item.kind==='house'?46:item.kind==='bush'?31:item.kind==='rock'?24:26;
+   const hh=item.kind==='tree'?57:item.kind==='house'?58:item.kind==='bush'?37:item.kind==='rock'?28:33;
    ctx.drawImage(img,Math.round(v.x-ww/2),Math.round(v.y-hh),ww,hh);
   }
  });
@@ -850,7 +870,12 @@ function styleOverworld(){
    }else if(/motorway|trunk|primary|secondary|tertiary|residential|road|street|path|track|pedestrian|footway/.test(id)){
     // A light stone/dirt pathway line on accurate OSM road geometry.
     set('line-color',/motorway|trunk/.test(id)?'#ead4a2':'#f0dfb4');
-    set('line-opacity',1);
+    if(/road|street|motorway|trunk|primary|secondary|tertiary|residential|path|footway/.test(id)){
+      const isSmall=/path|footway|pedestrian|track/.test(id);
+      const isMajor=/motorway|trunk|primary/.test(id);
+      set('line-width',isSmall?3:isMajor?9:6);
+      set('line-opacity',1);
+    }
    }
   }
  }
