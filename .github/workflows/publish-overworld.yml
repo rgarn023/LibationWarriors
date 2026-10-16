@@ -75,6 +75,9 @@ jobs:
             /tmp/libation-building-forest-sprites.png
             /tmp/libation-visible-buildings.png
             /tmp/libation-refined-rooftops.png
+            /tmp/libation-time-day.png
+            /tmp/libation-time-evening.png
+            /tmp/libation-time-night.png
           if-no-files-found: ignore
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
