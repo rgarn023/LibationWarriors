@@ -336,6 +336,9 @@ body:not(.live-map) #online{letter-spacing:.4px}
 /* Local close-up camera and minimal touch guidance. */
 #map{touch-action:none}
 #map #gpsMarker .sprite{bottom:3px!important}
+/* The old bobbing keyframes override translateX(-50%) and shift the hero away
+   from its world-coordinate shadow. The new boot frames provide motion. */
+body.walking #map #gpsMarker .sprite{animation:none!important;transform:translateX(-50%)!important}
 body.live-map #gameHint{display:block!important;top:auto;bottom:calc(90px + env(safe-area-inset-bottom));
  left:50%;width:max-content;max-width:90vw;z-index:8;opacity:.86;
  background:#234b40ba;border:1px solid #ccdaad80;pointer-events:none;
@@ -363,7 +366,7 @@ body.live-map #map .maplibregl-ctrl-attrib{display:block!important}
 <div id="grain"></div><div id="vignette"></div><div id="gameHint">DRAG TO TURN · SWIPE UP TO LOOK AHEAD</div><div id="loadingMap" class="pixfont">LOADING REAL OVERWORLD...<br><span class="xsmall muted">Live map requires internet · GPS requires HTTPS</span></div>
 <header id="hud"><div class="brand"><div class="brandmark pixfont">cg</div><div><div class="brandname pixfont">LIBATION WARRIORS</div><div class="brandsub">CHAROITE GAMES · LIVE 16-BIT MAP</div></div></div><div class="hudright"><div class="coin">🟡 2,850</div><div id="online" class="online is-off">MAP<br>CONNECTING</div></div></header>
 <div id="topChips"><button class="chip active" data-filter="all"><span class="symbol">✦</span> ALL</button><button class="chip" data-filter="rupture"><span class="symbol">⚔</span> RUPTURES</button><button class="chip special" data-filter="challenge"><span class="symbol">✺</span> WORMHOLES</button><button class="chip right" id="searchButton">⌕ FIND</button></div>
-<div id="leftSide"><button class="floatbtn tiny" id="avatarBtn" title="Customize your overworld avatar" aria-label="Customize your overworld avatar">✎</button><button class="floatbtn" id="locateBtn" title="Show my current GPS location" aria-label="Show my real current location">⌖</button><button class="floatbtn" id="zoomInBtn" title="Zoom in">＋</button><button class="floatbtn" id="zoomOutBtn" title="Zoom out">－</button><button class="floatbtn tiny" id="refreshBtn" title="Refresh real venues">↻</button></div>
+<div id="leftSide"><button class="floatbtn tiny" id="avatarBtn" title="Customize your overworld avatar" aria-label="Customize your overworld avatar">✎</button><button class="floatbtn" id="locateBtn" title="Show my current GPS location" aria-label="Show my real current location">⌖</button><button class="floatbtn" id="zoomInBtn" title="Zoom in">+</button><button class="floatbtn" id="zoomOutBtn" title="Zoom out">-</button><button class="floatbtn tiny" id="refreshBtn" title="Refresh real venues">↻</button></div>
 <div id="zoomLevel" aria-live="polite">Z 13</div><div id="liveLocationBanner" role="status" aria-live="polite"></div><div id="locationReadout" role="status" aria-live="polite"></div><div id="mapStats"><div class="eyebrow pixfont">◉ NEARBY REALM</div><div id="regionName" class="city">Finding GPS...</div><div class="tiny" id="venueCount">Looking for nearby venues…</div></div>
 <div id="toast" role="status"></div>
 <div id="caption">16-BIT MAP STYLE · LIVE OSM GEOGRAPHY WHEN ONLINE · GAMEPLAY SIMULATED</div>
