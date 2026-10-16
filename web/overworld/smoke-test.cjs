@@ -38,8 +38,8 @@ const fs=require('fs');
  }));
  await page.route('**/api/interpreter**',route=>route.fulfill({
   status:200,contentType:'application/json',body:JSON.stringify({elements:[
-    {type:'node',id:55101,lat:36.77132,lon:-76.28440,tags:{amenity:'pub',name:'Test Fixture Tavern'}},
-    {type:'node',id:55102,lat:36.77160,lon:-76.28370,tags:{craft:'brewery',name:'Test Fixture Brewery'}},
+    {type:'node',id:55101,lat:36.77128,lon:-76.28408,tags:{amenity:'pub',name:'Test Fixture Tavern'}},
+    {type:'node',id:55102,lat:36.77143,lon:-76.28388,tags:{craft:'brewery',name:'Test Fixture Brewery'}},
     {type:'node',id:55103,lat:36.77090,lon:-76.28420,tags:{amenity:'restaurant',name:'Restaurant Without Alcohol Tag'}}
    ]})
  }));
@@ -121,6 +121,16 @@ const fs=require('fs');
    m.anchorError.every(v=>Math.abs(v)<=4);
  await page.waitForFunction(()=>document.querySelectorAll('.pixel-marker.maplibregl-marker').length===2,
   null,{timeout:12000});
+ // A close, tilted local-world camera is part of the gameplay contract.
+ const readCamera=()=>page.locator('#map').evaluate(el=>({
+   zoom:Number(el.dataset.cameraZoom),pitch:Number(el.dataset.cameraPitch),
+   bearing:Number(el.dataset.cameraBearing)
+ }));
+ const initialCamera=await readCamera();
+ console.log('LOCAL EXPLORER CAMERA:',JSON.stringify(initialCamera));
+ if(!(initialCamera.zoom>=18.1&&initialCamera.zoom<=18.4&&
+   initialCamera.pitch>=59&&initialCamera.pitch<=68))
+  throw Error('Camera regressed to distant overhead map: '+JSON.stringify(initialCamera));
  const pixelAudit=await inspectMarkerAnchors();
  console.log('ON-SCREEN GEOGRAPHIC MARKER AUDIT:',JSON.stringify(pixelAudit));
  if(!anchored(pixelAudit.avatar)||!pixelAudit.sprite.loaded||
@@ -130,21 +140,44 @@ const fs=require('fs');
  await page.waitForTimeout(3500); // Allow location toast to clear.
  await page.screenshot({path:'/tmp/libation-world-screenshot.png',fullPage:false});
  // Simulate actual location movement and then a horizontal camera swipe.
- await context.setGeolocation({longitude:-76.2836,latitude:36.7712,accuracy:6});
+ await context.setGeolocation({longitude:-76.2838,latitude:36.77105,accuracy:6});
  await page.waitForTimeout(2900); // GPS interpolation runs at most 2400ms.
  const moved=await inspectMarkerAnchors();
  if(!anchored(moved.avatar)||!moved.portals.every(anchored))
    throw Error('Geographic markers detached after GPS movement: '+JSON.stringify(moved));
- const canvas=page.locator('#map canvas.maplibregl-canvas');
- const bounds=await canvas.boundingBox();
- await page.mouse.move(bounds.x+bounds.width*.5,bounds.y+bounds.height*.48);
- await page.mouse.down();
- await page.mouse.move(bounds.x+bounds.width*.75,bounds.y+bounds.height*.48,{steps:8});
- await page.mouse.up();
- await page.waitForTimeout(350);
+ // Real Chromium touch input; a mouse drag did not reproduce Android swipe problems.
+ const cdp=await context.newCDPSession(page);
+ async function swipeTouch(start,end){
+  const touch=(x,y)=>({x,y,id:17});
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',
+   touchPoints:[touch(...start)]});
+  for(let i=1;i<=12;i++){
+   const t=i/12;
+   await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',
+    touchPoints:[touch(start[0]+(end[0]-start[0])*t,
+     start[1]+(end[1]-start[1])*t)]});
+   await page.waitForTimeout(20);
+  }
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+  await page.waitForTimeout(220);
+ }
+ const beforeSwipe=await readCamera();
+ await swipeTouch([80,550],[260,550]);
+ const afterTurn=await readCamera();
+ console.log('REAL TOUCH CAMERA TURN:',JSON.stringify({beforeSwipe,afterTurn}));
+ let bearingDelta=Math.abs(afterTurn.bearing-beforeSwipe.bearing);
+ bearingDelta=Math.min(bearingDelta,360-bearingDelta);
+ if(bearingDelta<45||Math.abs(afterTurn.pitch-beforeSwipe.pitch)>2)
+  throw Error('Android finger drag did not reliably turn camera: '+JSON.stringify({beforeSwipe,afterTurn}));
+ await page.screenshot({path:'/tmp/libation-world-touch-turn.png',fullPage:false});
+ await swipeTouch([90,650],[90,490]);
+ const afterTilt=await readCamera();
+ if(afterTilt.pitch<67||Math.abs(afterTilt.zoom-18.25)>.1)
+  throw Error('Android vertical swipe did not tilt camera toward the horizon: '+JSON.stringify(afterTilt));
  const turned=await inspectMarkerAnchors();
  if(!anchored(turned.avatar)||!turned.portals.every(anchored))
-   throw Error('Geographic markers detached after camera rotation: '+JSON.stringify(turned));
+   throw Error('Geographic markers detached after touch rotation: '+JSON.stringify(turned));
+ console.log('REAL TOUCH CAMERA TILT:',JSON.stringify(afterTilt));
  const gpsState=await page.evaluate(()=>{
   const toast=document.querySelector('#toast'),banner=document.querySelector('#liveLocationBanner');
   return {readout:document.querySelector('#locationReadout')?.textContent,
