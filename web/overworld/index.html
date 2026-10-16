@@ -1620,7 +1620,7 @@ function getWorldTimeTheme(date=new Date(),point=currentGeolocation){
  const phase=elevation<-6?'night':elevation<12?(angle<0?'morning':'evening'):'day';
  return {phase,source:'gps-solar',elevation:Math.round(elevation*10)/10};
 }
-window.LibationWorldTime=Object.freeze({resolve:getWorldTimeTheme});
+window.LibationWorldTime=Object.freeze({resolve:getWorldTimeTheme,apply:updateWorldTimeTheme});
 let worldTimeRefreshTimer=null,lastWorldTimePhase='';
 function updateWorldTimeTheme(date=new Date()){
  const host=$('#map');
