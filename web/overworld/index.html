@@ -1904,34 +1904,98 @@ function addGeographicLandmarkArt(){
 // source exposes polygons. Unknown heights are a small artistic placeholder,
 // not a claim about real-world building elevations. Never add fake footprints.
 function addGeographicBuildingDepth(){
- if(!map||!map.isStyleLoaded()||map.getLayer('lw-geographic-building-depth'))return;
- const style=map.getStyle();
- const layer=(style.layers||[]).find(l=>l.type==='fill'&&l.source&&
-   /building/i.test(l.id)&&!/outline|shadow|label/i.test(l.id));
- if(!layer)return;
- const depth={
-  id:'lw-geographic-building-depth',type:'fill-extrusion',
-  source:layer.source,
-  filter:layer.filter||['==',['geometry-type'],'Polygon'],
-  paint:{
-   'fill-extrusion-color':'#b19a7e',
-   'fill-extrusion-base':0,
-   'fill-extrusion-height':['min',18,['max',2,
-    ['to-number',['coalesce',['get','render_height'],['get','height'],3]]]],
-   'fill-extrusion-opacity':0.88
-  }
- };
- if(layer['source-layer'])depth['source-layer']=layer['source-layer'];
- try{
-  // Retain geographic layer order; portals and avatar stay MapLibre markers.
-  const labels=style.layers.find(l=>l.type==='symbol');
-  map.addLayer(depth,labels?.id);
-  $('#map').dataset.geographicDepth='on';
- }catch(err){
-  console.warn('Geographic building depth not supported by current style',err);
-  $('#map').dataset.geographicDepth='unavailable';
+ if(!map||!map.getStyle())return;
+ const host=$('#map'),style=map.getStyle(),all=style.layers||[];
+ // OpenFreeMap styles can expose mapped structures as fills, extrusions, or
+ // both. The old code used only the first fill; some actual maps therefore
+ // had no buildings at all after the stock extrusion layers were hidden.
+ const candidates=all.filter(layer=>layer.source&&
+  (layer.type==='fill'||layer.type==='fill-extrusion')&&
+  /building|house/.test(String(layer.id).toLowerCase())&&
+  !/outline|shadow|label|entrance|housenumber|number/.test(String(layer.id).toLowerCase()));
+ const selected=[],seen=new Set();
+ for(const layer of candidates){
+  const key=[layer.source,layer['source-layer']||'',JSON.stringify(layer.filter||null),
+   layer.minzoom||'',layer.maxzoom||''].join('|');
+  if(seen.has(key))continue;seen.add(key);
+  selected.push(layer);
+  if(selected.length>=6)break;
  }
+ if(!selected.length){
+  host.dataset.geographicBuildings='no-building-source';
+  host.dataset.buildingLayers='0';
+  console.warn('No mapped building polygon layer available in this geography source');
+  return;
+ }
+ const copy=(source,id,type,paint)=>{
+  const result={id,type,source:source.source,paint,
+   filter:source.filter?['all',['==',['geometry-type'],'Polygon'],source.filter]:
+    ['==',['geometry-type'],'Polygon']};
+  if(source['source-layer'])result['source-layer']=source['source-layer'];
+  if(Number.isFinite(source.minzoom))result.minzoom=source.minzoom;
+  if(Number.isFinite(source.maxzoom))result.maxzoom=source.maxzoom;
+  return result;
+ };
+ let registered=0;
+ const registeredFill=[];
+ for(let n=0;n<selected.length;n++){
+  const layer=selected[n],base='lw-visible-building-'+n,
+   footprint=base+'-footprint',solid=base+'-solid',outline=base+'-outline';
+  try{
+   // Every real polygon gets a high-contrast 16-bit footprint, regardless
+   // of sprite density, label collision, or missing real-world height tags.
+   if(!map.getLayer(footprint)){
+    const label=all.find(l=>l.type==='symbol')?.id;
+    map.addLayer(copy(layer,footprint,'fill',{
+     'fill-color':'#d6b68b','fill-outline-color':'#594a42','fill-opacity':0.96
+    }),label);
+   }
+   if(!map.getLayer(solid)){
+    const label=all.find(l=>l.type==='symbol')?.id;
+    map.addLayer(copy(layer,solid,'fill-extrusion',{
+     'fill-extrusion-color':'#a78261',
+     'fill-extrusion-base':0,
+     // Use known height when supplied; small stylized default is NOT
+     // a measurement of this building. Do not invent a new footprint.
+     'fill-extrusion-height':['min',16,['max',3,
+      ['to-number',['coalesce',['get','render_height'],['get','height'],5]]]],
+     'fill-extrusion-opacity':0.94
+    }),label);
+   }
+   if(!map.getLayer(outline)){
+    const label=all.find(l=>l.type==='symbol')?.id;
+    map.addLayer(copy(layer,outline,'line',{
+     'line-color':'#524843','line-opacity':0.94,
+     'line-width':['interpolate',['linear'],['zoom'],16,0.8,18,1.8,19,2.7]
+    }),label);
+   }
+   registeredFill.push(footprint);
+   registered++;
+  }catch(err){
+   console.warn('Unable to render mapped building footprints from',layer.id,err);
+  }
+ }
+ host.dataset.geographicDepth=registered?'on':'unavailable';
+ host.dataset.geographicBuildings=registered?'footprints-visible':'unavailable';
+ host.dataset.buildingLayers=String(registered);
+ // The number is an observation of real rendered polygons, not a count of
+ // imaginary decorative house sprites. It is refreshed on map idle.
+ const audit=()=>{
+  if(!map||!mapLoaded)return;
+  try{
+   const ids=registeredFill.filter(id=>map.getLayer(id));
+   const features=ids.length?map.queryRenderedFeatures({layers:ids}):[];
+   const unique=new Set(features.map(f=>{
+    const geom=f.geometry||{},center=geom.coordinates?.[0]?.[0]||[];
+    return [f.source,f.sourceLayer||'',f.id??'',center[0],center[1]].join(':');
+   }));
+   host.dataset.visibleMappedBuildings=String(unique.size);
+  }catch(_){host.dataset.visibleMappedBuildings='unavailable'}
+ };
+ map.on('idle',audit);
+ audit();
 }
+
 function offline(reason){
  localMapStarting=false;
  if(provider==='google')return;
