@@ -20,7 +20,7 @@ const fs=require('fs');
  const featureCollection={type:'FeatureCollection',features:[
   {type:'Feature',properties:{kind:'park'},geometry:{type:'Polygon',coordinates:[[[-76.285,36.7695],[-76.282,36.7695],[-76.282,36.7725],[-76.285,36.7725],[-76.285,36.7695]]]}},
   {type:'Feature',properties:{kind:'water'},geometry:{type:'Polygon',coordinates:[[[-76.281,36.767],[-76.278,36.767],[-76.278,36.774],[-76.281,36.774],[-76.281,36.767]]]}},
-  {type:'Feature',properties:{kind:'building'},geometry:{type:'Polygon',coordinates:[[[-76.2842,36.7702],[-76.284,36.7702],[-76.284,36.7704],[-76.2842,36.7704],[-76.2842,36.7702]]]}},
+  {type:'Feature',properties:{kind:'building'},geometry:{type:'Polygon',coordinates:[[[-76.28448,36.7713],[-76.28430,36.7713],[-76.28430,36.77148],[-76.28448,36.77148],[-76.28448,36.7713]]]}},
   {type:'Feature',properties:{kind:'road'},geometry:{type:'LineString',coordinates:[[-76.287,36.7706],[-76.285,36.7708],[-76.281,36.7713],[-76.277,36.772]]}},
   {type:'Feature',properties:{kind:'trail'},geometry:{type:'LineString',coordinates:[[-76.2847,36.769],[-76.2841,36.77],[-76.284,36.773]]}}
  ]};
@@ -127,6 +127,8 @@ const fs=require('fs');
    zoom:Number(el.dataset.cameraZoom),pitch:Number(el.dataset.cameraPitch),
    bearing:Number(el.dataset.cameraBearing)
  }));
+ const depth=await page.locator('#map').getAttribute('data-geographic-depth');
+ if(depth!=='on')throw Error('Grounded building footprint depth missing: '+depth);
  const initialCamera=await readCamera();
  console.log('LOCAL EXPLORER CAMERA:',JSON.stringify(initialCamera));
  if(!(initialCamera.zoom>=18.1&&initialCamera.zoom<=18.4&&
