@@ -1159,14 +1159,13 @@ function renderPanel(k){const body=$('#drawerContent');clearInterval(countdownHa
  }else if(k==='settings'||k==='find'){
   body.innerHTML=heading('REAL-WORLD OVERWORLD','MAP OPTIONS','The world stays visible behind every panel. Use the map to travel, find real venue markers, and enter conceptual dungeons.')+
    '<button class="primary full" id="openAvatarEditor">✎ CUSTOMIZE MY OVERWORLD AVATAR</button>'+
-   '<div class="eyebrow">JUMP TO A CITY</div><div class="stack" id="cities">'+Object.entries(presets).map(([key,coords])=>'<button class="chip" data-city="'+escapeHTML(key)+'">'+escapeHTML(key)+'</button>').join('')+'</div>'+
-   '<label class="label" for="cityQuery">SEARCH ANOTHER CITY</label><div class="two"><input class="inpt" id="cityQuery" placeholder="e.g. Kyoto, Japan"><button class="secondary" id="findCity">SEARCH</button></div>'+
+   '<div class="box"><b>LOCAL EXPLORATION MODE</b><p class="note">The overworld only shows your immediate surroundings at a consistent game scale. Walk to move your customized avatar; distant browsing and worldwide zoom are disabled.</p></div>'+ 
    '<div class="divider"></div><button id="settingsLocate" class="primary">⌖ SHOW MY ACTUAL GPS LOCATION</button><p class="note">Uses your phone’s GPS with your permission. To work on Android, open over HTTPS—not from downloaded <code>content://</code> files.</p><div class="eyebrow">MAP PROVIDER</div><div class="box"><b>Active: '+(provider==='google'?'Google Maps':provider==='osm'?'OpenFreeMap / OpenStreetMap':'Offline demonstration')+'</b><p class="note">Google Maps JavaScript requires your own Google API key (or a Google demo key). Map views may be billed. The default OpenStreetMap-powered map works without a key.</p></div>'+
    '<label class="label" for="googleKey">OPTIONAL GOOGLE MAPS JAVASCRIPT KEY</label><input class="inpt mono" id="googleKey" type="password" autocomplete="off" placeholder="Paste restricted browser API key"><button class="secondary full" id="useGoogle">SWITCH TO GOOGLE BASE MAP</button>'+
    '<p class="note">Your key is only kept in this page memory for the current session. For security, use website-restricted keys on an HTTPS-hosted page. Custom SNES palettes, sprite venue markers and UI are layered above either provider.</p>'+
    '<div class="divider"></div><div class="box"><div class="eyebrow">DATA SOURCES</div><p class="note">OpenFreeMap / © OpenStreetMap contributors; live venue points from OpenStreetMap via public Overpass service. The venue dataset is community-maintained; restaurant alcohol service and operating hours are not verified. Game dungeon, gold and character systems are fictional simulations. Registered home scan locations are never shown on the world map.</p></div>';
   $('#openAvatarEditor').onclick=()=>setPanel('avatar');
-  $('#cities [data-city]').forEach(btn=>btn.onclick=()=>{const n=btn.dataset.city;searchCity=n;moveTo(...presets[n],13.8);updateRegion();closeDrawer()});$('#findCity').onclick=geocode;$('#useGoogle').onclick=()=>loadGoogle($('#googleKey').value.trim());const locSettings=$('#settingsLocate');if(locSettings)locSettings.onclick=()=>{closeDrawer();locateMe()};
+  $('#cities [data-city]').forEach(btn=>btn.onclick=()=>{const n=btn.dataset.city;searchCity=n;moveTo(...presets[n],13.8);updateRegion();closeDrawer()});const cityFinder=$('#findCity');if(cityFinder)cityFinder.onclick=geocode;$('#useGoogle').onclick=()=>loadGoogle($('#googleKey').value.trim());const locSettings=$('#settingsLocate');if(locSettings)locSettings.onclick=()=>{closeDrawer();locateMe()};
  }
 }
 function baseWarrior(code){let normalized=String(code).replace(/[^0-9]/g,'');if(normalized.length===13&&normalized.startsWith('0'))normalized=normalized.slice(1);
@@ -1177,12 +1176,17 @@ function geocode(){const input=$('#cityQuery');const query=input.value.trim();if
 async function loadGoogle(key){if(!key){toast('Enter a valid Google Maps API key first.');return}toast('Loading Google Maps…');if(!window.google?.maps){try{await new Promise((resolve,reject)=>{const s=document.createElement('script');s.src='https://maps.googleapis.com/maps/api/js?key='+encodeURIComponent(key)+'&v=weekly';s.onload=resolve;s.onerror=()=>reject(new Error('Google Maps script could not load'));document.head.appendChild(s)})}catch(e){toast(e.message);return}}
  const c=position();if(map){try{map.remove()}catch(_){}}map=null;provider='google';mapLoaded=true;$('#map').style.display='block';$('#demoMarkers').style.display='none';hideBanner();$('#loadingMap').style.display='none';
  try{
- document.body.classList.add('google-active');gm=new google.maps.Map($('#map'),{center:{lat:c[1],lng:c[0]},zoom:13.5,disableDefaultUI:true,zoomControl:false,gestureHandling:'greedy',styles:[
+ document.body.classList.add('google-active');gm=new google.maps.Map($('#map'),{center:{lat:c[1],lng:c[0]},zoom:LOCAL_ZOOM,minZoom:LOCAL_ZOOM,maxZoom:LOCAL_ZOOM,disableDefaultUI:true,zoomControl:false,scrollwheel:false,disableDoubleClickZoom:true,gestureHandling:'greedy',styles:[
  {elementType:'geometry',stylers:[{color:'#9baf7f'}]},{elementType:'labels.text.fill',stylers:[{color:'#264052'}]},{elementType:'labels.text.stroke',stylers:[{color:'#f0dbb8'}]},
  {featureType:'water',elementType:'geometry',stylers:[{color:'#4f8ca9'}]},{featureType:'landscape.natural',elementType:'geometry',stylers:[{color:'#79a97e'}]},
  {featureType:'poi.park',elementType:'geometry',stylers:[{color:'#589372'}]},{featureType:'road',elementType:'geometry',stylers:[{color:'#e5cc98'}]},
  {featureType:'administrative',elementType:'geometry.stroke',stylers:[{color:'#8b836d'}]}
- ]});gm.addListener('idle',()=>{lastPosition=position();refreshSoon();updateZoom();updateGpsOverlay()});updateStatus('GOOGLE<br>MAPS',true);refreshSoon();updateZoom();updateGpsOverlay();closeDrawer();
+ ]});gm.addListener('idle',()=>{
+  if(currentGeolocation&&geoMeters(currentGeolocation,position())>LOCAL_RADIUS_METERS){
+   gm.panTo({lng:currentGeolocation[0],lat:currentGeolocation[1]});return;
+  }
+  lastPosition=position();refreshSoon();updateZoom();updateGpsOverlay();
+ });updateStatus('GOOGLE<br>MAPS',true);refreshSoon();updateZoom();updateGpsOverlay();closeDrawer();
  }catch(e){toast('Google Maps could not initialize: '+e.message)}
 }
 $('#searchButton').onclick=()=>toast('Explore your local overworld by walking. Distant city browsing is disabled.');$('#refreshBtn').onclick=()=>{if(provider==='offline')startLive();else loadVenues(true)};$('#zoomInBtn').onclick=()=>toast('The RPG overworld uses a fixed scale.');$('#zoomOutBtn').onclick=()=>toast('The RPG overworld uses a fixed scale.');
