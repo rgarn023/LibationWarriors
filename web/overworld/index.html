@@ -392,7 +392,7 @@ try{
   const v=Number(saved[k]);if(Number.isInteger(v)&&v>=0&&v<5)avatarConfig[k]=v
  }
 }catch(_){}
-function saveAvatar(){try{localStorage.setItem(AVATAR_KEY,JSON.stringify(avatarConfig))}catch(_){}}
+function saveAvatar(){avatarFrameCache.clear();try{localStorage.setItem(AVATAR_KEY,JSON.stringify(avatarConfig))}catch(_){}}
 
 function toast(s){const e=$('#toast');e.textContent=s;e.classList.add('toast-visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>e.classList.remove('toast-visible'),4200)}
 function escapeHTML(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
@@ -401,6 +401,7 @@ function hashStr(v){let h=2166136261;for(const c of String(v)){h^=c.charCodeAt(0
 // A custom 48x64 hand-pixeled adventurer, drawn in layered 16-bit palette groups.
 // This is NOT a scanned beverage warrior and is customized per user.
 const AVATAR_W=64,AVATAR_H=80;
+const avatarFrameCache=new Map(); // Avoid regenerating PNGs every animation tick
 let avatarFacing='up',avatarFrame=0,avatarIsWalking=false,avatarAnimationTimer=null;
 // Original detailed pixel sprite sheet (4 directional rows, 4 motion frames).
 // If the image fails to load, retain the older vector-drawn customization sprite
@@ -408,7 +409,7 @@ let avatarFacing='up',avatarFrame=0,avatarIsWalking=false,avatarAnimationTimer=n
 const liveAvatarAtlas=new Image();
 let liveAvatarAtlasReady=false;
 liveAvatarAtlas.addEventListener('load',()=>{
- liveAvatarAtlasReady=true;
+ liveAvatarAtlasReady=true;avatarFrameCache.clear();
  if(typeof repaintCustomAvatar==='function')repaintCustomAvatar();
 });
 liveAvatarAtlas.addEventListener('error',()=>{
@@ -416,14 +417,29 @@ liveAvatarAtlas.addEventListener('error',()=>{
 });
 liveAvatarAtlas.src='./avatar_snes.png';
 function makeCustomAvatarSprite(frame=0,facing=avatarFacing){
+ const phase=((frame%4)+4)%4;
+ const key=[facing,phase,avatarConfig.skin,avatarConfig.hair,
+  avatarConfig.outfit,avatarConfig.hairStyle,avatarConfig.body].join(':');
+ if(avatarFrameCache.has(key))return avatarFrameCache.get(key);
  if(liveAvatarAtlasReady){
   const c=document.createElement('canvas');c.width=64;c.height=88;
   const g=c.getContext('2d',{willReadFrequently:true});g.imageSmoothingEnabled=false;
   const col={down:0,up:1,left:2,right:3}[facing]??0;
-  const walkingOffset=(frame%4===1?-2:frame%4===3?1:0);
-  // Atlas contains four distinct cardinal views. An idle/walking bob adds
-  // motion while full hand-authored directional walk frames remain future art.
-  g.drawImage(liveAvatarAtlas,col*48,0,48,66,0,walkingOffset,64,88);
+  const source=document.createElement('canvas');source.width=64;source.height=88;
+  const sg=source.getContext('2d');sg.imageSmoothingEnabled=false;
+  sg.drawImage(liveAvatarAtlas,col*48,0,48,66,0,0,64,88);
+  g.drawImage(source,0,0);
+  // Temporary four-pose step cycle: two opposing boots and an intermediate
+  // contact frame. Preserve the original character's head, face and palette.
+  if(phase===1||phase===3){
+   const stride=phase===1?-3:3;
+   g.clearRect(12,59,40,29);
+   g.drawImage(source,12,59,20,29,12+stride,59+(phase===1?0:2),20,29);
+   g.drawImage(source,32,59,20,29,32-stride,59+(phase===1?2:0),20,29);
+  }else if(phase===2){
+   g.clearRect(12,59,40,29);
+   g.drawImage(source,12,59,40,29,12,60,40,28);
+  }
   const data=g.getImageData(0,0,64,88),pix=data.data;
   const hairColors=['#302a34','#714b30','#cd8247','#f2d4a0','#9856bd'];
   const coatColors=['#328ea4','#bb5977','#5e9962','#886cae','#caa156'];
@@ -447,7 +463,10 @@ function makeCustomAvatarSprite(frame=0,facing=avatarFacing){
    }
   }
   g.putImageData(data,0,0);
-  return c.toDataURL('image/png');
+  const sprite=c.toDataURL('image/png');
+  if(avatarFrameCache.size>90)avatarFrameCache.clear();
+  avatarFrameCache.set(key,sprite);
+  return sprite;
  }
  return fallbackCustomAvatarSprite(frame,facing);
 }
@@ -2100,12 +2119,12 @@ $('#avatarBtn').onclick=()=>setPanel('avatar');
 makeDemo();drawOffline();updateRegion();updateZoom();// Frame animation is local and never changes GPS or a scanned warrior blueprint.
 avatarAnimationTimer=setInterval(()=>{
  if(document.hidden)return;
- avatarFrame=(avatarFrame+1)%(avatarIsWalking?4:16);
- const frame=avatarIsWalking?avatarFrame:(avatarFrame%16===0?2:0);
+ avatarFrame=(avatarFrame+1)%4;
+ const frame=avatarIsWalking?avatarFrame:0;
  const src=makeCustomAvatarSprite(frame,avatarFacing);
  for(const d of ['up','down','left','right'])delete worldState.avatars['hero:'+d+':'+frame];
  if(gpsMarker?.getElement){
-  const el=gpsMarker.getElement(),img=el.querySelector('.sprite');if(img)img.src=src;
+  const el=gpsMarker.getElement(),img=el.querySelector('.sprite');if(img&&img.src!==src)img.src=src;
  }
 },170);
 window.addEventListener('resize',()=>{if(mapLoaded){resizeScenery();lastSceneryArea='';rebuildScenery()}});
