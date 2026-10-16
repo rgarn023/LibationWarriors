@@ -2098,6 +2098,18 @@ function addGeographicBuildingDepth(){
 
  // Read-only browser diagnostics: never expose phone coordinates or account info.
 window.LibationWorldDiagnostics=Object.freeze({
+ materials:()=>{
+  if(!map)return null;
+  const names=['lw-ground','lw-meadow','lw-park','lw-forest',
+   'lw-water','lw-sand','lw-settlement'];
+  const results=names.map(name=>{
+   if(!map.hasImage(name))return {name,ready:false};
+   const asset=map.getImage(name),pixels=asset?.data||asset;
+   return {name,ready:true,width:pixels?.width??asset?.width??null,
+    height:pixels?.height??asset?.height??null};
+  });
+  return {registered:results.filter(x=>x.ready).length,results};
+ },
  buildingPaint:()=>{
   if(!map||!map.getStyle())return null;
   const ids=map.getStyle().layers.map(l=>l.id);
