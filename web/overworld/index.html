@@ -205,8 +205,9 @@ body.walking #gpsMarker .sprite{animation:travelSteps .48s steps(2,end) infinite
 #gpsMarker{transform-origin:center bottom}
 #gpsMarker .gps-name{display:none}
 #gpsMarker .sprite{height:112px;width:84px}
-.pixel-marker{transform-origin:center bottom;transform:scale(var(--portal-scale, .8))}
-.pixel-marker img{transform-origin:center bottom}
+.pixel-marker{transform-origin:center bottom}
+/* Scale the portal artwork, not the MapLibre marker root: MapLibre owns its translation transform. */
+.pixel-marker img{transform-origin:center bottom;transform:scale(var(--portal-scale, .8))}
 .pixel-marker img{animation:none!important}
 #grain{display:none}
 @media(max-width:530px){
