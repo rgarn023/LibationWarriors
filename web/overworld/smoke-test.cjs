@@ -145,6 +145,15 @@ const fs=require('fs');
  const turned=await inspectMarkerAnchors();
  if(!anchored(turned.avatar)||!turned.portals.every(anchored))
    throw Error('Geographic markers detached after camera rotation: '+JSON.stringify(turned));
+ const gpsState=await page.evaluate(()=>{
+  const toast=document.querySelector('#toast'),banner=document.querySelector('#liveLocationBanner');
+  return {readout:document.querySelector('#locationReadout')?.textContent,
+   misleadingToast:toast?.classList.contains('toast-visible')&&/Unable to determine your position|Location request timed out/i.test(toast.textContent),
+   misleadingBanner:banner?.classList.contains('visible')&&/Unable to determine your position|Location request timed out/i.test(banner.textContent)};
+ });
+ if(gpsState.misleadingToast||gpsState.misleadingBanner)
+   throw Error('A transient GPS error hides a valid live position: '+JSON.stringify(gpsState));
+ console.log('GPS SIGNAL STATUS:',JSON.stringify(gpsState));
  await page.screenshot({path:'/tmp/libation-world-movement.png',fullPage:false});
  console.log('GPS MOVEMENT + CAMERA SWIPE:',JSON.stringify({moved,turned}));
 
