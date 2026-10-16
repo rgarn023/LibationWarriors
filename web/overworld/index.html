@@ -145,7 +145,7 @@ async function startLive(){
  try{
    document.body.classList.remove('google-active');$('#map').style.display='block';map=new maplibregl.Map({container:'map',style:'https://tiles.openfreemap.org/styles/liberty',center:centerStart,zoom:13.2,attributionControl:true,preserveDrawingBuffer:false,pitch:0,dragRotate:false,touchPitch:false,minZoom:3,maxZoom:19,cooperativeGestures:false});
    provider='osm';map.getCanvas().setAttribute('aria-label','Real geographic map. Drag to pan and pinch to zoom.');
-   map.on('load',()=>{mapLoaded=true;hideBanner();$('#map').classList.add('map-live');$('#loadingMap').style.display='none';$('#demoMarkers').style.display='none';updateStatus('LIVE<br>WORLD',true);styleOverworld();refreshSoon();updateZoom();updateGpsOverlay();});
+   map.on('load',()=>{mapLoaded=true;hideBanner();$('#map').classList.add('map-live');$('#loadingMap').style.display='none';$('#demoMarkers').style.display='none';updateStatus('LIVE<br>WORLD',true);styleOverworld();if(currentGeolocation)moveTo(currentGeolocation[0],currentGeolocation[1],Math.max(15,zoomNow()));refreshSoon();updateZoom();updateGpsOverlay();});
    map.on('moveend',()=>{lastPosition=position();refreshSoon();updateZoom()});map.on('move',()=>updateGpsOverlay());map.on('zoom',updateZoom);
    map.on('error',e=>{if(!mapLoaded){offline('Could not reach online map tiles. Offline concept shown.')}});
    setTimeout(()=>{if(!mapLoaded)offline('Map service is taking too long. Offline concept shown.')},14000);
@@ -360,12 +360,13 @@ function updateGpsOverlay(){
  }
 }
 function receivedGps(p){
+ const firstFix=!currentGeolocation;
  currentGeolocation=[p.coords.longitude,p.coords.latitude];gpsAccuracy=p.coords.accuracy;
  locationAccess='granted';$('#locateBtn').classList.remove('busy');$('#locateBtn').classList.add('active');
  $('#locationReadout').textContent='✦ GPS POSITION FOUND  ·  ±'+Math.round(gpsAccuracy)+' m  ·  PRIVATE';
  $('#locationReadout').classList.add('visible');hideBanner();
  if(provider==='osm'||provider==='google'){
-  searchCity='Near your position';moveTo(currentGeolocation[0],currentGeolocation[1],Math.max(15,zoomNow()));updateRegion();
+  searchCity='Near your position';if(firstFix)moveTo(currentGeolocation[0],currentGeolocation[1],Math.max(15,zoomNow()));updateRegion();
  }else{mapBanner('✓ GPS found, but live map tiles are unavailable. This illustrated background is NOT geographic. <button id="retryConnection" class="launchLocation">RETRY LIVE MAP</button>');$('#retryConnection').onclick=()=>{hideBanner();startLive()}}
  updateGpsOverlay();toast('GPS location received. Your exact position is only displayed on this device.');
 }
