@@ -167,15 +167,7 @@ const fs=require('fs');
   buildingsPresentation.blocks!=='removed'||
   buildingsPresentation.houseIcons!=='yes'||buildingsPresentation.roofCount<2)
   throw Error('Buildings still render as filled roofs or tall blocks: '+JSON.stringify(buildingsPresentation));
- const mappedPaint=await page.evaluate(()=>{
-  const style=map.getStyle(),ids=style.layers.map(l=>l.id);
-  const footprint=ids.find(id=>/^lw-visible-building-\d+-footprint$/.test(id));
-  const border=ids.find(id=>/^lw-visible-building-\d+-outline$/.test(id));
-  return {footprint,fillOpacity:footprint?map.getPaintProperty(footprint,'fill-opacity'):null,
-   border,strokeOpacity:border?map.getPaintProperty(border,'line-opacity'):null,
-   roofOrSolidLayers:ids.filter(id=>/^lw-visible-building-\d+-(roof|solid)$/.test(id)),
-   texture:document.querySelector('#map')?.dataset.buildingHatch};
- });
+ const mappedPaint=await page.evaluate(()=>window.LibationWorldDiagnostics.buildingPaint());
  console.log('SUBTLE BUILDING FOOTPRINT RENDER:',JSON.stringify(mappedPaint));
  if(!mappedPaint.footprint||mappedPaint.fillOpacity>.25||
     !mappedPaint.border||mappedPaint.strokeOpacity<.65||
