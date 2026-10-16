@@ -40,12 +40,30 @@ const fs=require('fs');
   status:200,contentType:'application/json',body:'{"elements":[]}'
  }));
  await page.goto('http://127.0.0.1:8123/',{waitUntil:'domcontentloaded',timeout:30000});
- await page.waitForFunction(()=>{
-  const c=document.querySelector('#gameOverworldArt');
-  return !!(window.LibationGameWorld?.diagnostics().ready && c?.width>100
-   && typeof mapLoaded!=='undefined'&&mapLoaded
-   && typeof currentGeolocation!=='undefined'&&!!currentGeolocation);
- },null,{timeout:22000});
+ try{
+  await page.waitForFunction(()=>{
+   const c=document.querySelector('#gameOverworldArt');
+   return !!(window.LibationGameWorld?.diagnostics().ready && c?.width>100
+    && typeof mapLoaded!=='undefined'&&mapLoaded
+    && typeof currentGeolocation!=='undefined'&&!!currentGeolocation);
+  },null,{timeout:14500});
+ }catch(waitError){
+  const diag=await page.evaluate(()=>({
+    ready:!!window.LibationGameWorld?.diagnostics().ready,
+    features:window.LibationGameWorld?.diagnostics().features,
+    canvas:!!document.querySelector('#gameOverworldArt'),
+    mapLoaded:typeof mapLoaded!=='undefined'?mapLoaded:'undefined',
+    gps:typeof currentGeolocation!=='undefined'?currentGeolocation:'undefined',
+    provider:typeof provider!=='undefined'?provider:'undefined',
+    banner:document.querySelector('#liveLocationBanner')?.textContent?.slice(0,150),
+    status:document.querySelector('#online')?.textContent?.slice(0,100),
+    maplibre:typeof window.maplibregl,
+    scripts:[...document.scripts].map(x=>x.src).filter(Boolean).slice(-5)
+  }));
+  console.log('V13 TIMEOUT DIAGNOSTIC',JSON.stringify(diag),'BROWSER ERRORS',JSON.stringify(errors));
+  await page.screenshot({path:'/tmp/libation-world-screenshot.png',fullPage:false});
+  throw waitError;
+ }
  await page.waitForTimeout(500);
  const inspect=await page.evaluate(()=>{
   const c=document.querySelector('#gameOverworldArt');
