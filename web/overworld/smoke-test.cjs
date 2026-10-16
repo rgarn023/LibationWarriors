@@ -140,12 +140,24 @@ const fs=require('fs');
  const terrainReport=await page.locator('#map').evaluate(el=>({
    phase:el.dataset.terrainPhase,
    shorelineEdges:Number(el.dataset.shorelineEdges),
-   routeShoulders:Number(el.dataset.routeShoulders)
+   routeShoulders:Number(el.dataset.routeShoulders),
+   greenContours:Number(el.dataset.greenContours),
+   pathDetails:Number(el.dataset.pathDetails),
+   materials:Number(el.dataset.terrainMaterials)
  }));
  console.log('GEOGRAPHIC RPG TERRAIN PHASE:',JSON.stringify(terrainReport));
- if(terrainReport.phase!=='pixel-materials-1'||
+ if(terrainReport.phase!=='pixel-materials-2'||
    terrainReport.shorelineEdges<2||terrainReport.routeShoulders<2)
   throw Error('Water/coast/path artwork not tied to geographic layers: '+JSON.stringify(terrainReport));
+ if(terrainReport.materials!==7||terrainReport.greenContours<1||terrainReport.pathDetails<1)
+  throw Error('Biome/path detail materials missing: '+JSON.stringify(terrainReport));
+ const materialAudit=await page.evaluate(()=>{
+  const palette=['lw-ground','lw-meadow','lw-park','lw-forest',
+   'lw-water','lw-sand','lw-settlement'];
+  return window.LibationWorldDiagnostics?.materials?.()||
+   {available:'not-exported'};
+ });
+ console.log('WORLD TEXTURE MATERIAL AUDIT:',JSON.stringify(materialAudit));
  const texture=await page.locator('#map').getAttribute('data-terrain-tiles');
  if(texture!=='geographic')throw Error('Native georeferenced terrain tile materials absent: '+texture);
  const nativeArt=await page.locator('#map').evaluate(el=>({
@@ -278,6 +290,7 @@ const fs=require('fs');
  await page.waitForTimeout(3500); // Allow location toast to clear.
  await page.screenshot({path:'/tmp/libation-world-screenshot.png',fullPage:false});
  await page.screenshot({path:'/tmp/libation-fantasy-terrain.png',fullPage:false});
+ await page.screenshot({path:'/tmp/libation-detailed-overworld.png',fullPage:false});
  await page.screenshot({path:'/tmp/libation-building-forest-sprites.png',fullPage:false});
  await page.screenshot({path:'/tmp/libation-visible-buildings.png',fullPage:false});
  await page.screenshot({path:'/tmp/libation-refined-rooftops.png',fullPage:false});
