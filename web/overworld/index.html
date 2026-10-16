@@ -721,8 +721,11 @@ function updateStatus(label,alive){const el=$('#online');el.innerHTML=label;el.c
 function updateRegion(){
  const count=venues.filter(v=>v.type==='rupture').length;
  const challenge=venues.filter(v=>v.type==='challenge').length;
- const label=venueCountMode==='unavailable'?'Venue data unavailable · real map active':
+ const label=venueCountMode==='tile'?
+  (count+challenge?count+' ruptures · '+challenge+' wormholes · mapped POIs':
+   'No verified venues in loaded map · coverage limited'):
   venueCountMode==='loading'?'Finding nearby venues…':
+  venueCountMode==='unavailable'?'Directory unavailable · map POIs only':
   mapLoaded?(count+' ruptures · '+challenge+' wormholes'):
   'Offline illustration · not real geography';
  $('#venueCount').textContent=label;$('#regionName').textContent=searchCity;
@@ -2143,39 +2146,47 @@ window.addEventListener('resize',()=>{if(provider==='offline')drawOffline()});
 // A POI returned here has geographic coordinates from the same map, not an
 // invented marker. Unverified restaurants stay excluded.
 function nearbyTileVenues(){
- if(provider!=='osm'||!map||!mapLoaded||!map.isStyleLoaded())return [];
- const style=map.getStyle(),bounds=map.getBounds();
- const features=[];
+ if(provider!=='osm'||!map||!mapLoaded)return [];
+ const style=map.getStyle();if(!style)return [];
+ const features=[],bounds=map.getBounds();
+ // OpenMapTiles groups pubs and biergartens under class="beer".
+ // These venues come from existing geographically positioned map tiles.
  for(const [sourceId,info] of Object.entries(style.sources||{})){
-  if(info.type!=='vector')continue;
-  for(const layerName of ['poi']){
-   try{features.push(...(map.querySourceFeatures(sourceId,{sourceLayer:layerName})||[]))}
-   catch(_){}
+  if(info.type!=='vector'&&info.type!=='geojson')continue;
+  for(const sourceLayer of (info.type==='vector'?['poi']:[undefined])){
+   try{
+    const opts=sourceLayer?{sourceLayer}:undefined;
+    features.push(...(map.querySourceFeatures(sourceId,opts)||[]));
+   }catch(_){}
   }
  }
- // queryRenderedFeatures can still work when a provider exposes POIs under
- // a different vector source name or source-layer implementation.
  try{
-  const layers=(style.layers||[]).filter(l=>l.type==='symbol'&&/(poi|point_of_interest)/i.test(l.id)).map(l=>l.id);
+  const layers=(style.layers||[]).filter(l=>l.type==='symbol'&&
+   /poi|point_of_interest/i.test(l.id)).map(l=>l.id);
   if(layers.length)features.push(...map.queryRenderedFeatures({layers}));
  }catch(_){}
  const found=[],seen=new Set();
- for(const f of features){
-  const p=f.properties||{};
-  const className=String(p.class||p.category||'').toLowerCase();
-  const sub=String(p.subclass||p.type||'').toLowerCase();
-  const regular=['bar','pub','biergarten'].includes(className)||['bar','pub','biergarten'].includes(sub);
-  const challenge=['winery','distillery','brewery','meadery'].includes(className)||['winery','distillery','brewery','meadery'].includes(sub);
-  if((!regular&&!challenge)||f.geometry?.type!=='Point')continue;
-  const longitude=Number(f.geometry.coordinates?.[0]),latitude=Number(f.geometry.coordinates?.[1]);
-  if(!Number.isFinite(longitude)||!Number.isFinite(latitude)||Math.abs(longitude)>180||Math.abs(latitude)>85)continue;
-  if(!bounds.contains([longitude,latitude]))continue;
+ for(const feature of features){
+  const p=feature.properties||{};
+  const category=String(p.class||p.category||'').toLowerCase();
+  const subtype=String(p.subclass||p.type||'').toLowerCase();
+  // Do not present retail alcohol shops or unverified restaurants as bars.
+  const regular=['pub','bar','biergarten'].includes(subtype)||
+   (category==='beer'&&['pub','biergarten'].includes(subtype))||
+   (category==='bar'&&!subtype);
+  const producer=['brewery','winery','distillery','meadery'].includes(subtype)||
+   ['brewery','winery','distillery','meadery'].includes(category);
+  if((!regular&&!producer)||feature.geometry?.type!=='Point')continue;
+  const lon=Number(feature.geometry.coordinates?.[0]),lat=Number(feature.geometry.coordinates?.[1]);
+  if(!Number.isFinite(lat)||!Number.isFinite(lon)||Math.abs(lat)>85||Math.abs(lon)>180)continue;
+  if(!bounds.contains([lon,lat]))continue;
+  if(currentGeolocation&&geoMeters(currentGeolocation,[lon,lat])>LOCAL_RADIUS_METERS+150)continue;
   const name=String(p.name||p.name_en||p['name:en']||'').trim().slice(0,80);
   if(!name)continue;
-  const key=[name.toLowerCase(),Math.round(latitude*10000),Math.round(longitude*10000)].join(':');
+  const key=[name.toLowerCase(),Math.round(lat*10000),Math.round(lon*10000)].join(':');
   if(seen.has(key))continue;seen.add(key);
-  found.push({id:'osm-tile:'+key,name,type:challenge?'challenge':'rupture',
-    lat:latitude,lon:longitude,source:'vector-tile',demo:false,kind:sub||className,website:''});
+  found.push({id:'osm-tile:'+key,name,type:producer?'challenge':'rupture',
+   lat,lon,source:'map-tiles',demo:false,kind:subtype||category,website:''});
   if(found.length>=80)break;
  }
  return found;
@@ -2195,24 +2206,20 @@ let lastTileSignature='';
 // must NOT delete actual nearby locations and make portals flicker.
 let lastTileVenueRefresh=0,lastTileVenueGPS=null;
 function integrateMapTileVenues(){
- if(provider!=='osm'||!mapLoaded||!map||!currentGeolocation||!map.isStyleLoaded())return;
+ if(provider!=='osm'||!mapLoaded||!map||!currentGeolocation)return;
  const now=Date.now(),moved=lastTileVenueGPS?geoMeters(lastTileVenueGPS,currentGeolocation):Infinity;
- if(now-lastTileVenueRefresh<18000 && moved<60)return;
+ if(now-lastTileVenueRefresh<1300&&moved<35)return;
  lastTileVenueRefresh=now;lastTileVenueGPS=currentGeolocation.slice();
- const base=venues.filter(v=>Number.isFinite(v.lat)&&Number.isFinite(v.lon)&&
-  geoMeters(currentGeolocation,[v.lon,v.lat])<LOCAL_RADIUS_METERS+220);
- const merged=combineVenues(base,nearbyTileVenues());
+ const retained=venues.filter(v=>Number.isFinite(v.lat)&&Number.isFinite(v.lon)&&
+  geoMeters(currentGeolocation,[v.lon,v.lat])<LOCAL_RADIUS_METERS+150);
+ const merged=combineVenues(retained,nearbyTileVenues());
  const signature=merged.map(v=>v.id).sort().join('|');
  if(lastTileSignature===signature)return;
- lastTileSignature=signature;
- venues=merged;renderMarkers();
- if(venueCountMode==='unavailable'||venueCountMode==='loading'){
-  if(venues.length)$('#venueCount').textContent=venues.length+' nearby venues · map data';
- }else updateRegion();
+ lastTileSignature=signature;venues=merged;
+ venueCountMode='tile';renderMarkers();updateRegion();
 }
-
 // Nearby OSM venues are real locations. Do not invent fictional points on a live map.
-const OVERPASS=['https://overpass-api.de/api/interpreter','https://overpass.kumi.systems/api/interpreter','https://overpass.nchc.org.tw/api/interpreter'];
+// Normal venue discovery uses POIs in already loaded OSM map tiles.
 function venueRequestArea(){
  const c=currentGeolocation||position();
  const zoom=LOCAL_ZOOM;
@@ -2249,72 +2256,27 @@ function normalizeVenueRows(elements){
  return rows;
 }
 async function loadVenues(force=false){
- if(provider==='offline')return;
- const area=venueRequestArea();
- if(area.zoom<10.2){
-   if(fetchController)fetchController.abort();
-   venues=[];renderMarkers();$('#venueCount').textContent='Zoom in to discover venues';
-   return;
- }
- const key=venueQueryKey(area), now=Date.now();
- if(!force&&key===lastVenueKey&&now-lastVenueLoadAt<25000)return;
- lastVenueKey=key;lastVenueLoadAt=now;
- if(venueCache.has(key)){venues=combineVenues(venues,combineVenues(venueCache.get(key),nearbyTileVenues()));renderMarkers();updateRegion();}
- // Cancel previous request when the user pans/zooms to a different area.
- if(fetchController)fetchController.abort();
- const request=new AbortController();
- fetchController=request;
- const currentRequest=++fetchSerial;
- mapLoading=true;
- venueCountMode='loading';
- if(!venueCache.has(key))$('#venueCount').textContent='Searching live venue data…';
- integrateMapTileVenues();
- const la=area.lat.toFixed(5),lo=area.lon.toFixed(5);
- // Small, bounded query plus a clear 70-element ceiling prevents overload on public services.
- const r=area.radius;
- const query='[out:json][timeout:18];('+
-   'nwr(around:'+r+','+la+','+lo+')['+'"amenity"~"^(pub|bar|biergarten)$"'+'];'+
-   'nwr(around:'+r+','+la+','+lo+')['+'"amenity"="restaurant"'+']['+'"alcohol"'+'];'+
-   'nwr(around:'+r+','+la+','+lo+')['+'"craft"~"^(brewery|winery|distillery|meadery)$"'+'];'+
-   'nwr(around:'+r+','+la+','+lo+')['+'"industrial"~"^(brewery|winery|distillery)$"'+'];'+
-   ');out center 70;';
- let lastError='venue service unavailable';
- for(const endpoint of OVERPASS){
-   if(request.signal.aborted)return;
-   const timeoutController=new AbortController();
-   const onAbort=()=>timeoutController.abort();
-   request.signal.addEventListener('abort',onAbort,{once:true});
-   const timeout=setTimeout(()=>timeoutController.abort(),8500);
-   try{
-     const response=await fetch(endpoint+'?data='+encodeURIComponent(query),{
-       signal:timeoutController.signal,headers:{accept:'application/json'}});
-     if(!response.ok)throw Error('HTTP '+response.status);
-     const result=await response.json();
-     if(request.signal.aborted||currentRequest!==fetchSerial)return;
-     venues=combineVenues(venues,combineVenues(normalizeVenueRows(result.elements).slice(0,70),nearbyTileVenues()));
-     venueCache.set(key,venues);
-     // Cap memory to recent areas; gameplay is not a venue database.
-     if(venueCache.size>24)venueCache.delete(venueCache.keys().next().value);
-     venueCountMode='ready';renderMarkers();updateRegion();mapLoading=false;
-     if(!venues.length)$('#venueCount').textContent='No confirmed venues nearby · pan or zoom';
-     return;
-   }catch(err){
-     if(request.signal.aborted)return;
-     lastError=err?.message||'service unavailable';
-   }finally{
-     clearTimeout(timeout);
-     request.signal.removeEventListener('abort',onAbort);
-   }
- }
- if(request.signal.aborted||currentRequest!==fetchSerial)return;
- mapLoading=false;
- venueCountMode='unavailable';
- venues=combineVenues(venues,combineVenues(venueCache.get(key)||[],nearbyTileVenues()));
- renderMarkers();
- $('#venueCount').textContent=venues.length?
-    venues.length+' mapped places · directory unavailable':
-    'No venue data returned · tap ↻ to retry';
- if(!venues.length)toast('Venue directory failed ('+lastError+'). Your GPS map still works.');
+ if(provider==='offline'||!map||!mapLoaded)return;
+ // Public Overpass endpoints routinely fail from mobile browsers. The map's
+ // vector tile POIs are the safe primary source for accurately located portals.
+ // A complete venue directory will require a controlled server-side service.
+ if(fetchController){fetchController.abort();fetchController=null}
+ const area=venueRequestArea(),key=venueQueryKey(area);
+ lastVenueKey=key;lastVenueLoadAt=Date.now();
+ const retained=venues.filter(v=>Number.isFinite(v.lat)&&Number.isFinite(v.lon)&&
+  geoMeters([area.lon,area.lat],[v.lon,v.lat])<LOCAL_RADIUS_METERS+150);
+ const available=nearbyTileVenues();
+ venues=combineVenues(retained,available);
+ venueCache.set(key,venues);
+ if(venueCache.size>24)venueCache.delete(venueCache.keys().next().value);
+ lastTileSignature=venues.map(v=>v.id).sort().join('|');
+ venueCountMode='tile';mapLoading=false;
+ $('#map').dataset.venueDirectory='map-tiles';
+ renderMarkers();updateRegion();
+ if(force&&!venues.length)toast('No verified venue POIs in the loaded map. Coverage may be incomplete.');
+ if(!available.length)setTimeout(()=>{
+  if(provider==='osm'&&mapLoaded)integrateMapTileVenues();
+ },2000);
 }
 // Markers persist between venue refreshes; DOM is not torn down on every tile event.
 const worldVenueMarkers=new Map();
