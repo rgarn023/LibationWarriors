@@ -1791,8 +1791,20 @@ function makeGeographicLandmarkSprite(kind,variant=0){
  const leaves=['#55965c','#70b96b','#8bc77b'];
  if(kind==='forest'){
   const x=36,v=variant%3;
-  // Pixel-art evergreen with a sloping silhouette, shaded layered boughs,
-  // sunlit clusters, and a small mapped ground contact shadow.
+  // A small forest grove is representative of the *mapped woodland area*.
+  // The two rear trees are decorative companions, not invented tree locations.
+  const rearPine=(cx,top,width,variantOffset)=>{
+   p('#315540',cx-3,top+40,7,18);
+   p('#836245',cx-1,top+43,3,13);
+   for(let level=0;level<4;level++){
+    const y=top+level*10,r=5+level*4+width;
+    fill('#25483d',[[cx,y-4],[cx+r+2,y+14],[cx-r-2,y+14]]);
+    fill(leaves[(v+variantOffset)%3],[[cx,y-6],[cx+r-2,y+12],[cx-r+3,y+12]]);
+    p('#a4ce8b',cx-2-level,y+3,4,2);
+   }
+  };
+  rearPine(17,28,0,1);rearPine(55,33,0,2);
+  // Foreground evergreen: detailed layered boughs and visible trunk.
   p('#244b3f',14,76,44,5);p('#305a43',19,74,34,6);
   p('#66523d',33,62,7,17);p('#9e7b50',36,64,2,11);
   for(let tier=0;tier<4;tier++){
@@ -1902,10 +1914,10 @@ function addGeographicBuildingDepth(){
   source:layer.source,
   filter:layer.filter||['==',['geometry-type'],'Polygon'],
   paint:{
-   'fill-extrusion-color':'#d6b58d',
+   'fill-extrusion-color':'#b19a7e',
    'fill-extrusion-base':0,
-   'fill-extrusion-height':['min',18,['max',4,
-    ['to-number',['coalesce',['get','render_height'],['get','height'],8]]]],
+   'fill-extrusion-height':['min',18,['max',2,
+    ['to-number',['coalesce',['get','render_height'],['get','height'],3]]]],
    'fill-extrusion-opacity':0.88
   }
  };
