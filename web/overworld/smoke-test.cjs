@@ -1,43 +1,75 @@
+// Deterministic browser test for the V13 geographic RPG renderer.
+// Public mapping and Overpass endpoints are mocked, so CI tests gameplay
+// rather than depending on external rate limits, CORS, or DNS.
 const {chromium}=require('/tmp/libation-test/node_modules/playwright-core');
 const fs=require('fs');
 (async()=>{
- const chrome=['/usr/bin/google-chrome','/usr/bin/google-chrome-stable','/usr/bin/chromium','/snap/bin/chromium'].find(fs.existsSync);
- if(!chrome)throw Error('Chrome/Chromium browser not present on Actions runner');
+ const chrome=['/usr/bin/google-chrome','/usr/bin/google-chrome-stable','/usr/bin/chromium'].find(fs.existsSync);
+ if(!chrome)throw Error('No Chromium browser found on Actions runner');
  const browser=await chromium.launch({executablePath:chrome,headless:true,
   args:['--no-sandbox','--use-gl=angle','--use-angle=swiftshader','--enable-webgl']});
- const ctx=await browser.newContext({
+ try{
+ const context=await browser.newContext({
   viewport:{width:390,height:844},deviceScaleFactor:2,isMobile:true,hasTouch:true,
   geolocation:{longitude:-76.284,latitude:36.771,accuracy:12},
   permissions:['geolocation']});
- const page=await ctx.newPage();
- let errors=[];
- page.on('pageerror',e=>errors.push(e.message));
+ const page=await context.newPage();
+ const errors=[];
+ page.on('pageerror',e=>errors.push(e.stack||e.message));
  page.on('console',m=>{if(m.type()==='error')errors.push(m.text())});
- await page.goto('http://127.0.0.1:8123/',{waitUntil:'domcontentloaded',timeout:25000});
- try{await page.waitForFunction(()=>document.body.classList.contains('game-ready'),null,{timeout:35000})}
- catch(err){console.log('World loading timed out:',err.message)}
- await page.waitForTimeout(2600);
+ const featureCollection={type:'FeatureCollection',features:[
+  {type:'Feature',properties:{kind:'park'},geometry:{type:'Polygon',coordinates:[[[-76.285,36.7695],[-76.282,36.7695],[-76.282,36.7725],[-76.285,36.7725],[-76.285,36.7695]]]}},
+  {type:'Feature',properties:{kind:'water'},geometry:{type:'Polygon',coordinates:[[[-76.281,36.767],[-76.278,36.767],[-76.278,36.774],[-76.281,36.774],[-76.281,36.767]]]}},
+  {type:'Feature',properties:{kind:'building'},geometry:{type:'Polygon',coordinates:[[[-76.2842,36.7702],[-76.284,36.7702],[-76.284,36.7704],[-76.2842,36.7704],[-76.2842,36.7702]]]}},
+  {type:'Feature',properties:{kind:'road'},geometry:{type:'LineString',coordinates:[[-76.287,36.7706],[-76.285,36.7708],[-76.281,36.7713],[-76.277,36.772]]}},
+  {type:'Feature',properties:{kind:'trail'},geometry:{type:'LineString',coordinates:[[-76.2847,36.769],[-76.2841,36.77],[-76.284,36.773]]}}
+ ]};
+ const mockStyle={version:8,sources:{nearby:{type:'geojson',data:featureCollection}},
+  layers:[
+   {id:'background',type:'background',paint:{'background-color':'#a1d2a0'}},
+   {id:'park',type:'fill',source:'nearby',filter:['==',['get','kind'],'park'],paint:{'fill-color':'#6eaf83'}},
+   {id:'water',type:'fill',source:'nearby',filter:['==',['get','kind'],'water'],paint:{'fill-color':'#55acc9'}},
+   {id:'building',type:'fill',source:'nearby',filter:['==',['get','kind'],'building'],paint:{'fill-color':'#bdaa80'}},
+   {id:'road-primary',type:'line',source:'nearby',filter:['==',['get','kind'],'road'],paint:{'line-color':'#e8d6b1','line-width':7}},
+   {id:'path',type:'line',source:'nearby',filter:['==',['get','kind'],'trail'],paint:{'line-color':'#efe5c3','line-width':3}}
+  ]};
+ await page.route('**/styles/liberty**',route=>route.fulfill({
+  status:200,contentType:'application/json',body:JSON.stringify(mockStyle)
+ }));
+ await page.route('**/api/interpreter**',route=>route.fulfill({
+  status:200,contentType:'application/json',body:'{"elements":[]}'
+ }));
+ await page.goto('http://127.0.0.1:8123/',{waitUntil:'domcontentloaded',timeout:30000});
+ await page.waitForFunction(()=>{
+  const c=document.querySelector('#gameOverworldArt');
+  return !!(window.LibationGameWorld?.diagnostics().ready && c?.width>100
+   && typeof mapLoaded!=='undefined'&&mapLoaded
+   && typeof currentGeolocation!=='undefined'&&!!currentGeolocation);
+ },null,{timeout:22000});
+ await page.waitForTimeout(500);
  const inspect=await page.evaluate(()=>{
-  const c=document.getElementById('gameWorld'),state=typeof worldState==='undefined'?null:worldState;
-  let colorCount=0;
-  if(c?.width&&c?.height){
-   const ctx=c.getContext('2d'),pix=ctx.getImageData(0,0,Math.min(160,c.width),Math.min(160,c.height)).data;
-   const colors=new Set();
-   for(let i=0;i<pix.length;i+=400)colors.add([pix[i],pix[i+1],pix[i+2]].join(','));
-   colorCount=colors.size;
-  }
-  return {gameReady:document.body.classList.contains('game-ready'),
-   mapLoaded:typeof mapLoaded!=='undefined'&&mapLoaded,
-   geolocation:typeof currentGeolocation!=='undefined'&&!!currentGeolocation,
-   canvasSize:c?[c.width,c.height]:null,
-   colorCount,geographicFeatures:state?Object.fromEntries(Object.entries(state.features).map(([k,v])=>[k,v.length])):{},
-   portals:typeof venues!=='undefined'?venues.length:0};
+  const c=document.querySelector('#gameOverworldArt');
+  const ctx=c.getContext('2d',{willReadFrequently:true});
+  const sample=ctx.getImageData(0,0,Math.min(c.width,260),Math.min(c.height,320)).data;
+  const colors=new Set();
+  for(let i=0;i<sample.length;i+=40)colors.add(
+   sample[i]+','+sample[i+1]+','+sample[i+2]);
+  const marker=document.querySelector('#gpsMarker');
+  return {mapLoaded,geolocation:!!currentGeolocation,
+   features:window.LibationGameWorld.diagnostics().features,
+   canvasSize:[c.width,c.height],canvasDisplay:getComputedStyle(c).display,
+   colors:colors.size,hasGPSMarker:!!marker,
+   oldOverlayHidden:getComputedStyle(document.querySelector('#gameWorld')).display==='none'};
  });
  await page.screenshot({path:'/tmp/libation-world-screenshot.png',fullPage:false});
- console.log('SCENE AUDIT:',JSON.stringify(inspect),'BROWSER ERRORS:',JSON.stringify(errors.slice(0,15)));
- await browser.close();
- if(!inspect.gameReady||!inspect.canvasSize?.[0]||!inspect.geolocation||inspect.colorCount<3){
-  throw Error('Game renderer/geolocation/canvas smoke test did not pass');
+ console.log('V13 WORLD AUDIT:',JSON.stringify(inspect),
+   'JS ERRORS:',JSON.stringify(errors.slice(0,12)));
+ if(!inspect.mapLoaded||!inspect.geolocation||inspect.features<3||
+    inspect.colors<6||!inspect.hasGPSMarker||!inspect.oldOverlayHidden){
+   throw Error('Georeferenced RPG world browser smoke test failed');
  }
- if(errors.some(e=>/Uncaught|ReferenceError|TypeError|SyntaxError/.test(e)))throw Error('JavaScript errors: '+errors.join('; '));
+ if(errors.some(e=>/Uncaught|ReferenceError|TypeError|SyntaxError/.test(e))){
+   throw Error('Runtime JS exceptions: '+errors.join('; '));
+ }
+ }finally{await browser.close()}
 })().catch(e=>{console.error(e.stack||String(e));process.exit(1)});
