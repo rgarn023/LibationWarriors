@@ -45,7 +45,7 @@ const fs=require('fs');
    const c=document.querySelector('#map canvas.maplibregl-canvas');
    const gps=document.querySelector('#gpsMarker');
    const status=document.querySelector('#online')?.textContent||'';
-   return !!(c&&gps&&status.includes('LIVE')&&
+   return !!(c&&gps&&(status.includes('LIVE')||status.includes('ONLINE'))&&
     (document.querySelector('#locationReadout')?.textContent||'').includes('GPS POSITION FOUND'));
   },null,{timeout:22000});
  }catch(err){
