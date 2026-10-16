@@ -152,8 +152,23 @@ async function startLive(){
    provider='osm';map.getCanvas().setAttribute('aria-label','Real geographic map. Drag to pan and pinch to zoom.');
    map.on('load',()=>{mapLoaded=true;hideBanner();$('#map').classList.add('map-live');$('#loadingMap').style.display='none';$('#demoMarkers').style.display='none';updateStatus('LIVE<br>WORLD',true);styleOverworld();if(currentGeolocation)moveTo(currentGeolocation[0],currentGeolocation[1],Math.max(15,zoomNow()));refreshSoon();updateZoom();updateGpsOverlay();});
    map.on('moveend',()=>{lastPosition=position();refreshSoon();updateZoom()});map.on('move',()=>updateGpsOverlay());map.on('zoom',updateZoom);
-   map.on('error',e=>{if(!mapLoaded){offline('Could not reach online map tiles. Offline concept shown.')}});
-   setTimeout(()=>{if(!mapLoaded)offline('Map service is taking too long. Offline concept shown.')},14000);
+   // Retry a second geographic map source if the vector style cannot load.
+   // We never use fictional scene art to impersonate real GPS/map geography.
+   let rasterFallbackAttempted=false;
+   const fallbackStyle={version:8,sources:{carto:{type:'raster',tiles:[
+     'https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
+     'https://b.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png'
+   ],tileSize:256,attribution:'© OpenStreetMap contributors · © CARTO'}},
+     layers:[{id:'geographic-fallback',type:'raster',source:'carto'}]};
+   const tryRasterFallback=()=>{
+     if(mapLoaded||rasterFallbackAttempted||provider!=='osm'||!map)return;
+     rasterFallbackAttempted=true;
+     $('#venueCount').textContent='Switching to backup live geography…';
+     try{map.setStyle(fallbackStyle)}catch(err){console.warn('Raster fallback failed',err)}
+   };
+   map.on('error',e=>{if(!mapLoaded)tryRasterFallback();});
+   setTimeout(tryRasterFallback,8000);
+   setTimeout(()=>{if(!mapLoaded)offline('Live geography could not load from either map source. Check the connection and retry.')},22000);
  }catch(e){offline('Live map service failed: '+e.message)}
 }
 function snesPattern(kind){
