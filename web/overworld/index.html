@@ -2483,7 +2483,7 @@ function renderPanel(k){const body=$('#drawerContent');clearInterval(countdownHa
    '<div class="divider"></div><div class="box"><div class="eyebrow">DATA SOURCES</div><p class="note">OpenFreeMap / © OpenStreetMap contributors; live venue points from OpenStreetMap from existing OSM vector tiles. The venue dataset is community-maintained; restaurant alcohol service and operating hours are not verified. Game dungeon, gold and character systems are fictional simulations. Registered home scan locations are never shown on the world map.</p></div>';
   $('#openAvatarEditor').onclick=()=>setPanel('avatar');
   $('#devModeToggle').onclick=()=>{setDeveloperMode(!developerMode);renderPanel('settings')};
-  $('#cities [data-city]').forEach(btn=>btn.onclick=()=>{const n=btn.dataset.city;searchCity=n;moveTo(...presets[n],13.8);updateRegion();closeDrawer()});const cityFinder=$('#findCity');if(cityFinder)cityFinder.onclick=geocode;$('#useGoogle').onclick=()=>loadGoogle($('#googleKey').value.trim());const locSettings=$('#settingsLocate');if(locSettings)locSettings.onclick=()=>{closeDrawer();locateMe()};
+  $$('#cities [data-city]').forEach(btn=>btn.onclick=()=>{const n=btn.dataset.city;searchCity=n;moveTo(...presets[n],13.8);updateRegion();closeDrawer()});const cityFinder=$('#findCity');if(cityFinder)cityFinder.onclick=geocode;$('#useGoogle').onclick=()=>loadGoogle($('#googleKey').value.trim());const locSettings=$('#settingsLocate');if(locSettings)locSettings.onclick=()=>{closeDrawer();locateMe()};
  }
 }
 function baseWarrior(code){let normalized=String(code).replace(/[^0-9]/g,'');if(normalized.length===13&&normalized.startsWith('0'))normalized=normalized.slice(1);
