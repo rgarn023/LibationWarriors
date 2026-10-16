@@ -186,10 +186,39 @@ body.walking #gpsMarker .sprite{animation:travelSteps .48s steps(2,end) infinite
 #mapStats .city{color:#ffedca}
 #hud{background:linear-gradient(180deg,#193c32f5,#264c3fb8);border-bottom-color:#c1a66e}
 #caption{display:none!important}
+
+/* V11: forward-looking mobile exploration, contrasting with the old flat atlas. */
+#scene{background:#6cb7db}
+#skyHorizon{position:absolute;top:0;left:0;right:0;height:37%;z-index:3;pointer-events:none;
+ background:linear-gradient(180deg,#57abdf 0%,#80c9ed 25%,#bbdef0 57%,#d1e6d47d 83%,transparent 100%);}
+#skyHorizon:before,#skyHorizon:after{content:"";position:absolute;display:block;border-radius:50%;
+ background:#f8fcf9d8;filter:blur(4px);box-shadow:
+  28px 1px 0 12px #f4fcfad1,72px 4px 0 6px #f4fcfaaf,105px 2px 0 17px #f8fcf7b9;}
+#skyHorizon:before{left:8%;top:22%;width:42px;height:9px;}
+#skyHorizon:after{right:10%;top:36%;width:54px;height:13px;transform:scale(.75);}
+#hud{background:linear-gradient(180deg,#102f40d5,#1d3d4e8c);border-bottom:2px solid #88afaa}
+#mapStats{background:#1b4b44c9;max-width:152px;padding:6px 8px;}
+#mapStats .city{font-size:12px}
+#mapStats .eyebrow{font-size:8px}
+#topChips{top:calc(env(safe-area-inset-top) + 83px);gap:5px}
+#topChips .chip{padding:7px 9px}
+#gpsMarker{transform-origin:center bottom}
+#gpsMarker .gps-name{display:none}
+#gpsMarker .sprite{height:112px;width:84px}
+.pixel-marker img{animation:none!important}
+#grain{display:none}
+@media(max-width:530px){
+ #skyHorizon{height:35%}
+ #hud{min-height:62px}
+ #topChips{top:calc(env(safe-area-inset-top) + 74px)}
+ #mapStats{top:calc(env(safe-area-inset-top) + 122px)}
+ #leftSide{top:calc(env(safe-area-inset-top) + 130px)}
+}
+
 </style>
 </head>
 <body>
-<div id="scene"><div id="illustratedBackdrop"></div><canvas id="offlineCanvas"></canvas><div id="map" role="application" aria-label="Interactive real geographic map"></div><div id="demoMarkers"></div><div id="playerPin"><img class="playerImage" alt="Your warrior avatar"><div class="label">YOU</div><div class="playerBeacon"></div></div><div id="accuracyCircle"></div><div id="playerSpot">✦</div></div>
+<div id="scene"><div id="skyHorizon" aria-hidden="true"></div><div id="illustratedBackdrop"></div><canvas id="offlineCanvas"></canvas><div id="map" role="application" aria-label="Interactive real geographic map"></div><div id="demoMarkers"></div><div id="playerPin"><img class="playerImage" alt="Your warrior avatar"><div class="label">YOU</div><div class="playerBeacon"></div></div><div id="accuracyCircle"></div><div id="playerSpot">✦</div></div>
 <div id="grain"></div><div id="vignette"></div><div id="loadingMap" class="pixfont">LOADING REAL OVERWORLD...<br><span class="xsmall muted">Live map requires internet · GPS requires HTTPS</span></div>
 <header id="hud"><div class="brand"><div class="brandmark pixfont">cg</div><div><div class="brandname pixfont">LIBATION WARRIORS</div><div class="brandsub">CHAROITE GAMES · LIVE 16-BIT MAP</div></div></div><div class="hudright"><div class="coin">🟡 2,850</div><div id="online" class="online is-off">MAP<br>CONNECTING</div></div></header>
 <div id="topChips"><button class="chip active" data-filter="all"><span class="symbol">✦</span> ALL</button><button class="chip" data-filter="rupture"><span class="symbol">⚔</span> RUPTURES</button><button class="chip special" data-filter="challenge"><span class="symbol">✺</span> WORMHOLES</button><button class="chip right" id="searchButton">⌕ FIND</button></div>
@@ -204,11 +233,13 @@ body.walking #gpsMarker .sprite{animation:travelSteps .48s steps(2,end) infinite
 'use strict';
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const centerStart=[-76.273,36.768]; // Unused until GPS arrives.
-const LOCAL_ZOOM=16.25,LOCAL_RADIUS_METERS=1350;
+const LOCAL_ZOOM=16.95,LOCAL_RADIUS_METERS=1600,ADVENTURE_PITCH=55;
 const presets={"Chesapeake, VA":[-76.273,36.768],"Virginia Beach, VA":[-75.976,36.852],"New York, NY":[-73.985,40.748],"Boston, MA":[-71.06,42.356],"Tokyo, Japan":[139.701,35.658]};
 let provider='offline', map=null,gm=null,gmMarkers=[],markers=[],venues=[],demoVenues=[],selectedVenue=null,lastPosition=centerStart.slice(),currentFilter='all',mapLoading=false,mapLoaded=false,fetchSerial=0,fetchController=null,venueTimer=null,searchCity='Your nearby overworld',activePanel='map',avatarKey='712340000032',claimed=new Set(),shadowPath=null,openedAt=Date.now(),countdownHandle=null,loadingHint='',currentGeolocation=null,gpsWatchId=null,gpsAccuracy=null,gpsMarker=null,gpsAccuracyCircle=null,offlineZoom=13,liveMapFailure=false,locationAccess='not-requested',venueCache=new Map(),lastVenueKey='',lastVenueLoadAt=0;
 let toastTimer=null,venueCountMode='idle',followPlayer=true;
 let gpsDrawnPosition=null,gpsTransitionFrame=null,lastGpsReceiveAt=0,lastGpsCameraAt=0;
+let cameraBearing=0,cameraTilt=ADVENTURE_PITCH,acceptedGpsAccuracy=Infinity,lastAcceptedSpeed=0;
+let lastSceneryMode='light';
 const AVATAR_KEY='libation-overworld-avatar-v1';
 const defaultAvatar={skin:1,hair:0,outfit:1,hairStyle:1,body:1};
 let avatarConfig={...defaultAvatar};
@@ -463,7 +494,7 @@ function moveTo(lon,lat,z=LOCAL_ZOOM){
   toast('Walk to explore your nearby realm. Distant jumps are disabled.');return;
  }
  followPlayer=false;refreshAdventureAvatar();lastPosition=[lon,lat];
- if(provider==='osm'&&map)map.easeTo({center:[lon,lat],zoom:LOCAL_ZOOM,pitch:0,duration:600});
+ if(provider==='osm'&&map)map.easeTo({center:currentGeolocation||[lon,lat],zoom:LOCAL_ZOOM,pitch:cameraTilt,bearing:cameraBearing,duration:600});
  else if(provider==='google'&&gm){gm.panTo({lng:lon,lat});gm.setZoom(LOCAL_ZOOM)}
  else{offlineZoom=LOCAL_ZOOM;drawOffline()}
  updateZoom();updateGpsOverlay();
@@ -547,11 +578,41 @@ function moveGeoreferencedAvatar(next,speed,heading){
 function explorerCamera(isFirst=false,duration=650){
  if(!currentGeolocation||provider!=='osm'||!map||!mapLoaded||!followPlayer)return;
  const h=map.getCanvas().clientHeight||window.innerHeight;
- const pad={top:Math.round(h*.08),bottom:Math.round(h*.14),left:0,right:0};
- map.easeTo({center:currentGeolocation,pitch:0,bearing:0,zoom:LOCAL_ZOOM,
-  padding:pad,duration:isFirst?700:Math.max(180,Math.min(2000,duration))});
+ // Bias the player toward the lower third, preserving a broad forward view.
+ const pad={top:Math.round(h*.34),bottom:Math.round(h*.035),left:0,right:0};
+ map.easeTo({center:currentGeolocation,pitch:cameraTilt,bearing:cameraBearing,
+  zoom:LOCAL_ZOOM,padding:pad,
+  duration:isFirst?850:Math.max(300,Math.min(2000,duration))});
  refreshAdventureAvatar();
 }
+function registerAdventureCameraControls(){
+ if(!map)return;
+ const canvas=map.getCanvas();
+ // Pokemon GO-like horizontal swipes orbit the GPS location. We intentionally
+ // do not pan across the world or change the fixed neighborhood zoom.
+ let start=null;
+ canvas.style.touchAction='none';
+ canvas.addEventListener('pointerdown',e=>{
+  if(e.pointerType==='mouse'&&e.button!==0)return;
+  start={x:e.clientX,y:e.clientY,bearing:cameraBearing,pitch:cameraTilt,id:e.pointerId};
+  try{canvas.setPointerCapture(e.pointerId)}catch(_){}
+ });
+ canvas.addEventListener('pointermove',e=>{
+  if(!start||e.pointerId!==start.id||!mapLoaded)return;
+  const dx=e.clientX-start.x,dy=e.clientY-start.y;
+  cameraBearing=(start.bearing+dx*.36)%360;
+  cameraTilt=Math.max(42,Math.min(65,start.pitch+dy*.06));
+  if(currentGeolocation&&followPlayer){
+   // No camera easing during an active swipe, avoiding competing animations.
+   map.jumpTo({center:gpsDrawnPosition||currentGeolocation,bearing:cameraBearing,
+    pitch:cameraTilt,zoom:LOCAL_ZOOM});
+  }
+ });
+ const stop=e=>{if(start&&e.pointerId===start.id)start=null};
+ canvas.addEventListener('pointerup',stop);
+ canvas.addEventListener('pointercancel',stop);
+}
+
 function refreshSoon(force=false){clearTimeout(venueTimer);venueTimer=setTimeout(()=>loadVenues(force),650)};
 let localMapStarting=false;
 function applyLocalViewportBounds(){
@@ -559,7 +620,10 @@ function applyLocalViewportBounds(){
  const [lon,lat]=currentGeolocation;
  const dy=LOCAL_RADIUS_METERS/111320;
  const dx=LOCAL_RADIUS_METERS/(111320*Math.max(.25,Math.cos(lat*Math.PI/180)));
- map.setMaxBounds([[lon-dx,lat-dy],[lon+dx,lat+dy]]);
+ // Expand the play radius only when the explorer genuinely moves far enough.
+ const old=map.getMaxBounds?.();
+ if(old&&old.contains([lon,lat])&&old.contains([lon+dx*.45,lat+dy*.45])&&old.contains([lon-dx*.45,lat-dy*.45]))return;
+ map.setMaxBounds([[lon-dx*1.5,lat-dy*1.5],[lon+dx*1.5,lat+dy*1.5]]);
 }
 async function startLive(){
  if(localMapStarting||mapLoaded)return;
@@ -574,17 +638,27 @@ async function startLive(){
  try{
    document.body.classList.remove('google-active');$('#map').style.display='block';map=new maplibregl.Map({container:'map',style:'https://tiles.openfreemap.org/styles/liberty',
      center:currentGeolocation,zoom:LOCAL_ZOOM,minZoom:LOCAL_ZOOM,maxZoom:LOCAL_ZOOM,
-     attributionControl:true,preserveDrawingBuffer:false,pitch:0,maxPitch:0,dragRotate:false,
-     touchPitch:false,minPitch:0,scrollZoom:false,doubleClickZoom:false,boxZoom:false,
+     attributionControl:true,preserveDrawingBuffer:false,pitch:ADVENTURE_PITCH,maxPitch:68,dragPan:false,dragRotate:false,
+     touchPitch:false,minPitch:40,scrollZoom:false,doubleClickZoom:false,boxZoom:false,
      touchZoomRotate:false,cooperativeGestures:false,renderWorldCopies:false});
    applyLocalViewportBounds();
-   map.scrollZoom.disable();map.doubleClickZoom.disable();map.touchZoomRotate.disable();
+   map.scrollZoom.disable();map.doubleClickZoom.disable();map.touchZoomRotate.disable();map.dragPan.disable();
    provider='osm';map.getCanvas().setAttribute('aria-label','Nearby GPS overworld. Walk to move your avatar; drag to look nearby.');
-   map.on('load',()=>{mapLoaded=true;localMapStarting=false;hideBanner();$('#map').classList.add('map-live');$('#loadingMap').style.display='none';$('#demoMarkers').style.display='none';updateStatus('LIVE<br>WORLD',true);styleOverworld();document.body.classList.add('live-map');initScenery();if(currentGeolocation){moveGeoreferencedAvatar(currentGeolocation,0,null);explorerCamera(true)}else map.easeTo({pitch:0,zoom:LOCAL_ZOOM,duration:450});refreshSoon();updateZoom();updateGpsOverlay();});
-   map.on('moveend',()=>{lastPosition=position();integrateMapTileVenues();refreshSoon();updateZoom()});
-   map.on('idle',()=>{integrateMapTileVenues();rebuildScenery()});
-   map.on('dragstart',()=>{followPlayer=false;$('#locateBtn').classList.remove('active');refreshAdventureAvatar()});
-   map.on('move',()=>{updateGpsOverlay();drawScenery()});map.on('zoom',updateZoom);
+   map.on('load',()=>{
+     mapLoaded=true;localMapStarting=false;hideBanner();
+     $('#map').classList.add('map-live');$('#loadingMap').style.display='none';
+     $('#demoMarkers').style.display='none';
+     updateStatus('LIVE<br>WORLD',true);
+     styleOverworld();document.body.classList.add('live-map','go-perspective');
+     // Avoid creating hundreds of DOM/world objects on every viewport change.
+     registerAdventureCameraControls();
+     if(currentGeolocation){moveGeoreferencedAvatar(currentGeolocation,0,null);explorerCamera(true)}
+     refreshSoon();updateZoom();updateGpsOverlay();
+    });
+   map.on('moveend',()=>{lastPosition=position();refreshSoon();updateZoom()});
+   // Tile POIs are checked only after the movement has settled.
+   map.on('idle',()=>{integrateMapTileVenues()});
+   map.on('move',updateGpsOverlay);map.on('zoom',updateZoom);
    // Retry a second geographic map source if the vector style cannot load.
    // We never use fictional scene art to impersonate real GPS/map geography.
    let rasterFallbackAttempted=false;
@@ -1259,12 +1333,24 @@ function receivedGps(p){
  $('#locationReadout').textContent='✦ GPS POSITION FOUND · ±'+Math.round(gpsAccuracy)+' m · PRIVATE';
  $('#locationReadout').classList.add('visible');hideBanner();
  searchCity='Your nearby realm';
- if(provider==='osm'&&map)applyLocalViewportBounds();
  if(provider==='osm'&&mapLoaded){
   // Movement is animated at geographic coordinates; the map projection handles
   // screen placement even when the player pans, zooms or rotates.
+  // Filter GPS wander when standing still. Never chase each jittery position fix.
+  const prior=gpsDrawnPosition||previous;
+  const displacement=prior?geoMeters(prior,currentGeolocation):Infinity;
+  const moving=Number.isFinite(p.coords.speed)&&p.coords.speed>.65;
+  const precision=Math.max(Number(p.coords.accuracy)||0,acceptedGpsAccuracy===Infinity?0:acceptedGpsAccuracy);
+  const threshold=moving?Math.max(2.2,Math.min(6,precision*.25)):Math.max(9,Math.min(22,precision*1.25));
+  if(!firstFix&&displacement<threshold){
+   currentGeolocation=previous;
+   avatarIsWalking=false;document.body.classList.remove('walking');
+   updateGpsOverlay();updateRegion();return;
+  }
+  acceptedGpsAccuracy=Number(p.coords.accuracy)||8;
+  applyLocalViewportBounds();
   const duration=moveGeoreferencedAvatar(currentGeolocation,p.coords.speed,p.coords.heading);
-  if(firstFix||followPlayer)explorerCamera(firstFix,duration||600);
+  if(firstFix||followPlayer)explorerCamera(firstFix,duration||750);
   updateGpsOverlay();updateRegion();
  }else if(provider==='google'&&gm){
   updateGpsOverlay();
