@@ -335,6 +335,7 @@ body:not(.live-map) #online{letter-spacing:.4px}
 
 /* Local close-up camera and minimal touch guidance. */
 #map{touch-action:none}
+#map #gpsMarker .sprite{bottom:3px!important}
 body.live-map #gameHint{display:block!important;top:auto;bottom:calc(90px + env(safe-area-inset-bottom));
  left:50%;width:max-content;max-width:90vw;z-index:8;opacity:.86;
  background:#234b40ba;border:1px solid #ccdaad80;pointer-events:none;
@@ -402,7 +403,7 @@ function hashStr(v){let h=2166136261;for(const c of String(v)){h^=c.charCodeAt(0
 // This is NOT a scanned beverage warrior and is customized per user.
 const AVATAR_W=64,AVATAR_H=80;
 const avatarFrameCache=new Map(); // Avoid regenerating PNGs every animation tick
-let avatarFacing='up',avatarFrame=0,avatarIsWalking=false,avatarAnimationTimer=null;
+let avatarFacing='up',avatarWorldHeading=0,avatarFrame=0,avatarIsWalking=false,avatarAnimationTimer=null;
 // Original detailed pixel sprite sheet (4 directional rows, 4 motion frames).
 // If the image fails to load, retain the older vector-drawn customization sprite
 // instead of displaying a broken player image.
@@ -1105,6 +1106,18 @@ function facingFromCoordinates(a,b,heading){
  const east=(b[0]-a[0])*111320*Math.cos(b[1]*Math.PI/180);
  return Math.abs(east)>Math.abs(north)?(east>0?'right':'left'):(north>0?'up':'down');
 }
+// Four-direction character artwork must remain oriented relative to the
+// CAMERA as it orbits the GPS position (world headings never change here).
+function refreshCameraRelativeFacing(){
+ if(!gpsMarker||!currentGeolocation)return;
+ const h=((avatarWorldHeading-cameraBearing)%360+360)%360;
+ const direction=h>=315||h<45?'up':h<135?'right':h<225?'down':'left';
+ if(avatarFacing!==direction){
+  avatarFacing=direction;
+  const img=gpsMarker.getElement()?.querySelector('.sprite');
+  if(img)img.src=makeCustomAvatarSprite(avatarIsWalking?avatarFrame:0,direction);
+ }
+}
 function moveGeoreferencedAvatar(next,speed,heading){
  if(provider!=='osm'||!map||!mapLoaded)return 0;
  ensureGeoreferencedAvatar();
@@ -1114,7 +1127,14 @@ function moveGeoreferencedAvatar(next,speed,heading){
  const delta=geoMeters(from,next);
  const accuracy=Math.max(0,gpsAccuracy||0);
  const jitterRadius=Math.max(2,Math.min(7,accuracy*.13));
- if(delta>jitterRadius)avatarFacing=facingFromCoordinates(from,next,heading);
+ if(delta>jitterRadius){
+  const radians=Math.PI/180;
+  const east=(next[0]-from[0])*Math.cos(next[1]*radians);
+  const north=next[1]-from[1];
+  avatarWorldHeading=Number.isFinite(heading)?(heading+360)%360:
+    (Math.atan2(east,north)*180/Math.PI+360)%360;
+  refreshCameraRelativeFacing();
+ }
  // Large location corrections should snap; never animate hundreds of meters
  // across buildings and water or imply the player physically walked there.
  const snap=delta>110||!Number.isFinite(delta);
@@ -1296,7 +1316,7 @@ async function startLive(){
    map.on('moveend',()=>{lastPosition=position();updateZoom()});
    // Tile POIs are checked only after the movement has settled.
    map.on('idle',()=>{if(gpsTransitionFrame===null)integrateMapTileVenues()});
-   map.on('move',()=>{updateGpsOverlay();syncAdventureCameraState()});map.on('zoom',updateZoom);
+   map.on('move',()=>{updateGpsOverlay();syncAdventureCameraState();refreshCameraRelativeFacing()});map.on('zoom',updateZoom);
    // Retry a second geographic map source if the vector style cannot load.
    // We never use fictional scene art to impersonate real GPS/map geography.
    let rasterFallbackAttempted=false;
