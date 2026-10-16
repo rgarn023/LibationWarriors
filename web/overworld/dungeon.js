@@ -234,12 +234,12 @@ function stop(){
 }
 function snapshot(){
  if(!state)return {active:false};
- return {active:!root.hidden,room:state.room,rooms:state.rooms,hp:state.hp,
+ return {active:!root.hidden,room:state.room,rooms:state.rooms,hp:state.hp,maxHP:state.maxHP,
   enemies:state.enemies.length,cleared:state.roomClear,completed:state.completed,
   defeated:state.defeated,kind:state.kind,player:{...state.player},gold:state.gold};
 }
 function debugClearRoom(){
- if(!state||!new URLSearchParams(location.search).has('dev'))return false;
+ if(!state||!(new URLSearchParams(location.search).has('dev')||window.LibationDeveloper?.enabled()))return false;
  state.enemies=[];state.roomClear=true;announce('DEV TEST: room clear — reach exit');return true;
 }
 window.LibationDungeon=Object.freeze({start,stop,snapshot,move:step,attack,debugClearRoom});
