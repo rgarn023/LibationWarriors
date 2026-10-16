@@ -205,6 +205,8 @@ body.walking #gpsMarker .sprite{animation:travelSteps .48s steps(2,end) infinite
 #gpsMarker{transform-origin:center bottom}
 #gpsMarker .gps-name{display:none}
 #gpsMarker .sprite{height:112px;width:84px}
+.pixel-marker{transform-origin:center bottom;transform:scale(var(--portal-scale, .8))}
+.pixel-marker img{transform-origin:center bottom}
 .pixel-marker img{animation:none!important}
 #grain{display:none}
 @media(max-width:530px){
@@ -253,7 +255,7 @@ function hashStr(v){let h=2166136261;for(const c of String(v)){h^=c.charCodeAt(0
 // A custom 48x64 hand-pixeled adventurer, drawn in layered 16-bit palette groups.
 // This is NOT a scanned beverage warrior and is customized per user.
 const AVATAR_W=64,AVATAR_H=80;
-let avatarFacing='down',avatarFrame=0,avatarIsWalking=false,avatarAnimationTimer=null;
+let avatarFacing='up',avatarFrame=0,avatarIsWalking=false,avatarAnimationTimer=null;
 function makeCustomAvatarSprite(frame=0,facing=avatarFacing){
  // An original 64x80 SNES-era action-RPG explorer. Flowing contours and 5-tone
  // shadow clusters replace the old rectangular doll. 4 directional views.
@@ -1158,44 +1160,68 @@ async function loadVenues(force=false){
     'No venue data returned · tap ↻ to retry';
  if(!venues.length)toast('Venue directory failed ('+lastError+'). Your GPS map still works.');
 }
-function clearMarkers(){for(const marker of markers){try{marker.remove()}catch(_){}}markers=[];for(const marker of gmMarkers){try{marker.setMap(null)}catch(_){}}gmMarkers=[]}
+// Markers persist between venue refreshes; DOM is not torn down on every tile event.
+const worldVenueMarkers=new Map();
+function clearMarkers(){
+ for(const entry of worldVenueMarkers.values()){try{entry.marker.remove()}catch(_){}}
+ worldVenueMarkers.clear();
+ for(const marker of markers){try{marker.remove()}catch(_){}}
+ markers=[];
+ for(const marker of gmMarkers){try{marker.setMap(null)}catch(_){}}
+ gmMarkers=[];
+}
 function renderMarkers(){
- clearMarkers();
  if(provider==='offline'){
+  if(worldVenueMarkers.size||gmMarkers.length)clearMarkers();
   if(!demoVenues.length)makeDemo();
-  $$('.fakepin').forEach((e,i)=>{e.style.display=currentFilter==='all'||demoVenues[i].type===currentFilter?'block':'none'});
+  $$('.fakepin').forEach((el,i)=>{
+   el.style.display=currentFilter==='all'||demoVenues[i].type===currentFilter?'block':'none';
+  });
   return;
  }
- const bounds=provider==='osm'&&map?map.getBounds():null;
- const c=position();
- const candidates=venues.filter(v=>(currentFilter==='all'||v.type===currentFilter)&&
-  (!bounds||bounds.contains([v.lon,v.lat])));
- // Prioritize selected places then nearby portals, and prevent a pile of
- // identical markers obscuring the player and nearby roads.
+ const origin=currentGeolocation||position();
+ const candidates=venues.filter(v=>
+   (currentFilter==='all'||v.type===currentFilter)&&
+   geoMeters(origin,[v.lon,v.lat])<=LOCAL_RADIUS_METERS);
  candidates.sort((a,b)=>{
   if(a.id===selectedVenue?.id)return -1;
   if(b.id===selectedVenue?.id)return 1;
-  const da=(a.lon-c[0])**2+(a.lat-c[1])**2;
-  const db=(b.lon-c[0])**2+(b.lat-c[1])**2;
-  return da-db;
+  return geoMeters(origin,[a.lon,a.lat])-geoMeters(origin,[b.lon,b.lat]);
  });
- const used=[],size=zoomNow()>=16?61:zoomNow()>=14?54:46;
- const max=zoomNow()>=16?28:zoomNow()>=14?20:12;
- for(const v of candidates){
-  if(used.length>=max)break;
-  if(provider==='osm'&&map){
-   const p=map.project([v.lon,v.lat]);
-   if(!Number.isFinite(p.x)||!Number.isFinite(p.y))continue;
-   if(used.some(q=>Math.hypot(q.x-p.x,q.y-p.y)<size))continue;
-   used.push(p);
-   const m=new maplibregl.Marker({element:pinEl(v),anchor:'bottom'})
-     .setLngLat([v.lon,v.lat]).addTo(map);
-   markers.push(m);
-  }else if(provider==='google'&&gm){
+ if(provider==='osm'&&map){
+  const selected=new Set();
+  // Prioritize nearest and selected venues. Only create/remove when membership
+  // changes, not on every camera movement or OpenStreetMap tile reload.
+  for(const v of candidates.slice(0,24)){
+   if(!Number.isFinite(v.lat)||!Number.isFinite(v.lon))continue;
+   const key=v.id||v.name+':'+v.lat+':'+v.lon;
+   selected.add(key);
+   const dist=geoMeters(origin,[v.lon,v.lat]);
+   const scale=Math.max(.48,Math.min(.96,1.02-dist/2800));
+   if(!worldVenueMarkers.has(key)){
+    const el=pinEl(v);
+    el.style.setProperty('--portal-scale',scale.toFixed(3));
+    const marker=new maplibregl.Marker({element:el,anchor:'bottom'})
+      .setLngLat([v.lon,v.lat]).addTo(map);
+    worldVenueMarkers.set(key,{marker,v});
+   }else{
+    const entry=worldVenueMarkers.get(key);
+    entry.marker.getElement().style.setProperty('--portal-scale',scale.toFixed(3));
+   }
+  }
+  for(const [key,entry] of worldVenueMarkers){
+   if(!selected.has(key)){entry.marker.remove();worldVenueMarkers.delete(key)}
+  }
+  return;
+ }
+ if(provider==='google'&&gm){
+  for(const marker of gmMarkers){try{marker.setMap(null)}catch(_){}}
+  gmMarkers=[];
+  for(const v of candidates.slice(0,20)){
    const m=new google.maps.Marker({position:{lat:v.lat,lng:v.lon},map:gm,
-    title:v.name,icon:{url:portalSprites[v.type],
-     scaledSize:new google.maps.Size(50,62),anchor:new google.maps.Point(25,62)}});
-   m.addListener('click',()=>chooseVenue(v));gmMarkers.push(m);used.push({x:used.length*size,y:0});
+    title:v.name,icon:{url:portalSprites[v.type],scaledSize:new google.maps.Size(50,62),
+    anchor:new google.maps.Point(25,62)}});
+   m.addListener('click',()=>chooseVenue(v));gmMarkers.push(m);
   }
  }
 }
