@@ -136,17 +136,66 @@ const fs=require('fs');
  if(!(initialCamera.zoom>=18.1&&initialCamera.zoom<=18.4&&
    initialCamera.pitch>=59&&initialCamera.pitch<=68))
   throw Error('Camera regressed to distant overhead map: '+JSON.stringify(initialCamera));
+ // The character is a world object: its feet/shadow stay on the GPS ground
+ // point, while its visible size must change exponentially with map zoom.
+ async function avatarGeometry(){
+  return page.evaluate(()=>{
+   const marker=document.querySelector('#gpsMarker');
+   const rig=marker?.querySelector('.avatar-rig');
+   const img=rig?.querySelector('img.sprite');
+   const shadow=rig?.querySelector('.gps-ground');
+   if(!marker||!rig||!img||!shadow)return null;
+   const root=marker.getBoundingClientRect();
+   const ir=img.getBoundingClientRect(),sr=shadow.getBoundingClientRect();
+   const transform=getComputedStyle(rig).transform;
+   return {
+    zoom:Number(marker.dataset.avatarMapZoom),
+    scale:Number(marker.dataset.avatarWorldScale),
+    computedScale:new DOMMatrixReadOnly(transform).a,
+    spriteHeight:ir.height,shadowWidth:sr.width,
+    markerWidth:root.width,markerHeight:root.height,
+    shadowGroundError:Math.abs(sr.bottom-root.bottom),
+    lateralError:Math.abs((ir.left+ir.right)/2-(sr.left+sr.right)/2),
+    footToShadowCenter:Math.abs((ir.bottom-6.4*new DOMMatrixReadOnly(transform).a)-
+      (sr.top+sr.bottom)/2)
+   };
+  });
+ }
+ function checkWorldAvatar(v, expectedZoom){
+  if(!v||Math.abs(v.zoom-expectedZoom)>.08||
+     Math.abs(v.scale-Math.pow(2,v.zoom-18.25))>.02||
+     Math.abs(v.computedScale-v.scale)>.002||
+     v.shadowGroundError>2||v.lateralError>3||
+     v.footToShadowCenter>8||
+     Math.abs(v.markerWidth-90)>1||Math.abs(v.markerHeight-119)>1)
+   throw Error('Character lost its geographic scale or ground contact: '+JSON.stringify(v));
+ }
+ const baseAvatar=await avatarGeometry();
+ checkWorldAvatar(baseAvatar,initialCamera.zoom);
  // Local zoom is bounded; plus/minus buttons must change real map scale.
  await page.locator('#zoomOutBtn').click();
  await page.waitForTimeout(450);
  const zoomedOut=await readCamera();
  if(!(zoomedOut.zoom<initialCamera.zoom-.18&&zoomedOut.zoom>=17.54))
   throw Error('Zoom-out control is still locked: '+JSON.stringify({initialCamera,zoomedOut}));
+ const smallAvatar=await avatarGeometry();
+ checkWorldAvatar(smallAvatar,zoomedOut.zoom);
+ if(smallAvatar.spriteHeight>=baseAvatar.spriteHeight*.92||
+    smallAvatar.shadowWidth>=baseAvatar.shadowWidth*.92)
+  throw Error('Avatar/shadow stayed fixed pixel-size while zooming out: '+JSON.stringify({baseAvatar,smallAvatar}));
+ await page.screenshot({path:'/tmp/libation-world-zoomed-out.png',fullPage:false});
  await page.locator('#zoomInBtn').click();
  await page.waitForTimeout(450);
  const restored=await readCamera();
  if(Math.abs(restored.zoom-initialCamera.zoom)>.06)
   throw Error('Zoom-in failed to restore close camera: '+JSON.stringify(restored));
+ const resetAvatar=await avatarGeometry();
+ checkWorldAvatar(resetAvatar,restored.zoom);
+ if(Math.abs(resetAvatar.spriteHeight-baseAvatar.spriteHeight)>3||
+    Math.abs(resetAvatar.shadowWidth-baseAvatar.shadowWidth)>3)
+  throw Error('Character size failed to restore after zooming in: '+JSON.stringify({baseAvatar,resetAvatar}));
+ console.log('GEOGRAPHIC AVATAR ZOOM SCALING:',JSON.stringify({baseAvatar,smallAvatar,resetAvatar}));
+ await page.screenshot({path:'/tmp/libation-world-zoomed-in.png',fullPage:false});
  console.log('LOCAL ZOOM CONTROLS:',JSON.stringify({initialCamera,zoomedOut,restored}));
  const pixelAudit=await inspectMarkerAnchors();
  console.log('ON-SCREEN GEOGRAPHIC MARKER AUDIT:',JSON.stringify(pixelAudit));
@@ -227,6 +276,10 @@ const fs=require('fs');
  const pinched=await readCamera();
  if(!(pinched.zoom<beforeSwipe.zoom-.25&&pinched.zoom>=17.54))
   throw Error('Two-finger pinch failed to zoom out: '+JSON.stringify({beforeSwipe,pinched}));
+ const pinchedAvatar=await avatarGeometry();
+ checkWorldAvatar(pinchedAvatar,pinched.zoom);
+ if(pinchedAvatar.spriteHeight>=baseAvatar.spriteHeight*.8)
+  throw Error('Pinch zoom did not scale avatar as part of the geographic world: '+JSON.stringify(pinchedAvatar));
  console.log('TWO-FINGER PINCH:',JSON.stringify(pinched));
  await page.locator('#zoomInBtn').click();
  await page.locator('#zoomInBtn').click();
