@@ -23,6 +23,9 @@ const fs=require('fs');
   {type:'Feature',properties:{kind:'forest'},geometry:{type:'Polygon',coordinates:[[[-76.28455,36.77185],[-76.28405,36.77185],[-76.28405,36.77265],[-76.28455,36.77265],[-76.28455,36.77185]]]}},
   {type:'Feature',properties:{kind:'sand'},geometry:{type:'Polygon',coordinates:[[[-76.28355,36.7717],[-76.28368,36.7717],[-76.28368,36.7723],[-76.28355,36.7723],[-76.28355,36.7717]]]}},
   {type:'Feature',properties:{kind:'building'},geometry:{type:'Polygon',coordinates:[[[-76.28448,36.7713],[-76.28430,36.7713],[-76.28430,36.77148],[-76.28448,36.77148],[-76.28448,36.7713]]]}},
+  {type:'Feature',properties:{kind:'building'},geometry:{type:'Polygon',coordinates:[[[-76.28483,36.77149],[-76.28465,36.77149],[-76.28465,36.77166],[-76.28483,36.77166],[-76.28483,36.77149]]]}},
+  {type:'Feature',properties:{kind:'building'},geometry:{type:'Polygon',coordinates:[[[-76.28398,36.77117],[-76.28380,36.77117],[-76.28380,36.77134],[-76.28398,36.77134],[-76.28398,36.77117]]]}},
+  {type:'Feature',properties:{kind:'structure-3d'},geometry:{type:'Polygon',coordinates:[[[-76.28498,36.7711],[-76.28478,36.7711],[-76.28478,36.77126],[-76.28498,36.77126],[-76.28498,36.7711]]]}},
   {type:'Feature',properties:{kind:'road'},geometry:{type:'LineString',coordinates:[[-76.287,36.7706],[-76.285,36.7708],[-76.281,36.7713],[-76.277,36.772]]}},
   {type:'Feature',properties:{kind:'trail'},geometry:{type:'LineString',coordinates:[[-76.2847,36.769],[-76.2841,36.77],[-76.284,36.773]]}}
  ]};
@@ -34,6 +37,9 @@ const fs=require('fs');
    {id:'forest',type:'fill',source:'nearby',filter:['==',['get','kind'],'forest'],paint:{'fill-color':'#457c52'}},
    {id:'sand',type:'fill',source:'nearby',filter:['==',['get','kind'],'sand'],paint:{'fill-color':'#e3c38d'}},
    {id:'building',type:'fill',source:'nearby',filter:['==',['get','kind'],'building'],paint:{'fill-color':'#bdaa80'}},
+   {id:'building-3d-test',type:'fill-extrusion',source:'nearby',
+    filter:['==',['get','kind'],'structure-3d'],
+    paint:{'fill-extrusion-color':'#a99178','fill-extrusion-height':7}},
    {id:'road-primary',type:'line',source:'nearby',filter:['==',['get','kind'],'road'],paint:{'line-color':'#e8d6b1','line-width':7}},
    {id:'path',type:'line',source:'nearby',filter:['==',['get','kind'],'trail'],paint:{'line-color':'#efe5c3','line-width':3}}
   ]};
@@ -152,6 +158,14 @@ const fs=require('fs');
   throw Error('No real-polygon-anchored fantasy buildings and woodland: '+JSON.stringify(nativeArt));
  const depth=await page.locator('#map').getAttribute('data-geographic-depth');
  if(depth!=='on')throw Error('Grounded building footprint depth missing: '+depth);
+ const buildings=await page.locator('#map').evaluate(el=>({
+  status:el.dataset.geographicBuildings,
+  layers:Number(el.dataset.buildingLayers),
+  visible:Number(el.dataset.visibleMappedBuildings)
+ }));
+ console.log('ACTUAL MAPPED BUILDING FOOTPRINT RENDER AUDIT:',JSON.stringify(buildings));
+ if(buildings.status!=='footprints-visible'||buildings.layers<2||buildings.visible<1)
+  throw Error('Mapped real-world building footprints were hidden by sprite collision: '+JSON.stringify(buildings));
  const initialCamera=await readCamera();
  console.log('LOCAL EXPLORER CAMERA:',JSON.stringify(initialCamera));
  if(!(initialCamera.zoom>=18.1&&initialCamera.zoom<=18.4&&
@@ -228,6 +242,7 @@ const fs=require('fs');
  await page.screenshot({path:'/tmp/libation-world-screenshot.png',fullPage:false});
  await page.screenshot({path:'/tmp/libation-fantasy-terrain.png',fullPage:false});
  await page.screenshot({path:'/tmp/libation-building-forest-sprites.png',fullPage:false});
+ await page.screenshot({path:'/tmp/libation-visible-buildings.png',fullPage:false});
  // Simulate actual location movement and then a horizontal camera swipe.
  await context.setGeolocation({longitude:-76.2838,latitude:36.77105,accuracy:6});
  await page.waitForFunction(()=>document.body.classList.contains('walking'),null,{timeout:4500});
