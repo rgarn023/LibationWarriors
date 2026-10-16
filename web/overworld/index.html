@@ -1532,9 +1532,9 @@ function addGeographicTerrainTextures(){
  // addLayer() dirties MapLibre style's loaded flag; image registration is still safe.
  if(!map||!map.getStyle())return;
  const kinds={
-  'lw-ground':{base:'#a4cb8a',dark:'#7eae76',light:'#bfda99',count:12},
-  'lw-park':{base:'#7fbb79',dark:'#579d68',light:'#a2d78b',count:18},
-  'lw-water':{base:'#5daecd',dark:'#3894bb',light:'#98d6db',count:14}
+  'lw-ground':{base:'#a4cb8a',dark:'#92bb82',light:'#b4d39a',count:6},
+  'lw-park':{base:'#7fbb79',dark:'#72ad74',light:'#93c788',count:9},
+  'lw-water':{base:'#5daecd',dark:'#4b9ec3',light:'#88c8d9',count:8}
  };
  try{
   for(const [name,p] of Object.entries(kinds)){
