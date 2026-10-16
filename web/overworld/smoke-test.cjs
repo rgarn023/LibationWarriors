@@ -285,23 +285,23 @@ const fs=require('fs');
  // applied to only the geographic WebGL canvas must leave avatar/portals unfiltered.
  await page.evaluate(()=>{
   document.querySelector('#map canvas.maplibregl-canvas').style.transition='none';
-  updateWorldTimeTheme(new Date('2026-10-16T17:00:00Z'));
+  window.LibationWorldTime.apply(new Date('2026-10-16T17:00:00Z'));
  });
  await page.waitForTimeout(150);
  await page.screenshot({path:'/tmp/libation-time-day.png',fullPage:false});
  const daytime=await page.locator('#map canvas.maplibregl-canvas').evaluate(el=>getComputedStyle(el).filter);
- await page.evaluate(()=>updateWorldTimeTheme(new Date('2026-10-16T22:00:00Z')));
+ await page.evaluate(()=>window.LibationWorldTime.apply(new Date('2026-10-16T22:00:00Z')));
  await page.waitForTimeout(150);
  await page.screenshot({path:'/tmp/libation-time-evening.png',fullPage:false});
  const sunset=await page.locator('#map canvas.maplibregl-canvas').evaluate(el=>getComputedStyle(el).filter);
- await page.evaluate(()=>updateWorldTimeTheme(new Date('2026-10-16T04:00:00Z')));
+ await page.evaluate(()=>window.LibationWorldTime.apply(new Date('2026-10-16T04:00:00Z')));
  await page.waitForTimeout(150);
  await page.screenshot({path:'/tmp/libation-time-night.png',fullPage:false});
  const nighttime=await page.locator('#map canvas.maplibregl-canvas').evaluate(el=>getComputedStyle(el).filter);
  if(daytime!=='none'||sunset==='none'||nighttime==='none'||sunset===nighttime)
   throw Error('Sunrise/sunset changes did not visibly recolor geographic world: '+
    JSON.stringify({daytime,sunset,nighttime}));
- await page.evaluate(()=>updateWorldTimeTheme(new Date()));
+ await page.evaluate(()=>window.LibationWorldTime.apply(new Date()));
  console.log('DAY EVENING NIGHT MAP RENDER:',JSON.stringify({daytime,sunset,nighttime}));
  // Simulate actual location movement and then a horizontal camera swipe.
  await context.setGeolocation({longitude:-76.2838,latitude:36.77105,accuracy:6});
