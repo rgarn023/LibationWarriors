@@ -71,6 +71,7 @@ jobs:
             /tmp/libation-world-walking.png
             /tmp/libation-world-zoomed-in.png
             /tmp/libation-world-zoomed-out.png
+            /tmp/libation-fantasy-terrain.png
           if-no-files-found: ignore
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
