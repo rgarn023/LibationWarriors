@@ -172,6 +172,16 @@ const fs=require('fs');
  }
  const walkUnique=new Set(walkingSamples.map(v=>v.tail));
  console.log('WALK ANIMATION SAMPLES:',JSON.stringify(walkingSamples));
+ const footAlignment=await page.evaluate(()=>{
+   const image=document.querySelector('#gpsMarker img.sprite')?.getBoundingClientRect();
+   const shadow=document.querySelector('#gpsMarker .gps-ground')?.getBoundingClientRect();
+   return {imageCenter:image?(image.left+image.right)/2:null,
+     shadowCenter:shadow?(shadow.left+shadow.right)/2:null};
+ });
+ if(!Number.isFinite(footAlignment.imageCenter)||!Number.isFinite(footAlignment.shadowCenter)||
+   Math.abs(footAlignment.imageCenter-footAlignment.shadowCenter)>8)
+  throw Error('Walking avatar detached from grounded GPS shadow: '+JSON.stringify(footAlignment));
+ console.log('WALKING FOOT ALIGNMENT:',JSON.stringify(footAlignment));
  await page.screenshot({path:'/tmp/libation-world-walking.png',fullPage:false});
  if(walkUnique.size<2)
   throw Error('Walking still uses a single static avatar frame: '+JSON.stringify(walkingSamples));
