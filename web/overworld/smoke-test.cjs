@@ -116,9 +116,10 @@ const fs=require('fs');
     venueStatus:document.querySelector('#venueCount')?.textContent};
   });
  }
- const anchored=m=>m.exists&&m.position==='absolute'&&m.onScreen&&
+ const positioned=m=>m.exists&&m.position==='absolute'&&
    m.size[0]>=30&&m.size[1]>=50&&Array.isArray(m.anchorError)&&
    m.anchorError.every(v=>Math.abs(v)<=4);
+ const anchored=m=>positioned(m)&&m.onScreen;
  await page.waitForFunction(()=>document.querySelectorAll('.pixel-marker.maplibregl-marker').length===2,
   null,{timeout:12000});
  // A close, tilted local-world camera is part of the gameplay contract.
@@ -143,7 +144,7 @@ const fs=require('fs');
  await context.setGeolocation({longitude:-76.2838,latitude:36.77105,accuracy:6});
  await page.waitForTimeout(2900); // GPS interpolation runs at most 2400ms.
  const moved=await inspectMarkerAnchors();
- if(!anchored(moved.avatar)||!moved.portals.every(anchored))
+ if(!anchored(moved.avatar)||!moved.portals.every(positioned))
    throw Error('Geographic markers detached after GPS movement: '+JSON.stringify(moved));
  // Real Chromium touch input; a mouse drag did not reproduce Android swipe problems.
  const cdp=await context.newCDPSession(page);
@@ -175,7 +176,7 @@ const fs=require('fs');
  if(afterTilt.pitch<67||Math.abs(afterTilt.zoom-18.25)>.1)
   throw Error('Android vertical swipe did not tilt camera toward the horizon: '+JSON.stringify(afterTilt));
  const turned=await inspectMarkerAnchors();
- if(!anchored(turned.avatar)||!turned.portals.every(anchored))
+ if(!anchored(turned.avatar)||!turned.portals.every(positioned))
    throw Error('Geographic markers detached after touch rotation: '+JSON.stringify(turned));
  console.log('REAL TOUCH CAMERA TILT:',JSON.stringify(afterTilt));
  const gpsState=await page.evaluate(()=>{
