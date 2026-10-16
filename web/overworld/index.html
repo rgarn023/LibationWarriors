@@ -289,6 +289,19 @@ body:not(.game-ready) #gameWorld{opacity:0;pointer-events:none}
 #locationReadout.visible{display:none!important}
 #footnav{background:linear-gradient(0deg,#295e5090,transparent 90%);}
 #gameHint{opacity:.72;font-size:9px}
+
+/* V13: geographic data draws the scene; mobile canvas is RPG art, not a map app. */
+#gameWorld{display:none!important;pointer-events:none!important}
+#gpsMarker,.pixel-marker{display:block!important}
+#accuracyCircle{display:none!important}
+#map .maplibregl-marker{z-index:5;pointer-events:auto}
+#map .maplibregl-canvas-container{overflow:hidden}
+#map .maplibregl-ctrl-attrib{font-size:8px!important;opacity:.55}
+#gameHint{display:none!important}
+#footnav .navbtn{font-size:8px!important;max-width:70px;min-height:62px}
+#footnav .navbtn .em{font-size:22px}
+#skyHorizon,#grain,#vignette{display:none!important}
+
 </style>
 </head>
 <body>
@@ -302,6 +315,7 @@ body:not(.game-ready) #gameWorld{opacity:0;pointer-events:none}
 <div id="caption">16-BIT MAP STYLE · LIVE OSM GEOGRAPHY WHEN ONLINE · GAMEPLAY SIMULATED</div>
 <nav id="footnav" aria-label="Main game panels"><button class="navbtn active" data-panel="map" aria-label="map" title="map"><span class="em">🗺️</span>WORLD</button><button class="navbtn" data-panel="summon" aria-label="summon" title="summon"><span class="em">💠</span>SUMMON</button><button class="navbtn" data-panel="collection" aria-label="Warriors" title="Warriors"><span class="em">⚔️</span>WARRIORS</button><button class="navbtn" data-panel="paths" aria-label="Shadows" title="Shadows"><span class="em">👾</span>SHADOWS</button><button class="navbtn" data-panel="settings" aria-label="settings" title="settings"><span class="em">⚙️</span>OPTIONS</button></nav>
 <div id="drawerWrap"><div id="shade" aria-hidden="true"></div><aside id="drawer" role="dialog" aria-label="Game panel"><div class="grab"></div><button class="close" id="closeDrawer" aria-label="Close">✕</button><main id="drawerContent"></main></aside></div>
+<script src="./game-world.js"></script>
 <script>
 (()=>{
 'use strict';
@@ -1072,7 +1086,7 @@ async function startLive(){
      $('#map').classList.add('map-live');$('#loadingMap').style.display='none';
      $('#demoMarkers').style.display='none';
      updateStatus('LIVE<br>WORLD',true);
-     styleOverworld();document.body.classList.add('live-map','go-perspective');worldStart();worldTileUpdate();
+     styleOverworld();document.body.classList.add('live-map','go-perspective');window.LibationGameWorld?.attach(map);
      // Avoid creating hundreds of DOM/world objects on every viewport change.
      registerAdventureCameraControls();
      if(currentGeolocation){moveGeoreferencedAvatar(currentGeolocation,0,null);explorerCamera(true)}
@@ -1080,7 +1094,7 @@ async function startLive(){
     });
    map.on('moveend',()=>{lastPosition=position();refreshSoon();updateZoom()});
    // Tile POIs are checked only after the movement has settled.
-   map.on('idle',()=>{if(gpsTransitionFrame===null)integrateMapTileVenues();if(Date.now()-worldState.lastGeoFetch>12000)worldTileUpdate()});
+   map.on('idle',()=>{if(gpsTransitionFrame===null)integrateMapTileVenues();window.LibationGameWorld?.refresh()});
    map.on('move',updateGpsOverlay);map.on('zoom',updateZoom);
    // Retry a second geographic map source if the vector style cannot load.
    // We never use fictional scene art to impersonate real GPS/map geography.
@@ -1412,7 +1426,7 @@ function offline(reason){
  localMapStarting=false;
  if(provider==='google')return;
  if(gpsTransitionFrame!==null){cancelAnimationFrame(gpsTransitionFrame);gpsTransitionFrame=null}
- if(gpsMarker){try{gpsMarker.remove()}catch(_){};gpsMarker=null}gpsDrawnPosition=null;document.body.classList.remove('game-ready');worldState.started=false;worldState.ready=false;
+ if(gpsMarker){try{gpsMarker.remove()}catch(_){};gpsMarker=null}gpsDrawnPosition=null;document.body.classList.remove('game-ready');worldState.started=false;worldState.ready=false;window.LibationGameWorld?.destroy();
  if(map){try{map.remove()}catch(_){}}map=null;sceneryCanvas=null;sceneryCtx=null;sceneryPoints=[];lastSceneryArea='';provider='offline';mapLoaded=false;document.body.classList.remove('live-map','following','walking');
  $('#map').style.display='none';$('#loadingMap').style.display='none';$('#demoMarkers').style.display='block';updateStatus('OFFLINE<br>DEMO',false);
  makeDemo();drawOffline();updateRegion();mapBanner('⚠ Offline scenic illustration — not your real location.<button id="retryConnection" type="button" class="launchLocation">RETRY LIVE MAP</button>');$('#retryConnection').onclick=()=>{hideBanner();startLive()};toast(reason||'Live map unavailable. Check connection.');
