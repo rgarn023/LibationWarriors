@@ -166,41 +166,136 @@ function toast(s){const e=$('#toast');e.textContent=s;e.classList.add('toast-vis
 function escapeHTML(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function hashStr(v){let h=2166136261;for(const c of String(v)){h^=c.charCodeAt(0);h=Math.imul(h,16777619)}return h>>>0}
 
-function makeCustomAvatarSprite(){
- // Separate from warrior blueprints: a player-edited, local 16-bit overworld sprite.
- const cv=document.createElement('canvas');cv.width=32;cv.height=44;
- const g=cv.getContext('2d');g.imageSmoothingEnabled=false;
- const pixel=(col,x,y,w=1,h=1)=>{g.fillStyle=col;g.fillRect(x,y,w,h)};
- const skin=['#f4c4a0','#deb08c','#bf805d','#915e43','#593927'][avatarConfig.skin];
- const hair=['#292332','#69432e','#bd8550','#dad4ae','#7e4a8f'][avatarConfig.hair];
- const coat=['#286d86','#8b425d','#507b47','#69509a','#be914b'][avatarConfig.outfit];
- const dark=['#162f45','#472334','#263e2a','#332653','#5b3e2d'][avatarConfig.outfit];
- const trim=['#7ce0e3','#e5baca','#acd68d','#c7a3ef','#fae2a2'][avatarConfig.outfit];
- // Neutral SNES-like figure, sized to stay recognizable at map scale.
- pixel('#0a1924',10,40,14,3);pixel('#263342',10,33,12,8);
- pixel('#202938',10,36,5,5);pixel('#202938',17,36,5,5);
- pixel('#695044',11,38,4,4);pixel('#695044',18,38,4,4);
- const shoulder=avatarConfig.body===0?8:avatarConfig.body===2?6:7;
- pixel('#181a34',16-shoulder,21,shoulder*2+1,15);
- pixel(coat,17-shoulder,22,shoulder*2-1,13);
- pixel(dark,15,22,3,14);pixel(trim,14,31,5,2);
- pixel('#1c263c',8,23,5,12);pixel('#1c263c',20,23,5,12);
- pixel(coat,9,24,3,9);pixel(coat,21,24,3,9);
- pixel(skin,9,34,3,3);pixel(skin,21,34,3,3);
- // The head and face are independently styled rather than derived from a UPC.
- pixel('#221b30',10,7,13,16);pixel(skin,11,9,11,13);
- pixel('#9b6149',15,18,4,1);
- pixel('#1c1c30',13,14,2,2);pixel('#1c1c30',19,14,2,2);
- pixel(hair,10,5,13,7);pixel(hair,10,7,3,6);
- if(avatarConfig.hairStyle===1){pixel(hair,9,11,4,15);pixel(hair,21,11,4,15)}
- if(avatarConfig.hairStyle===2){pixel(hair,9,9,4,8);pixel(hair,21,9,4,8);pixel(hair,11,4,11,4)}
- if(avatarConfig.hairStyle===3){pixel(hair,14,3,5,7);pixel(hair,12,6,11,3)}
- if(avatarConfig.hairStyle===4){pixel(hair,9,8,3,13);pixel(hair,21,8,3,13);pixel('#cdb28f',13,5,7,2)}
- pixel(trim,18,25,3,6);
- return cv.toDataURL('image/png');
+// A custom 48x64 hand-pixeled adventurer, drawn in layered 16-bit palette groups.
+// This is NOT a scanned beverage warrior and is customized per user.
+const AVATAR_W=48,AVATAR_H=64;
+let avatarFacing='down',avatarFrame=0,avatarIsWalking=false,avatarAnimationTimer=null;
+function makeCustomAvatarSprite(frame=0,facing=avatarFacing){
+ const c=document.createElement('canvas');c.width=AVATAR_W;c.height=AVATAR_H;
+ const x=c.getContext('2d');x.imageSmoothingEnabled=false;
+ const p=(col,a,b,w=1,h=1)=>{x.fillStyle=col;x.fillRect(a,b,w,h)};
+ const skinTones=[
+  ['#8a5047','#d79275','#f4c4a0','#ffe0b9'],
+  ['#815145','#b77b61','#deb08c','#f3cc9e'],
+  ['#754333','#985d42','#bf805d','#dca381'],
+  ['#4f312d','#704434','#915e43','#b9815c'],
+  ['#302630','#452d2d','#593927','#855138']
+ ][avatarConfig.skin];
+ const hairs=[
+  ['#211e2e','#3b3442','#676174'],
+  ['#39292f','#69432e','#a16b45'],
+  ['#69402f','#b97841','#e8a45d'],
+  ['#8d7c61','#d7c59a','#fff0bc'],
+  ['#3a274d','#784a92','#b38dc4']
+ ][avatarConfig.hair];
+ const coats=[
+  ['#183d53','#337e90','#71b9bd','#b4e5ce'],
+  ['#4c253b','#91465f','#d17b82','#ffb6a3'],
+  ['#27412f','#5b8a58','#91bd69','#d4e6a1'],
+  ['#332c5d','#745f9f','#b39acc','#dfccf3'],
+  ['#70442f','#b2824a','#dab46d','#ffdb8b']
+ ][avatarConfig.outfit];
+ const [shadow,mid,base,shine]=coats;
+ const [deep,medium,skin,light]=skinTones;
+ const [hairDark,hair,hairLight]=hairs;
+ const outline='#1e293f', black='#141c2e',steel='#8799a2',gold='#fbd486';
+ const walking=frame%4!==0;const stride=walking?(frame%4===1?2:frame%4===3?-2:0):0;
+ const fromBehind=facing==='up',side=facing==='left'||facing==='right';
+ if(facing==='left'){x.translate(AVATAR_W,0);x.scale(-1,1)}
+ // Soft circular drop shadow under boots: a separate grounding graphic, not a badge.
+ p('#345c5780',8,58,33,3);p('#173b4a9a',11,60,27,2);
+ // Legs: independent poses with boots, trousers, socks and highlights.
+ const legs=[{x:15+stride,y:43+Math.max(0,-stride)},{x:27-stride,y:43+Math.max(0,stride)}];
+ for(const leg of legs){
+  p(outline,leg.x-2,leg.y,10,16);
+  p(shadow,leg.x,leg.y,7,9);p(medium,leg.x+1,leg.y+1,5,5);
+  p(black,leg.x-1,leg.y+10,10,6);
+  p('#6f5349',leg.x,leg.y+10,9,4);
+  p('#b08960',leg.x+1,leg.y+10,5,2);
+  p(outline,leg.x-3,leg.y+14,13,4);
+  p('#655342',leg.x-2,leg.y+15,11,2);
+ }
+ // Tapered mantle with broad shoulder silhouette and four tones.
+ const bw=avatarConfig.body===0?36:avatarConfig.body===2?28:32;
+ const start=Math.round(24-bw/2);
+ p(outline,start,27,bw,18);
+ p(shadow,start+2,29,bw-4,19);
+ p(mid,start+4,30,bw-8,16);
+ p(base,start+5,31,bw-11,11);
+ p(shine,start+7,32,4,9);p(medium,start+bw-12,35,4,8);
+ // Sleeves drape below shoulder; hands follow walking.
+ p(outline,start-3,30,8,17);
+ p(shadow,start-2,32,7,12);p(base,start,31,4,11);
+ p(outline,start+bw-4,30,8,17);
+ p(shadow,start+bw-2,32,7,13);p(base,start+bw-1,31,3,10);
+ p(deep,start-2,44,7,5);p(skin,start-1,44,5,4);p(light,start,44,2,2);
+ p(deep,start+bw-3,44,7,5);p(skin,start+bw-2,44,5,4);
+ // Belt and buckle + cloak folds.
+ p(outline,start+4,44,bw-8,4);
+ p('#815d45',start+5,44,bw-10,3);
+ p(gold,22,43,6,5);p('#fff1bd',24,44,2,2);
+ p(shadow,start+7,47,3,5);p(mid,start+bw-12,45,4,5);
+ p(shine,start+6,49,2,5);
+ // A narrow scarf with true pixel folds adds JRPG costume detail.
+ p(steel,19,26,13,4);p('#d2d9bd',20,25,10,3);
+ if(!fromBehind){p('#ecddba',21,28,8,3);p('#fff1d2',22,27,4,2)}
+ p('#d6c9a8',20,31,3,4);
+ // Neck and head silhouette.
+ p(outline,15,8,19,23);
+ p(deep,16,11,18,19);
+ p(skin,17,13,16,15);
+ p(light,19,14,10,8);
+ p(medium,17,22,14,4);
+ // Ears, cheek and subtle nose; not a giant rectangular facial patch.
+ if(!side){p(deep,14,20,4,6);p(skin,15,21,3,4);p(deep,32,20,3,6);p(skin,32,22,2,2)}
+ else{p(deep,33,20,3,6);p(skin,34,21,2,3)}
+ if(!fromBehind){
+  if(side){
+   p(black,28,20,3,2);p('#f4f0d5',29,20,1,1);
+   p(medium,31,24,3,2);p(deep,27,27,5,1);
+  }else{
+   p(black,20,19,3,3);p(black,28,19,3,3);
+   p('#fff7e2',20,19,1,1);p('#fff7e2',28,19,1,1);
+   p(medium,24,23,4,2);p(deep,24,27,3,1);
+   p('#ce8f7a',18,24,3,2);p('#ce8f7a',30,24,2,2);
+  }
+ }
+ // Layered hair cap: asymmetric tufts and actual light/shadow clusters.
+ p(hairDark,14,7,21,12);
+ p(hair,16,6,18,11);
+ p(hairLight,17,7,9,3);
+ p(hairDark,14,11,5,13);
+ if(fromBehind){
+  p(hair,16,13,18,17);p(hairLight,18,15,4,8);
+  p(hairDark,26,17,6,12);
+ }else{
+  p(hair,15,10,11,5);p(hairLight,17,10,5,3);
+  p(hairDark,27,9,7,8);
+  p(hair,29,12,5,5);
+ }
+ if(avatarConfig.hairStyle===1||avatarConfig.hairStyle===4){
+  p(hairDark,12,14,6,17);p(hair,13,15,4,15);
+  p(hairDark,32,15,5,15);p(hair,33,16,3,12);
+  if(avatarConfig.hairStyle===4){
+   p(hairLight,33,21,3,3);p(gold,32,28,6,3);p(hair,32,31,4,9);
+  }
+ }
+ if(avatarConfig.hairStyle===2){
+  p(hairDark,13,14,5,7);p(hair,14,14,3,5);
+  p(hairDark,32,14,6,9);p(hair,33,16,3,6);
+  p(hairLight,21,6,8,2);
+ }
+ if(avatarConfig.hairStyle===3){
+  p(hairDark,18,3,13,5);p(hair,21,1,8,5);
+  p(hairLight,23,2,5,2);p(hairDark,28,5,8,4);
+ }
+ // Decorative colored earring/shoulder rivets with restrained 16-bit shading.
+ p(gold,start+2,31,3,3);p('#fff1b5',start+3,31,1,1);
+ p(gold,start+bw-6,31,3,3);
+ return c.toDataURL('image/png');
 }
 function repaintCustomAvatar(){
- const front=$('#adventureAvatar .sprite');if(front)front.src=makeCustomAvatarSprite();
+ const front=$('#adventureAvatar .sprite');if(front)front.src=makeCustomAvatarSprite(avatarFrame,avatarFacing);
  const img=$('#gpsMarker .sprite');if(img)img.src=makeCustomAvatarSprite();
  if(window._googlePlayer&&window.google?.maps){
   window._googlePlayer.setIcon({url:makeCustomAvatarSprite(),scaledSize:new google.maps.Size(52,70),anchor:new google.maps.Point(26,70)});
@@ -308,7 +403,7 @@ function refreshAdventureAvatar(){
  const follow=!!(followPlayer&&currentGeolocation&&provider==='osm'&&mapLoaded&&map);
  document.body.classList.toggle('following',follow);
  const icon=$('#adventureAvatar .sprite');
- if(icon&&!icon.getAttribute('src'))icon.src=makeCustomAvatarSprite();
+ if(icon&&!icon.getAttribute('src'))icon.src=makeCustomAvatarSprite(avatarFrame,avatarFacing);
  if(gpsMarker?.getElement)gpsMarker.getElement().style.display=follow?'none':'';
 }
 function explorerCamera(isFirst=false){
@@ -759,7 +854,12 @@ function updateGpsOverlay(){
 function receivedGps(p){
  const firstFix=!currentGeolocation;
  currentGeolocation=[p.coords.longitude,p.coords.latitude];gpsAccuracy=p.coords.accuracy;
- document.body.classList.toggle('walking',Number.isFinite(p.coords.speed)&&p.coords.speed>.55);
+ avatarIsWalking=Number.isFinite(p.coords.speed)&&p.coords.speed>.55;
+ document.body.classList.toggle('walking',avatarIsWalking);
+ if(Number.isFinite(p.coords.heading)&&p.coords.speed>.6){
+  const heading=(p.coords.heading+360)%360;
+  avatarFacing=heading>=315||heading<45?'up':heading<135?'right':heading<225?'down':'left';
+ }
  locationAccess='granted';$('#locateBtn').classList.remove('busy');$('#locateBtn').classList.add('active');
  $('#locationReadout').textContent='✦ GPS POSITION FOUND  ·  ±'+Math.round(gpsAccuracy)+' m  ·  PRIVATE';
  $('#locationReadout').classList.add('visible');hideBanner();
@@ -785,7 +885,18 @@ function locateMe(){
 $('#locateBtn').onclick=locateMe;
 $('#avatarBtn').onclick=()=>setPanel('avatar');
 
-makeDemo();drawOffline();updateRegion();updateZoom();window.addEventListener('load',()=>{startLive();if(window.isSecureContext){locateMe()}else mapBanner('Open this prototype from an HTTPS site to enable your real GPS position. The downloadable file may show the map but cannot reliably access location on Android.')});
+makeDemo();drawOffline();updateRegion();updateZoom();// Frame animation is local and never changes GPS or a scanned warrior blueprint.
+avatarAnimationTimer=setInterval(()=>{
+ if(document.hidden)return;
+ avatarFrame=(avatarFrame+1)%(avatarIsWalking?4:16);
+ const frame=avatarIsWalking?avatarFrame:(avatarFrame%16===0?2:0);
+ const src=makeCustomAvatarSprite(frame,avatarFacing);
+ const front=$('#adventureAvatar .sprite');if(front)front.src=src;
+ if(gpsMarker?.getElement){
+  const el=gpsMarker.getElement(),img=el.querySelector('.sprite');if(img)img.src=src;
+ }
+},avatarIsWalking?160:520);
+window.addEventListener('load',()=>{startLive();if(window.isSecureContext){locateMe()}else mapBanner('Open this prototype from an HTTPS site to enable your real GPS position. The downloadable file may show the map but cannot reliably access location on Android.')});
 })();
 </script>
 </body>
