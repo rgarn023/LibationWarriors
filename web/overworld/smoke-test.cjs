@@ -83,7 +83,12 @@ const fs=require('fs');
    oldOverlayHidden:getComputedStyle(document.querySelector('#gameWorld')).display==='none',
    fakeIllustrationHidden:getComputedStyle(document.querySelector('#illustratedBackdrop')).display==='none',
    gpsOnMap:!!marker?.closest('.maplibregl-marker'),
-   liveGeographyReady:document.body.classList.contains('game-geography-ready')};
+   liveGeographyReady:document.body.classList.contains('game-geography-ready'),
+   mapOpacity:Number(getComputedStyle(document.querySelector('#map')).opacity),
+   basemapOpacity:Number(getComputedStyle(document.querySelector('#map canvas.maplibregl-canvas')).opacity),
+   markerOpacity:Number(getComputedStyle(marker).opacity),
+   markerDisplay:getComputedStyle(marker).display,
+   liveArtworkVisible:getComputedStyle(c).display==='block'};
  });
  const spriteDimensions=await page.evaluate(async()=>{
    const img=new Image();img.src='./avatar_snes.png';await img.decode();
@@ -96,6 +101,8 @@ const fs=require('fs');
  if(!inspect.mapLoaded||!inspect.geolocation||inspect.features<3||
     inspect.colors<6||!inspect.hasGPSMarker||!inspect.oldOverlayHidden||
     !inspect.fakeIllustrationHidden||!inspect.liveGeographyReady||
+    inspect.mapOpacity<.99||inspect.basemapOpacity>.01||inspect.markerOpacity<.99||
+    inspect.markerDisplay==='none'||!inspect.liveArtworkVisible||
     inspect.spriteDimensions[0]!==192||inspect.spriteDimensions[1]!==66){
    throw Error('Georeferenced RPG world browser smoke test failed');
  }
