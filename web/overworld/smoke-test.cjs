@@ -154,10 +154,19 @@ const fs=require('fs');
   buildings:Number(el.dataset.artBuildings||0)
  }));
  console.log('NATIVE GEO-ANCHORED BUILDING AND WOODLAND ART:',JSON.stringify(nativeArt));
- if(nativeArt.mode!=='native-symbols'||nativeArt.trees<1||nativeArt.buildings<1)
-  throw Error('No real-polygon-anchored fantasy buildings and woodland: '+JSON.stringify(nativeArt));
- const depth=await page.locator('#map').getAttribute('data-geographic-depth');
- if(depth!=='on')throw Error('Grounded building footprint depth missing: '+depth);
+ if(nativeArt.mode!=='native-symbols'||nativeArt.trees<1||nativeArt.buildings!==0)
+  throw Error('Repeated decorative cottages still in the live map: '+JSON.stringify(nativeArt));
+ const buildingsPresentation=await page.locator('#map').evaluate(el=>({
+  appearance:el.dataset.buildingPresentation,depth:el.dataset.geographicDepth,
+  blocks:el.dataset.blockExtrusions,houseIcons:el.dataset.houseSymbolsRemoved,
+  roofCount:Number(el.dataset.buildingLayers)
+ }));
+ console.log('REAL-FOOTPRINT ROOF ART:',JSON.stringify(buildingsPresentation));
+ if(buildingsPresentation.appearance!=='patterned-real-footprints'||
+  buildingsPresentation.depth!=='roof-only'||
+  buildingsPresentation.blocks!=='removed'||
+  buildingsPresentation.houseIcons!=='yes'||buildingsPresentation.roofCount<2)
+  throw Error('Buildings still render as giant brown blocks or repeated houses: '+JSON.stringify(buildingsPresentation));
  const buildings=await page.locator('#map').evaluate(el=>({
   status:el.dataset.geographicBuildings,
   layers:Number(el.dataset.buildingLayers),
@@ -243,6 +252,7 @@ const fs=require('fs');
  await page.screenshot({path:'/tmp/libation-fantasy-terrain.png',fullPage:false});
  await page.screenshot({path:'/tmp/libation-building-forest-sprites.png',fullPage:false});
  await page.screenshot({path:'/tmp/libation-visible-buildings.png',fullPage:false});
+ await page.screenshot({path:'/tmp/libation-refined-rooftops.png',fullPage:false});
  // Simulate actual location movement and then a horizontal camera swipe.
  await context.setGeolocation({longitude:-76.2838,latitude:36.77105,accuracy:6});
  await page.waitForFunction(()=>document.body.classList.contains('walking'),null,{timeout:4500});
