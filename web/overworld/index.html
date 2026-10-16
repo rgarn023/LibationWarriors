@@ -335,7 +335,12 @@ body:not(.live-map) #online{letter-spacing:.4px}
 
 /* Local close-up camera and minimal touch guidance. */
 #map{touch-action:none}
-#map #gpsMarker .sprite{bottom:3px!important}
+#map #gpsMarker .sprite{bottom:2px!important}
+/* The map owns the world-position transform. Scale only this child rig around
+   the GPS foot anchor; its shadow and adventurer stay grounded together. */
+#map #gpsMarker .avatar-rig{position:absolute;inset:0;width:100%;height:100%;
+ transform:scale(var(--avatar-world-scale,1));transform-origin:50% 100%;
+ pointer-events:none;will-change:transform;overflow:visible}
 /* The old bobbing keyframes override translateX(-50%) and shift the hero away
    from its world-coordinate shadow. The new boot frames provide motion. */
 body.walking #map #gpsMarker .sprite{animation:none!important;transform:translateX(-50%)!important}
@@ -1072,6 +1077,19 @@ function worldFrame(now){
  catch(e){if(!worldState.renderError){console.warn('RPG scene draw failed',e);worldState.renderError=true}}
 }
 
+// MapLibre zoom is logarithmic: +1 means 2x geographic size. A single
+// bottom-centered rig makes the hero and ground shadow shrink/grow as the
+// local world zooms, without ever changing their GPS coordinates.
+function updateGeographicAvatarScale(){
+ if(!map||!gpsMarker)return;
+ const marker=gpsMarker.getElement?.(),rig=marker?.querySelector('.avatar-rig');
+ if(!rig)return;
+ const zoom=map.getZoom(),size=Math.pow(2,zoom-LOCAL_ZOOM);
+ if(!Number.isFinite(size))return;
+ rig.style.setProperty('--avatar-world-scale',size.toFixed(5));
+ marker.dataset.avatarWorldScale=size.toFixed(5);
+ marker.dataset.avatarMapZoom=zoom.toFixed(3);
+}
 function ensureGeoreferencedAvatar(){
  if(provider!=='osm'||!map||!mapLoaded||!currentGeolocation)return;
  if(gpsMarker){
@@ -1084,11 +1102,12 @@ function ensureGeoreferencedAvatar(){
  el.id='gpsMarker';
  el.setAttribute('role','img');
  el.setAttribute('aria-label','Your custom adventurer at your real GPS location');
- el.innerHTML='<div class="gps-ground"></div><img class="sprite" alt="" src="'+
-   makeCustomAvatarSprite(avatarFrame,avatarFacing)+'"><span class="gps-name">YOU</span>';
+ el.innerHTML='<div class="avatar-rig"><div class="gps-ground"></div><img class="sprite" alt="" src="'+
+   makeCustomAvatarSprite(avatarFrame,avatarFacing)+'"><span class="gps-name">YOU</span></div>';
  gpsDrawnPosition=gpsDrawnPosition||currentGeolocation.slice();
  gpsMarker=new maplibregl.Marker({element:el,anchor:'bottom',offset:[0,0]})
    .setLngLat(gpsDrawnPosition).addTo(map);
+ updateGeographicAvatarScale();
 }
 function refreshAdventureAvatar(){
  document.body.classList.toggle('following',!!(followPlayer&&currentGeolocation&&provider==='osm'&&mapLoaded));
@@ -1319,7 +1338,7 @@ async function startLive(){
    map.on('moveend',()=>{lastPosition=position();updateZoom()});
    // Tile POIs are checked only after the movement has settled.
    map.on('idle',()=>{if(gpsTransitionFrame===null)integrateMapTileVenues()});
-   map.on('move',()=>{updateGpsOverlay();syncAdventureCameraState();refreshCameraRelativeFacing()});map.on('zoom',updateZoom);
+   map.on('move',()=>{updateGpsOverlay();syncAdventureCameraState();refreshCameraRelativeFacing()});map.on('zoom',()=>{updateZoom();updateGeographicAvatarScale()});
    // Retry a second geographic map source if the vector style cannot load.
    // We never use fictional scene art to impersonate real GPS/map geography.
    let rasterFallbackAttempted=false;
