@@ -1529,7 +1529,8 @@ function styleOverworld(){
 // geographic projection keeps them attached to actual OSM terrain as the
 // player walks and turns. No artificial trees, roads or shorelines are added.
 function addGeographicTerrainTextures(){
- if(!map||!map.isStyleLoaded())return;
+ // addLayer() dirties MapLibre style's loaded flag; image registration is still safe.
+ if(!map||!map.getStyle())return;
  const kinds={
   'lw-ground':{base:'#a4cb8a',dark:'#7eae76',light:'#bfda99',count:12},
   'lw-park':{base:'#7fbb79',dark:'#579d68',light:'#a2d78b',count:18},
