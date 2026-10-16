@@ -430,16 +430,16 @@ function makeCustomAvatarSprite(frame=0,facing=avatarFacing){
   const sg=source.getContext('2d');sg.imageSmoothingEnabled=false;
   sg.drawImage(liveAvatarAtlas,col*48,0,48,66,0,0,64,88);
   g.drawImage(source,0,0);
-  // Temporary four-pose step cycle: two opposing boots and an intermediate
-  // contact frame. Preserve the original character's head, face and palette.
+  // Move only boot/ankle pixels: upper trousers, sash and hands remain
+  // intact. Prevent the hard waist seam seen in the first segmented prototype.
   if(phase===1||phase===3){
-   const stride=phase===1?-3:3;
-   g.clearRect(12,59,40,29);
-   g.drawImage(source,12,59,20,29,12+stride,59+(phase===1?0:2),20,29);
-   g.drawImage(source,32,59,20,29,32-stride,59+(phase===1?2:0),20,29);
+   const stride=phase===1?-2:2;
+   g.clearRect(16,69,32,19);
+   g.drawImage(source,16,69,16,19,16+stride,69+(phase===1?0:1),16,19);
+   g.drawImage(source,32,69,16,19,32-stride,69+(phase===1?1:0),16,19);
   }else if(phase===2){
-   g.clearRect(12,59,40,29);
-   g.drawImage(source,12,59,40,29,12,60,40,28);
+   g.clearRect(16,69,32,19);
+   g.drawImage(source,16,69,32,19,16,70,32,18);
   }
   const data=g.getImageData(0,0,64,88),pix=data.data;
   const hairColors=['#302a34','#714b30','#cd8247','#f2d4a0','#9856bd'];
