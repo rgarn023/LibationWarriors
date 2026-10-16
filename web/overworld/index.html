@@ -324,6 +324,23 @@ body.live-map #map .maplibregl-ctrl{z-index:8}
 #gpsMarker .sprite{height:106px;width:77px;object-fit:contain}
 body:not(.live-map) #online{letter-spacing:.4px}
 
+
+/* v15 emergency map-stability patch: no false fantasy map behind GPS. */
+#map{z-index:1!important;opacity:1!important;pointer-events:auto!important;background:#a8cf91!important}
+#map canvas.maplibregl-canvas,
+body.game-geography-ready #map canvas.maplibregl-canvas,
+body:not(.game-geography-ready) #map canvas.maplibregl-canvas {
+ opacity:1!important;visibility:visible!important
+}
+#gameWorld,#gameOverworldArt,#illustratedBackdrop,#offlineCanvas,#worldScenery{
+ display:none!important;opacity:0!important;pointer-events:none!important
+}
+#map .maplibregl-marker,#map #gpsMarker{opacity:1!important;visibility:visible!important}
+#map .maplibregl-canvas-container{overflow:hidden}
+#mapStats{max-width:160px}
+#gameHint{display:none!important}
+body.live-map #map .maplibregl-ctrl-attrib{display:block!important}
+
 </style>
 </head>
 <body>
@@ -343,7 +360,7 @@ body:not(.live-map) #online{letter-spacing:.4px}
 'use strict';
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const centerStart=[-76.273,36.768]; // Unused until GPS arrives.
-const LOCAL_ZOOM=16.95,LOCAL_RADIUS_METERS=1600,ADVENTURE_PITCH=55;
+const LOCAL_ZOOM=16.35,LOCAL_RADIUS_METERS=1600,ADVENTURE_PITCH=34;
 const presets={"Chesapeake, VA":[-76.273,36.768],"Virginia Beach, VA":[-75.976,36.852],"New York, NY":[-73.985,40.748],"Boston, MA":[-71.06,42.356],"Tokyo, Japan":[139.701,35.658]};
 let provider='offline', map=null,gm=null,gmMarkers=[],markers=[],venues=[],demoVenues=[],selectedVenue=null,lastPosition=centerStart.slice(),currentFilter='all',mapLoading=false,mapLoaded=false,fetchSerial=0,fetchController=null,venueTimer=null,searchCity='Your nearby overworld',activePanel='map',avatarKey='712340000032',claimed=new Set(),shadowPath=null,openedAt=Date.now(),countdownHandle=null,loadingHint='',currentGeolocation=null,gpsWatchId=null,gpsAccuracy=null,gpsMarker=null,gpsAccuracyCircle=null,offlineZoom=13,liveMapFailure=false,locationAccess='not-requested',venueCache=new Map(),lastVenueKey='',lastVenueLoadAt=0;
 let toastTimer=null,venueCountMode='idle',followPlayer=true;
@@ -1117,7 +1134,7 @@ function registerAdventureCameraControls(){
   if(!start||e.pointerId!==start.id||!mapLoaded)return;
   const dx=e.clientX-start.x,dy=e.clientY-start.y;
   cameraBearing=(start.bearing+dx*.36)%360;
-  cameraTilt=Math.max(42,Math.min(65,start.pitch+dy*.06));
+  cameraTilt=Math.max(20,Math.min(40,start.pitch+dy*.045));
   if(currentGeolocation&&followPlayer){
    // No camera easing during an active swipe, avoiding competing animations.
    map.jumpTo({center:gpsDrawnPosition||currentGeolocation,bearing:cameraBearing,
@@ -1154,8 +1171,8 @@ async function startLive(){
  try{
    document.body.classList.remove('google-active');$('#map').style.display='block';map=new maplibregl.Map({container:'map',style:'https://tiles.openfreemap.org/styles/liberty',
      center:currentGeolocation,zoom:LOCAL_ZOOM,minZoom:LOCAL_ZOOM,maxZoom:LOCAL_ZOOM,
-     attributionControl:true,preserveDrawingBuffer:false,pitch:ADVENTURE_PITCH,maxPitch:68,dragPan:false,dragRotate:false,
-     touchPitch:false,minPitch:40,scrollZoom:false,doubleClickZoom:false,boxZoom:false,
+     attributionControl:true,preserveDrawingBuffer:false,pitch:ADVENTURE_PITCH,maxPitch:40,dragPan:false,dragRotate:false,
+     touchPitch:false,minPitch:20,scrollZoom:false,doubleClickZoom:false,boxZoom:false,
      touchZoomRotate:false,cooperativeGestures:false,renderWorldCopies:false});
    applyLocalViewportBounds();
    map.scrollZoom.disable();map.doubleClickZoom.disable();map.touchZoomRotate.disable();map.dragPan.disable();
@@ -1165,15 +1182,15 @@ async function startLive(){
      $('#map').classList.add('map-live');$('#loadingMap').style.display='none';
      $('#demoMarkers').style.display='none';
      updateStatus('MAP<br>ONLINE',true);
-     styleOverworld();document.body.classList.remove('offline-scenic','game-geography-ready');document.body.classList.add('live-map','go-perspective');window.LibationGameWorld?.attach(map);
+     styleOverworld();document.body.classList.remove('offline-scenic','game-geography-ready');document.body.classList.add('live-map','go-perspective','stable-map');
      // Avoid creating hundreds of DOM/world objects on every viewport change.
      registerAdventureCameraControls();
      if(currentGeolocation){moveGeoreferencedAvatar(currentGeolocation,0,null);explorerCamera(true)}
      refreshSoon();updateZoom();updateGpsOverlay();
     });
-   map.on('moveend',()=>{lastPosition=position();refreshSoon();updateZoom()});
+   map.on('moveend',()=>{lastPosition=position();updateZoom()});
    // Tile POIs are checked only after the movement has settled.
-   map.on('idle',()=>{if(gpsTransitionFrame===null)integrateMapTileVenues();window.LibationGameWorld?.refresh()});
+   map.on('idle',()=>{if(gpsTransitionFrame===null)integrateMapTileVenues()});
    map.on('move',updateGpsOverlay);map.on('zoom',updateZoom);
    // Retry a second geographic map source if the vector style cannot load.
    // We never use fictional scene art to impersonate real GPS/map geography.
@@ -1416,89 +1433,52 @@ function snesPattern(kind){
 // V12 visual rebuild: clean geographical shapes, deliberately illustrated colors,
 // cartoony outlined pathways, tiny 3-D low-rise buildings, no screen-filling
 // hatch patterns. Geographic data remains directly from OpenFreeMap/OSM.
+// STABLE RENDERER: MapLibre owns all geographic geometry and tile clipping.
+// Never redraw screen-space polygons using raw queryRenderedFeatures coordinates.
+// The original SNES palette stays, but projection and roads remain georeferenced.
 function styleOverworld(){
  if(!map||!map.isStyleLoaded())return;
- const style=map.getStyle();
- const layers=style.layers||[];
- const roadOutlines=[];
- const match=(id,re)=>re.test(id);
+ const layers=map.getStyle().layers||[];
  for(const layer of layers){
-  const id=layer.id.toLowerCase();
-  const set=(prop,value)=>{try{map.setPaintProperty(layer.id,prop,value)}catch(_){}};
-  const layout=(prop,value)=>{try{map.setLayoutProperty(layer.id,prop,value)}catch(_){}};
-  if(layer.type==='background'){
-   set('background-color','#8dc4a3');continue;
-  }
+  const id=String(layer.id).toLowerCase();
+  const set=(key,value)=>{try{map.setPaintProperty(layer.id,key,value)}catch(_){}};
+  const hide=()=>{try{map.setLayoutProperty(layer.id,'visibility','none')}catch(_){}};
+  if(layer.type==='background'){set('background-color','#a8cf91');continue}
   if(layer.type==='symbol'){
-   // Full-screen navigation labels overpower game-world objects.
-   layout('visibility','none');continue;
-  }
-  if(layer.type==='fill-extrusion'){
-   // Low, readable structures at actual OSM building geometry; not skyscrapers.
-   layout('visibility','visible');
-   set('fill-extrusion-color','#c5ceb0');
-   set('fill-extrusion-base',0);
-   set('fill-extrusion-height',5);
-   set('fill-extrusion-opacity',.88);
+   if(/poi|housenumber|address|transit|airport|building/.test(id))hide();
+   else{
+    set('text-color','#385d4d');set('text-halo-color','#d4e9b3');
+    set('text-halo-width',1.2);
+   }
    continue;
   }
+  if(layer.type==='fill-extrusion'){hide();continue}
   if(layer.type==='fill'){
-   // Remove all repeated water/grass patterns. Their high-frequency geometry
-   // made the recorded build look like a badly scrolling raster map.
-   set('fill-pattern',null);
-   set('fill-opacity',1);
-   if(match(id,/water|ocean|lake|river|reservoir|wetland|sea/)){
-    set('fill-color','#5ab7d4');set('fill-outline-color','#3995ba');
-   }else if(match(id,/park|forest|wood|tree|nature|vegetation/)){
-    set('fill-color','#76b47c');set('fill-outline-color','#5c9c70');
-   }else if(match(id,/grass|meadow|recreation|pitch|golf/)){
-    set('fill-color','#8dc889');set('fill-outline-color','#75b77f');
-   }else if(match(id,/sand|beach|dune/)){
-    set('fill-color','#e8d5a7');set('fill-outline-color','#c9b98f');
-   }else if(match(id,/building|house/)){
-    set('fill-color','#d8d0ab');set('fill-outline-color','#b9bd9c');
-   }else if(match(id,/residential|neighbourhood|neighborhood|urban|industrial|landuse/)){
-    set('fill-color','#97c6a6');set('fill-outline-color','#91c4a7');
-   }else{
-    set('fill-color','#96c9ad');
+   if(/water|ocean|lake|river|reservoir|wetland/.test(id)){
+    set('fill-color','#5aaed0');set('fill-outline-color','#398ab0');
+   }else if(/forest|wood|park|garden|nature/.test(id)){
+    set('fill-color','#78b979');
+   }else if(/grass|meadow|pitch|golf/.test(id)){
+    set('fill-color','#96ca85');
+   }else if(/sand|beach|dune/.test(id)){
+    set('fill-color','#e6d29c');
+   }else if(/building/.test(id)){
+    set('fill-color','#dfbf98');set('fill-outline-color','#ae9775');
+   }else if(/residential|industrial|commercial|landuse/.test(id)){
+    set('fill-color','#b3d49d');
    }
    continue;
   }
   if(layer.type==='line'){
-   set('line-pattern',null);
-   if(match(id,/water|river|stream|canal/)){
-    set('line-color','#479dbb');set('line-opacity',1);
-    set('line-width',4);continue;
+   if(/rail|tram|subway/.test(id)){set('line-opacity',.2);continue}
+   if(/river|stream|waterway|canal/.test(id)){
+    set('line-color','#499dbb');continue;
    }
-   if(match(id,/rail|tram|metro/)){
-    set('line-opacity',.12);continue;
-   }
-   if(!match(id,/road|street|highway|motorway|trunk|primary|secondary|tertiary|residential|path|footway|pedestrian|track|service|living/)){
-    set('line-opacity',.15);continue;
-   }
-   const foot=match(id,/foot|path|pedestrian|track|trail|cycle/);
-   const major=match(id,/motorway|trunk|primary/);
-   const width=foot?3.5:major?10.5:8;
-   set('line-opacity',1);set('line-color',foot?'#ebdba9':'#677a71');
-   set('line-width',width);
-   set('line-dasharray',null);
-   if(layer.source&&layer['source-layer']&&roadOutlines.length<28){
-    roadOutlines.push({source:layer.source,sourceLayer:layer['source-layer'],
-      filter:layer.filter,original:layer.id,width,foot});
+   if(/motorway|trunk|primary|secondary|tertiary|road|street|residential|path|track|footway|pedestrian|service/.test(id)){
+    set('line-color',/motorway|trunk|primary/.test(id)?'#f2d5a2':'#eee0b7');
+    set('line-opacity',1);
    }
   }
- }
- // Edges make OSM road geometries read as authored game paths. They're inserted
- // BELOW the source road, not a second overlay that can drift independently.
- for(let i=0;i<roadOutlines.length;i++){
-  const l=roadOutlines[i],id='lw-path-border-'+i;
-  if(map.getLayer(id))continue;
-  const definition={id,type:'line',source:l.source,'source-layer':l.sourceLayer,
-    layout:{'line-join':'round','line-cap':'round'},
-    paint:{'line-color':l.foot?'#cdbd8b':'#f4d89a',
-      'line-width':l.width+(l.foot?2:3),'line-opacity':1}};
-  if(l.filter)definition.filter=l.filter;
-  try{map.addLayer(definition,l.original)}catch(err){console.warn('Path border skipped:',err?.message)}
  }
 }
 function offline(reason){
@@ -1507,8 +1487,8 @@ function offline(reason){
  if(gpsTransitionFrame!==null){cancelAnimationFrame(gpsTransitionFrame);gpsTransitionFrame=null}
  if(gpsMarker){try{gpsMarker.remove()}catch(_){};gpsMarker=null}gpsDrawnPosition=null;document.body.classList.remove('game-ready');worldState.started=false;worldState.ready=false;window.LibationGameWorld?.destroy();
  if(map){try{map.remove()}catch(_){}}map=null;sceneryCanvas=null;sceneryCtx=null;sceneryPoints=[];lastSceneryArea='';provider='offline';mapLoaded=false;document.body.classList.remove('live-map','following','walking','game-geography-ready');document.body.classList.add('offline-scenic');
- $('#map').style.display='none';$('#loadingMap').style.display='none';$('#demoMarkers').style.display='block';updateStatus('OFFLINE<br>DEMO',false);
- makeDemo();drawOffline();updateRegion();mapBanner('⚠ Offline scenic illustration — not your real location.<button id="retryConnection" type="button" class="launchLocation">RETRY LIVE MAP</button>');$('#retryConnection').onclick=()=>{hideBanner();startLive()};toast(reason||'Live map unavailable. Check connection.');
+ $('#map').style.display='none';$('#loadingMap').style.display='none';$('#demoMarkers').style.display='none';updateStatus('OFFLINE<br>GPS',false);
+ venues=[];updateRegion();mapBanner('⚠ Live geography is unavailable. This is not a game-world map.<button id="retryConnection" type="button" class="launchLocation">RETRY LIVE MAP</button>');$('#retryConnection').onclick=()=>{hideBanner();startLive()};toast(reason||'Live map unavailable. Check connection.');
 }
 function makeDemo(){demoVenues=[{id:'demo1',name:'Cask & Crown',type:'rupture',demo:true,lat:36.77,lon:-76.27},{id:'demo2',name:'Lantern Tavern',type:'rupture',demo:true,lat:36.778,lon:-76.261},{id:'demo3',name:'Violet Stillworks',type:'challenge',demo:true,lat:36.761,lon:-76.253}];$('#demoMarkers').innerHTML='';for(let i=0;i<demoVenues.length;i++){let p=document.createElement('div');p.className='fakepin';p.appendChild(pinEl(demoVenues[i]));$('#demoMarkers').appendChild(p)}}
 function drawOffline(){
