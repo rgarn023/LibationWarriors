@@ -1726,7 +1726,7 @@ function addGeographicTerrainTextures(){
   if(!water){
    for(let i=0;i<55;i++){
     const x=pos(258)-6,y=pos(258)-6,w=8+pos(22),h=4+pos(14);
-    g.globalAlpha=forest?.17:park?.12:.10;
+    g.globalAlpha=forest ? 0.17 : (park ? 0.12 : 0.10);
     px(colors[1+pos(3)],x,y,w,h);
     px(colors[0],x+2,y+3,Math.max(2,w-6),Math.max(1,h-6));
    }
