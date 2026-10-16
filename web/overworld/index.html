@@ -252,7 +252,7 @@ body.walking #gpsMarker .sprite{animation:travelSteps .48s steps(2,end) infinite
 #map .maplibregl-ctrl-attrib{opacity:.5}
 .pixel-marker .location-title{font-size:8px;border-radius:8px}
 #gpsMarker .gps-ground{box-shadow:0 0 0 4px #e4f3dc50,0 0 0 13px #e9ffe721;border-color:#f9f5ca}
-#gpsMarker .sprite{filter:drop-shadow(2px 4px 2px #174f43a3)}
+#gpsMarker .sprite{filter:drop-shadow(2px 4px 2px #174f43a3);height:101px;width:76px}
 @media(max-width:530px){
  #topChips{top:calc(env(safe-area-inset-top) + 65px)}
  #leftSide{top:calc(env(safe-area-inset-top) + 125px)}
@@ -627,6 +627,7 @@ function explorerCamera(isFirst=false,duration=650){
  const pad={top:Math.round(h*.34),bottom:Math.round(h*.035),left:0,right:0};
  map.easeTo({center:currentGeolocation,pitch:cameraTilt,bearing:cameraBearing,
   zoom:LOCAL_ZOOM,padding:pad,
+  easing:t=>t*t*(3-2*t),
   duration:isFirst?850:Math.max(300,Math.min(2000,duration))});
  refreshAdventureAvatar();
 }
@@ -702,7 +703,7 @@ async function startLive(){
     });
    map.on('moveend',()=>{lastPosition=position();refreshSoon();updateZoom()});
    // Tile POIs are checked only after the movement has settled.
-   map.on('idle',()=>{integrateMapTileVenues()});
+   map.on('idle',()=>{if(gpsTransitionFrame===null)integrateMapTileVenues()});
    map.on('move',updateGpsOverlay);map.on('zoom',updateZoom);
    // Retry a second geographic map source if the vector style cannot load.
    // We never use fictional scene art to impersonate real GPS/map geography.
@@ -1098,24 +1099,24 @@ function combineVenues(primary,secondary){
  return found;
 }
 let lastTileSignature='';
+// Read tile POIs sparingly. During camera rotation, changing tile membership
+// must NOT delete actual nearby locations and make portals flicker.
+let lastTileVenueRefresh=0,lastTileVenueGPS=null;
 function integrateMapTileVenues(){
- if(provider!=='osm'||!mapLoaded||!map)return;
- const b=map.getBounds();
- // Retain portals in a surrounding buffer as the GPS camera moves.
- // Only the renderer should decide which ones are currently visible.
- const sw=b.getSouthWest(),ne=b.getNorthEast();
- const dlat=(ne.lat-sw.lat)*.65,dlon=(ne.lng-sw.lng)*.65;
- const retained=venues.filter(v=>v.lat>=sw.lat-dlat&&v.lat<=ne.lat+dlat&&
-   v.lon>=sw.lng-dlon&&v.lon<=ne.lng+dlon);
- const merged=combineVenues(retained,nearbyTileVenues());
+ if(provider!=='osm'||!mapLoaded||!map||!currentGeolocation||!map.isStyleLoaded())return;
+ const now=Date.now(),moved=lastTileVenueGPS?geoMeters(lastTileVenueGPS,currentGeolocation):Infinity;
+ if(now-lastTileVenueRefresh<18000 && moved<60)return;
+ lastTileVenueRefresh=now;lastTileVenueGPS=currentGeolocation.slice();
+ const base=venues.filter(v=>Number.isFinite(v.lat)&&Number.isFinite(v.lon)&&
+  geoMeters(currentGeolocation,[v.lon,v.lat])<LOCAL_RADIUS_METERS+220);
+ const merged=combineVenues(base,nearbyTileVenues());
  const signature=merged.map(v=>v.id).sort().join('|');
  if(lastTileSignature===signature)return;
  lastTileSignature=signature;
- venues=merged;
- renderMarkers();
- if(venueCountMode==='unavailable' || venueCountMode==='loading'){
-  if(venues.length)$('#venueCount').textContent=venues.length+' mapped locations'+(venueCountMode==='unavailable'?' · directory offline':' · directory loading');
- }else{updateRegion()}
+ venues=merged;renderMarkers();
+ if(venueCountMode==='unavailable'||venueCountMode==='loading'){
+  if(venues.length)$('#venueCount').textContent=venues.length+' nearby venues · map data';
+ }else updateRegion();
 }
 
 // Nearby OSM venues are real locations. Do not invent fictional points on a live map.
