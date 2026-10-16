@@ -90,7 +90,7 @@ body.google-active #map{bottom:calc(88px + env(safe-area-inset-bottom))} @media(
 <div id="grain"></div><div id="vignette"></div><div id="loadingMap" class="pixfont">LOADING REAL OVERWORLD...<br><span class="xsmall muted">Live map requires internet · GPS requires HTTPS</span></div>
 <header id="hud"><div class="brand"><div class="brandmark pixfont">cg</div><div><div class="brandname pixfont">LIBATION WARRIORS</div><div class="brandsub">CHAROITE GAMES · LIVE 16-BIT MAP</div></div></div><div class="hudright"><div class="coin">🟡 2,850</div><div id="online" class="online is-off">MAP<br>CONNECTING</div></div></header>
 <div id="topChips"><button class="chip active" data-filter="all"><span class="symbol">✦</span> ALL</button><button class="chip" data-filter="rupture"><span class="symbol">⚔</span> RUPTURES</button><button class="chip special" data-filter="challenge"><span class="symbol">✺</span> WORMHOLES</button><button class="chip right" id="searchButton">⌕ FIND</button></div>
-<div id="leftSide"><button class="floatbtn" id="locateBtn" title="Show my current GPS location" aria-label="Show my real current location">⌖</button><button class="floatbtn" id="zoomInBtn" title="Zoom in">＋</button><button class="floatbtn" id="zoomOutBtn" title="Zoom out">－</button><button class="floatbtn tiny" id="refreshBtn" title="Refresh real venues">↻</button></div>
+<div id="leftSide"><button class="floatbtn tiny" id="avatarBtn" title="Customize your overworld avatar" aria-label="Customize your overworld avatar">✎</button><button class="floatbtn" id="locateBtn" title="Show my current GPS location" aria-label="Show my real current location">⌖</button><button class="floatbtn" id="zoomInBtn" title="Zoom in">＋</button><button class="floatbtn" id="zoomOutBtn" title="Zoom out">－</button><button class="floatbtn tiny" id="refreshBtn" title="Refresh real venues">↻</button></div>
 <div id="zoomLevel" aria-live="polite">Z 13</div><div id="liveLocationBanner" role="status" aria-live="polite"></div><div id="locationReadout" role="status" aria-live="polite"></div><div id="mapStats"><div class="eyebrow pixfont">◉ REAL OVERWORLD</div><div id="regionName" class="city">Chesapeake, VA</div><div class="tiny" id="venueCount">Looking for nearby venues…</div></div>
 <div id="toast" role="status"></div>
 <div id="caption">16-BIT MAP STYLE · LIVE OSM GEOGRAPHY WHEN ONLINE · GAMEPLAY SIMULATED</div>
@@ -103,10 +103,78 @@ const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const centerStart=[-76.273,36.768]; // Chesapeake, Virginia — default sample region, not player location.
 const presets={"Chesapeake, VA":[-76.273,36.768],"Virginia Beach, VA":[-75.976,36.852],"New York, NY":[-73.985,40.748],"Boston, MA":[-71.06,42.356],"Tokyo, Japan":[139.701,35.658]};
 let provider='offline', map=null,gm=null,gmMarkers=[],markers=[],venues=[],demoVenues=[],selectedVenue=null,lastPosition=centerStart.slice(),currentFilter='all',mapLoading=false,mapLoaded=false,fetchSerial=0,fetchController=null,venueTimer=null,searchCity='Chesapeake, VA',activePanel='map',avatarKey='712340000032',claimed=new Set(),shadowPath=null,openedAt=Date.now(),countdownHandle=null,loadingHint='',currentGeolocation=null,gpsWatchId=null,gpsAccuracy=null,gpsMarker=null,gpsAccuracyCircle=null,offlineZoom=13,liveMapFailure=false,locationAccess='not-requested',venueCache=new Map(),lastVenueKey='',lastVenueLoadAt=0;
-let toastTimer=null;
+let toastTimer=null,venueCountMode='idle',followPlayer=true;
+const AVATAR_KEY='libation-overworld-avatar-v1';
+const defaultAvatar={skin:1,hair:0,outfit:1,hairStyle:1,body:1};
+let avatarConfig={...defaultAvatar};
+try{const saved=JSON.parse(localStorage.getItem(AVATAR_KEY)||'{}');for(const k of Object.keys(defaultAvatar)){const v=Number(saved[k]);if(Number.isInteger(v)&&v>=0&&v<5)avatarConfig[k]=v}}catch(_){}
+function saveAvatar(){try{localStorage.setItem(AVATAR_KEY,JSON.stringify(avatarConfig))}catch(_){}}
+
 function toast(s){const e=$('#toast');e.textContent=s;e.classList.add('toast-visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>e.classList.remove('toast-visible'),4200)}
 function escapeHTML(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function hashStr(v){let h=2166136261;for(const c of String(v)){h^=c.charCodeAt(0);h=Math.imul(h,16777619)}return h>>>0}
+
+function makeCustomAvatarSprite(){
+ // Separate from warrior blueprints: a player-edited, local 16-bit overworld sprite.
+ const cv=document.createElement('canvas');cv.width=32;cv.height=44;
+ const g=cv.getContext('2d');g.imageSmoothingEnabled=false;
+ const pixel=(col,x,y,w=1,h=1)=>{g.fillStyle=col;g.fillRect(x,y,w,h)};
+ const skin=['#f4c4a0','#deb08c','#bf805d','#915e43','#593927'][avatarConfig.skin];
+ const hair=['#292332','#69432e','#bd8550','#dad4ae','#7e4a8f'][avatarConfig.hair];
+ const coat=['#286d86','#8b425d','#507b47','#69509a','#be914b'][avatarConfig.outfit];
+ const dark=['#162f45','#472334','#263e2a','#332653','#5b3e2d'][avatarConfig.outfit];
+ const trim=['#7ce0e3','#e5baca','#acd68d','#c7a3ef','#fae2a2'][avatarConfig.outfit];
+ // Neutral SNES-like figure, sized to stay recognizable at map scale.
+ pixel('#0a1924',10,40,14,3);pixel('#263342',10,33,12,8);
+ pixel('#202938',10,36,5,5);pixel('#202938',17,36,5,5);
+ pixel('#695044',11,38,4,4);pixel('#695044',18,38,4,4);
+ const shoulder=avatarConfig.body===0?8:avatarConfig.body===2?6:7;
+ pixel('#181a34',16-shoulder,21,shoulder*2+1,15);
+ pixel(coat,17-shoulder,22,shoulder*2-1,13);
+ pixel(dark,15,22,3,14);pixel(trim,14,31,5,2);
+ pixel('#1c263c',8,23,5,12);pixel('#1c263c',20,23,5,12);
+ pixel(coat,9,24,3,9);pixel(coat,21,24,3,9);
+ pixel(skin,9,34,3,3);pixel(skin,21,34,3,3);
+ // The head and face are independently styled rather than derived from a UPC.
+ pixel('#221b30',10,7,13,16);pixel(skin,11,9,11,13);
+ pixel('#9b6149',15,18,4,1);
+ pixel('#1c1c30',13,14,2,2);pixel('#1c1c30',19,14,2,2);
+ pixel(hair,10,5,13,7);pixel(hair,10,7,3,6);
+ if(avatarConfig.hairStyle===1){pixel(hair,9,11,4,15);pixel(hair,21,11,4,15)}
+ if(avatarConfig.hairStyle===2){pixel(hair,9,9,4,8);pixel(hair,21,9,4,8);pixel(hair,11,4,11,4)}
+ if(avatarConfig.hairStyle===3){pixel(hair,14,3,5,7);pixel(hair,12,6,11,3)}
+ if(avatarConfig.hairStyle===4){pixel(hair,9,8,3,13);pixel(hair,21,8,3,13);pixel('#cdb28f',13,5,7,2)}
+ pixel(trim,18,25,3,6);
+ return cv.toDataURL('image/png');
+}
+function repaintCustomAvatar(){
+ const img=$('#gpsMarker .sprite');if(img)img.src=makeCustomAvatarSprite();
+ if(window._googlePlayer&&window.google?.maps){
+  window._googlePlayer.setIcon({url:makeCustomAvatarSprite(),scaledSize:new google.maps.Size(52,70),anchor:new google.maps.Point(26,70)});
+ }
+ const preview=$('#avatarPreview');if(preview)preview.src=makeCustomAvatarSprite();
+}
+function avatarOption(id,heading,labels,selected){
+ return '<label class="label" for="'+id+'">'+heading+'</label><select class="inpt" id="'+id+'">'+
+ labels.map((v,i)=>'<option value="'+i+'"'+(i===selected?' selected':'')+'>'+escapeHTML(v)+'</option>').join('')+'</select>';
+}
+function renderAvatarEditor(){
+ const body=$('#drawerContent');
+ body.innerHTML=heading('YOUR EXPLORER','CUSTOM AVATAR','Create your own 16-bit adventurer for the GPS overworld. Scanned warriors remain separate dungeon characters.')+
+ '<div class="box" style="display:grid;place-items:center;gap:8px;background:linear-gradient(#263b4b,#17312e)"><img id="avatarPreview" alt="Your custom overworld avatar" style="width:128px;height:176px;object-fit:contain;image-rendering:pixelated" src="'+makeCustomAvatarSprite()+'"><strong class="pixfont">YOUR OVERWORLD AVATAR</strong></div>'+
+ avatarOption('avatarSkin','SKIN TONE',['Light','Warm','Tan','Brown','Deep'],avatarConfig.skin)+
+ avatarOption('avatarHair','HAIR COLOR',['Black','Brown','Copper','Blonde','Purple'],avatarConfig.hair)+
+ avatarOption('avatarHairStyle','HAIRSTYLE',['Short','Long','Wavy','Spiky','Braided'],avatarConfig.hairStyle)+
+ avatarOption('avatarOutfit','OUTFIT',['Sea Scout','Crimson Ranger','Forest Walker','Arcane Traveler','Gilded Adventurer'],avatarConfig.outfit)+
+ avatarOption('avatarBody','SILHOUETTE',['Broad','Classic','Slim'],avatarConfig.body)+
+ '<p class="note">Changes are saved on this device for the concept. No account sync or precise GPS position is stored in the avatar profile.</p>'+
+ '<button class="primary full" id="finishAvatar">✓ SAVE AVATAR & RETURN TO MAP</button>';
+ for(const [id,key] of [['avatarSkin','skin'],['avatarHair','hair'],['avatarHairStyle','hairStyle'],['avatarOutfit','outfit'],['avatarBody','body']]){
+   $('#'+id).addEventListener('change',e=>{avatarConfig[key]=Number(e.target.value);saveAvatar();repaintCustomAvatar()});
+ }
+ $('#finishAvatar').onclick=()=>{saveAvatar();closeDrawer();toast('Your custom overworld avatar has been saved.')};
+}
+
 function makeSprite(kind,variant=0){
 const c=document.createElement('canvas');c.width=32;c.height=40;const x=c.getContext('2d');x.imageSmoothingEnabled=false;
 const p=(col,a,b,w=1,h=1)=>{x.fillStyle=col;x.fillRect(a,b,w,h)};
@@ -150,8 +218,10 @@ async function startLive(){
  try{
    document.body.classList.remove('google-active');$('#map').style.display='block';map=new maplibregl.Map({container:'map',style:'https://tiles.openfreemap.org/styles/liberty',center:centerStart,zoom:13.2,attributionControl:true,preserveDrawingBuffer:false,pitch:0,dragRotate:false,touchPitch:false,minZoom:3,maxZoom:19,cooperativeGestures:false,renderWorldCopies:false,maxBounds:[[-179.95,-84.8],[179.95,84.8]]});
    provider='osm';map.getCanvas().setAttribute('aria-label','Real geographic map. Drag to pan and pinch to zoom.');
-   map.on('load',()=>{mapLoaded=true;hideBanner();$('#map').classList.add('map-live');$('#loadingMap').style.display='none';$('#demoMarkers').style.display='none';updateStatus('LIVE<br>WORLD',true);styleOverworld();if(currentGeolocation)moveTo(currentGeolocation[0],currentGeolocation[1],Math.max(15,zoomNow()));refreshSoon();updateZoom();updateGpsOverlay();});
-   map.on('moveend',()=>{lastPosition=position();refreshSoon();updateZoom()});map.on('move',()=>updateGpsOverlay());map.on('zoom',updateZoom);
+   map.on('load',()=>{mapLoaded=true;hideBanner();$('#map').classList.add('map-live');$('#loadingMap').style.display='none';$('#demoMarkers').style.display='none';updateStatus('LIVE<br>WORLD',true);styleOverworld();if(currentGeolocation)map.easeTo({center:currentGeolocation,zoom:Math.max(15,zoomNow()),pitch:42,duration:800});else map.easeTo({pitch:42,duration:450});refreshSoon();updateZoom();updateGpsOverlay();});
+   map.on('moveend',()=>{lastPosition=position();refreshSoon();updateZoom()});
+   map.on('dragstart',()=>{followPlayer=false;$('#locateBtn').classList.remove('active')});
+   map.on('move',()=>updateGpsOverlay());map.on('zoom',updateZoom);
    // Retry a second geographic map source if the vector style cannot load.
    // We never use fictional scene art to impersonate real GPS/map geography.
    let rasterFallbackAttempted=false;
@@ -351,6 +421,7 @@ $$('[data-panel]').forEach(b=>b.addEventListener('click',()=>setPanel(b.dataset.
 function setPanel(k){activePanel=k;$$('[data-panel]').forEach(b=>b.classList.toggle('active',b.dataset.panel===k));if(k==='map')return closeDrawer();$('#drawerWrap').classList.add('open');renderPanel(k)}
 function heading(eye,title,sub=''){return '<div class="eyebrow pixfont">'+eye+'</div><h2 class="dtitle pixfont">'+title+'</h2><p class="dsub">'+sub+'</p>'}
 function renderPanel(k){const body=$('#drawerContent');clearInterval(countdownHandle);countdownHandle=null;
+ if(k==='avatar'){renderAvatarEditor();return}
  if(k==='venue'){
   const v=selectedVenue;if(!v){body.innerHTML=heading('WORLD','No venue selected','Tap a glowing icon on the map.');return}
   const ch=v.type==='challenge';const source=v.demo?'<span class="tag gold">FICTIONAL DEMO</span>':'<span class="tag green">REAL MAP LOCATION · OSM</span>';
@@ -401,13 +472,15 @@ function renderPanel(k){const body=$('#drawerContent');clearInterval(countdownHa
   $('#collectionSummon').onclick=()=>setPanel('summon');
  }else if(k==='settings'||k==='find'){
   body.innerHTML=heading('REAL-WORLD OVERWORLD','MAP OPTIONS','The world stays visible behind every panel. Use the map to travel, find real venue markers, and enter conceptual dungeons.')+
+   '<button class="primary full" id="openAvatarEditor">✎ CUSTOMIZE MY OVERWORLD AVATAR</button>'+
    '<div class="eyebrow">JUMP TO A CITY</div><div class="stack" id="cities">'+Object.entries(presets).map(([key,coords])=>'<button class="chip" data-city="'+escapeHTML(key)+'">'+escapeHTML(key)+'</button>').join('')+'</div>'+
    '<label class="label" for="cityQuery">SEARCH ANOTHER CITY</label><div class="two"><input class="inpt" id="cityQuery" placeholder="e.g. Kyoto, Japan"><button class="secondary" id="findCity">SEARCH</button></div>'+
    '<div class="divider"></div><button id="settingsLocate" class="primary">⌖ SHOW MY ACTUAL GPS LOCATION</button><p class="note">Uses your phone’s GPS with your permission. To work on Android, open over HTTPS—not from downloaded <code>content://</code> files.</p><div class="eyebrow">MAP PROVIDER</div><div class="box"><b>Active: '+(provider==='google'?'Google Maps':provider==='osm'?'OpenFreeMap / OpenStreetMap':'Offline demonstration')+'</b><p class="note">Google Maps JavaScript requires your own Google API key (or a Google demo key). Map views may be billed. The default OpenStreetMap-powered map works without a key.</p></div>'+
    '<label class="label" for="googleKey">OPTIONAL GOOGLE MAPS JAVASCRIPT KEY</label><input class="inpt mono" id="googleKey" type="password" autocomplete="off" placeholder="Paste restricted browser API key"><button class="secondary full" id="useGoogle">SWITCH TO GOOGLE BASE MAP</button>'+
    '<p class="note">Your key is only kept in this page memory for the current session. For security, use website-restricted keys on an HTTPS-hosted page. Custom SNES palettes, sprite venue markers and UI are layered above either provider.</p>'+
    '<div class="divider"></div><div class="box"><div class="eyebrow">DATA SOURCES</div><p class="note">OpenFreeMap / © OpenStreetMap contributors; live venue points from OpenStreetMap via public Overpass service. The venue dataset is community-maintained; restaurant alcohol service and operating hours are not verified. Game dungeon, gold and character systems are fictional simulations. Registered home scan locations are never shown on the world map.</p></div>';
-  $$('#cities [data-city]').forEach(btn=>btn.onclick=()=>{const n=btn.dataset.city;searchCity=n;moveTo(...presets[n],13.8);updateRegion();closeDrawer()});$('#findCity').onclick=geocode;$('#useGoogle').onclick=()=>loadGoogle($('#googleKey').value.trim());const locSettings=$('#settingsLocate');if(locSettings)locSettings.onclick=()=>{closeDrawer();locateMe()};
+  $('#openAvatarEditor').onclick=()=>setPanel('avatar');
+  $('#cities [data-city]').forEach(btn=>btn.onclick=()=>{const n=btn.dataset.city;searchCity=n;moveTo(...presets[n],13.8);updateRegion();closeDrawer()});$('#findCity').onclick=geocode;$('#useGoogle').onclick=()=>loadGoogle($('#googleKey').value.trim());const locSettings=$('#settingsLocate');if(locSettings)locSettings.onclick=()=>{closeDrawer();locateMe()};
  }
 }
 function baseWarrior(code){let normalized=String(code).replace(/[^0-9]/g,'');if(normalized.length===13&&normalized.startsWith('0'))normalized=normalized.slice(1);
@@ -431,7 +504,7 @@ function updateGpsOverlay(){
  if(!currentGeolocation)return;
  if(provider==='osm'&&map){
   if(!gpsMarker){
-   const e=document.createElement('div');e.id='gpsMarker';e.innerHTML='<img class="sprite" alt="16-bit warrior avatar" src="'+sprites.heroF+'"><div class="gpsTitle">YOUR LOCATION</div><div class="gpsArrow"></div>';
+   const e=document.createElement('div');e.id='gpsMarker';e.innerHTML='<img class="sprite" alt="16-bit warrior avatar" src="'+makeCustomAvatarSprite()+'"><div class="gpsTitle">YOUR LOCATION</div><div class="gpsArrow"></div>';
    gpsMarker=new maplibregl.Marker({element:e,anchor:'bottom'}).setLngLat(currentGeolocation).addTo(map);
   }else gpsMarker.setLngLat(currentGeolocation);
   // Draw GPS accuracy in meters, not a fabricated pixel radius.
@@ -443,7 +516,7 @@ function updateGpsOverlay(){
   $('#playerSpot').style.display='none';$('#playerPin').style.display='none';
  }else if(provider==='google'&&gm){
   if(gpsMarker&&gpsMarker.remove){gpsMarker.remove();gpsMarker=null}
-  if(!window._googlePlayer){window._googlePlayer=new google.maps.Marker({position:{lat:currentGeolocation[1],lng:currentGeolocation[0]},map:gm,title:'Your actual location',icon:{url:sprites.heroF,scaledSize:new google.maps.Size(39,55),anchor:new google.maps.Point(19,55)}})}
+  if(!window._googlePlayer){window._googlePlayer=new google.maps.Marker({position:{lat:currentGeolocation[1],lng:currentGeolocation[0]},map:gm,title:'Your actual location',icon:{url:makeCustomAvatarSprite(),scaledSize:new google.maps.Size(52,70),anchor:new google.maps.Point(26,70)}})}
   else window._googlePlayer.setPosition({lat:currentGeolocation[1],lng:currentGeolocation[0]});
   $('#accuracyCircle').style.display='none';
  }else{
@@ -458,7 +531,7 @@ function receivedGps(p){
  $('#locationReadout').textContent='✦ GPS POSITION FOUND  ·  ±'+Math.round(gpsAccuracy)+' m  ·  PRIVATE';
  $('#locationReadout').classList.add('visible');hideBanner();
  if(provider==='osm'||provider==='google'){
-  searchCity='Near your position';if(firstFix)moveTo(currentGeolocation[0],currentGeolocation[1],Math.max(15,zoomNow()));updateRegion();
+  searchCity='Near your position';if(firstFix||followPlayer){if(provider==='osm'&&map)map.easeTo({center:currentGeolocation,zoom:Math.max(15,zoomNow()),pitch:42,duration:firstFix?800:450});else moveTo(currentGeolocation[0],currentGeolocation[1],Math.max(15,zoomNow()))}updateRegion();
  }else{mapBanner('✓ GPS found, but live map tiles are unavailable. This illustrated background is NOT geographic. <button id="retryConnection" class="launchLocation">RETRY LIVE MAP</button>');$('#retryConnection').onclick=()=>{hideBanner();startLive()}}
  updateGpsOverlay();toast('GPS location received. Your exact position is only displayed on this device.');
 }
@@ -468,16 +541,18 @@ function locationFailure(e){
  mapBanner('⚠ '+escapeHTML(explanation));toast(explanation);
 }
 function locateMe(){
+ followPlayer=true;
  if(!window.isSecureContext){mapBanner('⚠ Real GPS requires a secure HTTPS website. Android downloaded <code>content://</code> files may block location. Open the GitHub Pages HTTPS version instead.');toast('Use the HTTPS-hosted prototype for GPS on Android.');return}
  if(!navigator.geolocation){mapBanner('⚠ This browser does not support GPS. Try Chrome on Android over HTTPS.');return}
- if(currentGeolocation){moveTo(...currentGeolocation,Math.max(15,zoomNow()));updateGpsOverlay();toast('Centered on your live GPS marker.');return}
+ if(currentGeolocation){if(provider==='osm'&&map)map.easeTo({center:currentGeolocation,zoom:Math.max(15,zoomNow()),pitch:42,duration:650});else moveTo(...currentGeolocation,Math.max(15,zoomNow()));updateGpsOverlay();toast('Following your live GPS position.');return}
  $('#locateBtn').classList.add('busy');mapBanner('⌖ Requesting your phone’s precise location. Tap Allow when Chrome asks.');
  if(gpsWatchId!==null)navigator.geolocation.clearWatch(gpsWatchId);
  gpsWatchId=navigator.geolocation.watchPosition(receivedGps,locationFailure,{enableHighAccuracy:true,timeout:22000,maximumAge:15000});
 }
 $('#locateBtn').onclick=locateMe;
+$('#avatarBtn').onclick=()=>setPanel('avatar');
 
-makeDemo();drawOffline();updateRegion();updateZoom();window.addEventListener('load',()=>{startLive();if(!window.isSecureContext)mapBanner('Open this prototype from an HTTPS site to enable your real GPS position. The downloadable file may show the map but cannot reliably access location on Android.')});
+makeDemo();drawOffline();updateRegion();updateZoom();window.addEventListener('load',()=>{startLive();if(window.isSecureContext){locateMe()}else mapBanner('Open this prototype from an HTTPS site to enable your real GPS position. The downloadable file may show the map but cannot reliably access location on Android.')});
 })();
 </script>
 </body>
