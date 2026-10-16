@@ -122,8 +122,11 @@
     }
     // Avoid temporarily blanking the canvas when tiles are still loading.
     if(found.length>0){
+      const firstReady=!state.ready;
       state.features=found;state.ready=true;
       if(state.canvas)state.canvas.style.display='block';
+      if(firstReady)window.dispatchEvent(new CustomEvent('libation-world-ready',
+        {detail:{geographicFeatures:found.length}}));
     }else if(!state.ready&&state.canvas)state.canvas.style.display='none';
     makeDecoration();
     schedule();
