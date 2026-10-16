@@ -135,6 +135,18 @@ body.following #gpsMarker{display:none}
 body.walking #adventureAvatar .sprite{animation:travelSteps .54s steps(2,end) infinite}
 @media(prefers-reduced-motion:reduce){.pixel-marker img,body.walking #adventureAvatar .sprite{animation:none}}
 
+
+/* 16-bit adventure presentation: tiled ground, not GPS street-map chrome. */
+#grain{display:none}
+#vignette{box-shadow:inset 0 0 36px #16453b29}
+#adventureAvatar .sprite{width:96px;height:128px;image-rendering:pixelated;
+ filter:drop-shadow(2px 4px 1px #144a3d88)}
+#adventureAvatar .footprint{width:55px;bottom:21px;background:#4a96652a;border-color:#aadcb488}
+#adventureAvatar .nameplate{margin-top:-2px;border-color:#d3c78d;background:#25513ebf}
+.pixel-marker img{width:48px;height:58px}
+#mapStats{border-color:#b0d2a2}
+#map .maplibregl-marker{will-change:transform}
+
 </style>
 </head>
 <body>
@@ -413,7 +425,7 @@ function explorerCamera(isFirst=false){
  const top=Math.round(h*.28),bottom=Math.round(h*.04);
  const screenY=(h+top-bottom)/2;
  $('#adventureAvatar').style.top=screenY+'px';
- map.easeTo({center:currentGeolocation,pitch:49,bearing:0,
+ map.easeTo({center:currentGeolocation,pitch:22,bearing:0,
   zoom:isFirst?Math.max(16,map.getZoom()):map.getZoom(),
   padding:{top,bottom,left:0,right:0},duration:isFirst?750:380});
  refreshAdventureAvatar();
@@ -430,7 +442,7 @@ async function startLive(){
  try{
    document.body.classList.remove('google-active');$('#map').style.display='block';map=new maplibregl.Map({container:'map',style:'https://tiles.openfreemap.org/styles/liberty',center:centerStart,zoom:13.2,attributionControl:true,preserveDrawingBuffer:false,pitch:0,dragRotate:false,touchPitch:false,minZoom:3,maxZoom:19,cooperativeGestures:false,renderWorldCopies:false,maxBounds:[[-179.95,-84.8],[179.95,84.8]]});
    provider='osm';map.getCanvas().setAttribute('aria-label','Real geographic map. Drag to pan and pinch to zoom.');
-   map.on('load',()=>{mapLoaded=true;hideBanner();$('#map').classList.add('map-live');$('#loadingMap').style.display='none';$('#demoMarkers').style.display='none';updateStatus('LIVE<br>WORLD',true);styleOverworld();if(currentGeolocation)explorerCamera(true);else map.easeTo({pitch:49,duration:450});document.body.classList.add('live-map');refreshSoon();updateZoom();updateGpsOverlay();});
+   map.on('load',()=>{mapLoaded=true;hideBanner();$('#map').classList.add('map-live');$('#loadingMap').style.display='none';$('#demoMarkers').style.display='none';updateStatus('LIVE<br>WORLD',true);styleOverworld();if(currentGeolocation)explorerCamera(true);else map.easeTo({pitch:22,duration:450});document.body.classList.add('live-map');refreshSoon();updateZoom();updateGpsOverlay();});
    map.on('moveend',()=>{lastPosition=position();integrateMapTileVenues();refreshSoon();updateZoom()});
    map.on('idle',integrateMapTileVenues);
    map.on('dragstart',()=>{followPlayer=false;$('#locateBtn').classList.remove('active');refreshAdventureAvatar()});
@@ -454,61 +466,138 @@ async function startLive(){
    setTimeout(()=>{if(!mapLoaded)offline('Live geography could not load from either map source. Check the connection and retry.')},22000);
  }catch(e){offline('Live map service failed: '+e.message)}
 }
+// Tile art is generated locally once and used by real OSM geographic layers.
+// No invented street/venue geometry is introduced by this decorative rendering.
 function snesPattern(kind){
  const c=document.createElement('canvas');c.width=64;c.height=64;
- const x=c.getContext('2d');x.imageSmoothingEnabled=false;
- const p=(col,x0,y0,w,h)=>{x.fillStyle=col;x.fillRect(x0,y0,w,h)};
- if(kind==='forest'){
-  p('#5b8556',0,0,64,64);
-  for(const [tx,ty,r] of [[13,8,0],[42,29,2],[5,47,1]]){
-   p('#335943',tx+6,ty+15,5,7);p('#163c3b',tx+1,ty+11,18,8);p('#2d6242',tx+3,ty+5,15,11);
-   p('#438a50',tx+5,ty+2,12,8);p('#69a960',tx+7,ty+1,8,5);
-   p('#9ab969',tx+7+r,ty+3,3,2);p('#20483e',tx+13,ty+13,6,3);
+ const g=c.getContext('2d',{willReadFrequently:true});g.imageSmoothingEnabled=false;
+ const p=(color,x,y,w=1,h=1)=>{g.fillStyle=color;g.fillRect(x,y,w,h)};
+ const tiles=[
+  [4,4],[19,28],[39,9],[51,42],[3,48],[34,49]
+ ];
+ if(kind==='grass'){
+  p('#91bb75',0,0,64,64);
+  for(let y=0;y<64;y+=16)for(let x=0;x<64;x+=16){
+   const h=(x*31+y*17+11)%13;
+   p(h>6?'#99c981':'#8cb674',x,y,16,16);
+   p('#a4cf89',x+1,y+1,7,2);p('#86af6e',x+8,y+13,6,2);
   }
-  p('#73945e',28,51,3,2);p('#2f6445',38,5,3,3);p('#adbc73',30,58,2,2);
+  for(const [x,y] of tiles){
+   p('#507f4e',x,y+3,2,4);p('#51844c',x+4,y+1,2,6);
+   p('#d3e3a1',x+1,y+1,2,2);p('#c8d987',x+6,y+4,3,2);
+   if(x===19||x===51){
+    p('#e5bf99',x+9,y+6,2,2);p('#faf0b4',x+9,y+5,2,2);
+   }
+  }
+ }else if(kind==='forest'){
+  p('#538c5b',0,0,64,64);
+  for(let y=0;y<64;y+=16)for(let x=0;x<64;x+=16){
+   p('#41774f',x,y,16,16);p('#67a166',x+2,y+1,12,4);
+  }
+  function tree(cx,cy,w=19){
+   // Trunk and deep undershadow; canopies drawn in tiered pixel clusters.
+   p('#243f3a',cx-8,cy+11,w+2,7);p('#765f42',cx-2,cy+9,5,13);
+   p('#314f3b',cx-10,cy+6,w+5,7);
+   p('#386e48',cx-9,cy+1,w+3,10);
+   p('#4c9451',cx-7,cy-5,w-1,12);
+   p('#5faf5e',cx-5,cy-8,w-4,9);
+   p('#80bf6a',cx-2,cy-9,w-11,5);
+   p('#98ce7a',cx-3,cy-6,4,2);
+   p('#366743',cx+6,cy+2,5,5);p('#2b5841',cx-7,cy+7,4,3);
+   p('#b3d585',cx+3,cy-6,3,2);
+  }
+  tree(11,13);tree(40,7);tree(54,39);tree(22,43);tree(2,57);
+  p('#b4c579',31,32,2,2);p('#668957',26,55,4,3);
  }else if(kind==='water'){
-  p('#2a719b',0,0,64,64);
-  for(const [px,py,w] of [[7,8,15],[35,19,22],[15,32,26],[43,48,16],[8,56,18]]){
-   p('#1d5e8c',px-2,py+3,w+4,2);p('#64b7c9',px,py,w,3);p('#a7dbd1',px+3,py,Math.max(3,w/3),2);
+  p('#2e7d9b',0,0,64,64);
+  for(let y=0;y<64;y+=16){p('#327e9c',0,y,64,8);p('#2a718e',0,y+8,64,8);}
+  for(const [xx,yy,ww] of [[3,8,15],[31,19,17],[7,34,24],[39,49,18],[22,59,20],[48,1,12]]){
+   p('#1b5c82',xx-3,yy+4,ww+6,3);
+   p('#71c2c8',xx,yy,ww,2);p('#b3ede4',xx+3,yy,Math.max(4,ww-9),1);
+   p('#3c99b6',xx+4,yy+3,ww-4,2);
   }
- }else if(kind==='grass'){
-  p('#91b47b',0,0,64,64);
-  for(const [px,py] of [[7,15],[28,3],[49,36],[21,51],[55,58],[8,40]]){
-   p('#5d944d',px,py,2,7);p('#c1c588',px+2,py+3,3,2);p('#3f7946',px+4,py+2,2,4);
+  p('#226f93',24,24,12,4);p('#b3e5d4',40,14,11,1);
+ }else if(kind==='meadow'){
+  p('#b0c986',0,0,64,64);
+  for(const [x,y] of tiles){p('#8ba963',x,y,8,3);p('#d2d7a1',x+5,y+5,8,2);
+   p('#b59f70',x+1,y+10,3,3);p('#d8be83',x+11,y+8,5,2);}
+ }else if(kind==='sand'){
+  p('#e5d9ae',0,0,64,64);
+  for(const [x,y] of tiles){p('#d5c090',x,y,10,3);p('#f5eac4',x+5,y+6,5,2);
+   p('#bea476',x+7,y+11,4,2)}
+ }else if(kind==='town'){
+  p('#ced0a0',0,0,64,64);
+  for(let y=0;y<64;y+=8)for(let x=0;x<64;x+=8){
+   const v=(x*7+y*11)%19;
+   p(v>8?'#d5d1a6':'#c6cba0',x,y,8,8);
+   p('#abb78b',x,y,1,8);p('#e2d8ac',x+1,y+1,6,1);
   }
  }
- return x.getImageData(0,0,64,64);
+ return g.getImageData(0,0,64,64);
 }
-function styleOverworld(){if(!map||!map.isStyleLoaded())return;
- // Register crisp tileable terrain art; bound to real geographic OSM vector features.
- try{for(const typ of ['forest','water','grass'])if(!map.hasImage('lw-'+typ))map.addImage('lw-'+typ,snesPattern(typ));}catch(e){console.warn('Terrain texture unavailable:',e.message)}
- // Custom 16-bit-inspired colour treatment of live vector map layers. Actual
- // geographic lines and shapes come from OpenStreetMap vector tiles.
- try{for(const layer of map.getStyle().layers){const id=layer.id.toLowerCase();
- const set=(k,v)=>{try{map.setPaintProperty(layer.id,k,v)}catch(_){}};
- // The prior gray skyscrapers come from OpenFreeMap 3-D building extrusions.
- // Real streets remain geographic; geometry is not projected or duplicated.
- if(layer.type==='fill-extrusion'){try{map.setLayoutProperty(layer.id,'visibility','none')}catch(_){};continue}
- if(layer.type==='symbol'&&/(building|housenumber|poi)/.test(id)){
-  try{map.setLayoutProperty(layer.id,'visibility','none')}catch(_){};continue
+function styleOverworld(){
+ if(!map||!map.isStyleLoaded())return;
+ try{
+  for(const k of ['forest','water','grass','meadow','sand','town']){
+   if(!map.hasImage('lw-'+k))map.addImage('lw-'+k,snesPattern(k),{pixelRatio:1});
+  }
+ }catch(err){console.warn('Terrain tiles unavailable',err)}
+ const style=map.getStyle(),layers=style.layers||[];
+ const isLand=id=>/(landuse|residential|urban|neighbourhood|neighborhood)/.test(id);
+ for(const layer of layers){
+  const id=layer.id.toLowerCase(),set=(property,value)=>{
+   try{map.setPaintProperty(layer.id,property,value)}catch(_){}};
+  const hide=()=>{try{map.setLayoutProperty(layer.id,'visibility','none')}catch(_){}};
+  // Cut out all navigation-style 3D and nearly all text labels.
+  if(layer.type==='fill-extrusion'){hide();continue}
+  if(layer.type==='symbol'){
+   if(/^(?!.*(country|state|city|town|village|settlement|place)).*/.test(id)){hide();continue}
+   if(/road|street|poi|house|building|water|airport|rail|transit/.test(id)){hide();continue}
+   set('text-color','#2b574f');set('text-halo-color','#e3eaca');set('text-halo-width',2);
+   continue;
+  }
+  if(layer.type==='background'){set('background-color','#9abe80');continue}
+  if(layer.type==='fill'){
+   if(/water|ocean|lake|river|reservoir|wetland/.test(id)){
+    set('fill-color','#3b8eae');set('fill-pattern','lw-water');
+    set('fill-outline-color','#9fdfc5');
+   }else if(/forest|wood|tree|park|national|vegetation/.test(id)){
+    set('fill-color','#5a955d');set('fill-pattern','lw-forest');
+    set('fill-outline-color','#306344');
+   }else if(/meadow|grass|pitch|recreation|golf/.test(id)){
+    set('fill-color','#a2ca7c');set('fill-pattern','lw-grass');
+   }else if(/beach|sand|dune/.test(id)){
+    set('fill-color','#dfd4a2');set('fill-pattern','lw-sand');
+   }else if(/build/.test(id)){
+    set('fill-color','#cba979');set('fill-outline-color','#8f8064');
+    set('fill-pattern',null);
+   }else if(isLand(id)){
+    set('fill-color','#b7c898');set('fill-pattern','lw-town');
+   }
+  }else if(layer.type==='line'){
+   if(/river|stream|water|canal/.test(id)){
+    set('line-color','#56adbf');set('line-opacity',1);
+   }else if(/rail|tram/.test(id)){
+    set('line-color','#a58b67');set('line-opacity',.52);
+   }else if(/motorway|trunk|primary|secondary|tertiary|residential|road|street|path|track|pedestrian|footway/.test(id)){
+    // A light stone/dirt pathway line on accurate OSM road geometry.
+    set('line-color',/motorway|trunk/.test(id)?'#ead4a2':'#f0dfb4');
+    set('line-opacity',1);
+   }
+  }
  }
- if(layer.type==='background')set('background-color','#c4dbaa');
- if(layer.type==='fill'){
-  if(/water|ocean|lake|river/.test(id)){set('fill-color','#72c5db');set('fill-pattern','lw-water');}
-  else if(/park|forest|wood|national|vegetation/.test(id)){set('fill-color','#79ba7a');set('fill-pattern','lw-forest');}
-  else if(/grass|meadow/.test(id)){set('fill-color','#aedc8b');set('fill-pattern','lw-grass');}
-  else if(/build/.test(id))set('fill-color','#ddc9a2');
-  else if(/landuse|residential/.test(id))set('fill-color','#c5d8ac');
+ // Add map-anchored grass tiles beneath the geography, not a moving screen filter.
+ if(!map.getSource('lw-world-floor')){
+  const box=[[-179.9,-84.8],[179.9,-84.8],[179.9,84.8],[-179.9,84.8],[-179.9,-84.8]];
+  try{
+   map.addSource('lw-world-floor',{type:'geojson',data:{type:'Feature',
+    properties:{},geometry:{type:'Polygon',coordinates:[box]}}});
+   const firstForeground=layers.find(l=>l.type!=='background')?.id;
+   map.addLayer({id:'lw-world-grass',type:'fill',source:'lw-world-floor',
+    paint:{'fill-pattern':'lw-grass','fill-opacity':.87}},firstForeground);
+  }catch(err){console.warn('Floor tile overlay not available',err)}
  }
- if(layer.type==='line'){
-  if(/river|stream|water/.test(id))set('line-color','#6ec3d7');
-  else if(/motorway|trunk|primary/.test(id))set('line-color','#fae8b4');
-  else if(/road|street|secondary|tertiary/.test(id))set('line-color','#ffebc7');
- }
- if(layer.type==='symbol'&&/label|place|settlement|road|poi/.test(id)){
-  set('text-color','#3b6f61');set('text-halo-color','#f1e9c9');set('text-halo-width',1);
- }
- }}catch(e){} }
+}
 function offline(reason){
  if(provider==='google')return;
  if(map){try{map.remove()}catch(_){}}map=null;provider='offline';mapLoaded=false;document.body.classList.remove('live-map','following');
