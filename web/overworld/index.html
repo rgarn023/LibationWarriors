@@ -1225,7 +1225,7 @@ async function startLive(){
      $('#map').classList.add('map-live');$('#loadingMap').style.display='none';
      $('#demoMarkers').style.display='none';
      updateStatus('MAP<br>ONLINE',true);
-     styleOverworld();document.body.classList.remove('offline-scenic','game-geography-ready');document.body.classList.add('live-map','go-perspective','stable-map');
+     styleOverworld();addGeographicBuildingDepth();document.body.classList.remove('offline-scenic','game-geography-ready');document.body.classList.add('live-map','go-perspective','stable-map');
      // Avoid creating hundreds of DOM/world objects on every viewport change.
      registerAdventureCameraControls();
      syncAdventureCameraState();
@@ -1523,6 +1523,38 @@ function styleOverworld(){
     set('line-opacity',1);
    }
   }
+ }
+}
+// Real OSM building footprints become shallow game-style 3D forms when the
+// source exposes polygons. Unknown heights are a small artistic placeholder,
+// not a claim about real-world building elevations. Never add fake footprints.
+function addGeographicBuildingDepth(){
+ if(!map||!map.isStyleLoaded()||map.getLayer('lw-geographic-building-depth'))return;
+ const style=map.getStyle();
+ const layer=(style.layers||[]).find(l=>l.type==='fill'&&l.source&&
+   /building/i.test(l.id)&&!/outline|shadow|label/i.test(l.id));
+ if(!layer)return;
+ const depth={
+  id:'lw-geographic-building-depth',type:'fill-extrusion',
+  source:layer.source,
+  filter:layer.filter||['==',['geometry-type'],'Polygon'],
+  paint:{
+   'fill-extrusion-color':'#d6b58d',
+   'fill-extrusion-base':0,
+   'fill-extrusion-height':['min',18,['max',4,
+    ['to-number',['coalesce',['get','render_height'],['get','height'],8]]]],
+   'fill-extrusion-opacity':0.88
+  }
+ };
+ if(layer['source-layer'])depth['source-layer']=layer['source-layer'];
+ try{
+  // Retain geographic layer order; portals and avatar stay MapLibre markers.
+  const labels=style.layers.find(l=>l.type==='symbol');
+  map.addLayer(depth,labels?.id);
+  $('#map').dataset.geographicDepth='on';
+ }catch(err){
+  console.warn('Geographic building depth not supported by current style',err);
+  $('#map').dataset.geographicDepth='unavailable';
  }
 }
 function offline(reason){
