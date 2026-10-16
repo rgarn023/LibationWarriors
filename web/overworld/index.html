@@ -1632,10 +1632,10 @@ function updateWorldTimeTheme(date=new Date()){
  // Filter only the geographically rendered world, not the GPS character,
  // portal objects, or UI. Keep night contrast sufficient to navigate.
  const filters={
-  morning:'brightness(1.035) saturate(1.06) sepia(0.09)',
-  day:'none',
-  evening:'brightness(0.88) saturate(0.94) sepia(0.24) hue-rotate(-6deg)',
-  night:'brightness(0.57) saturate(0.76) sepia(0.17) hue-rotate(12deg)'
+  morning:'brightness(1.04) saturate(1.13) contrast(1.05) sepia(0.035)',
+  day:'saturate(1.16) contrast(1.07)',
+  evening:'brightness(0.95) saturate(1.2) contrast(1.11) sepia(0.07) hue-rotate(-4deg)',
+  night:'brightness(0.65) saturate(1.07) contrast(1.13) hue-rotate(10deg)'
  };
  host.style.setProperty('--world-time-filter',filters[theme.phase]);
  document.body.dataset.worldTimePhase=theme.phase;
@@ -1652,7 +1652,7 @@ function styleOverworld(){
   const id=String(layer.id).toLowerCase();
   const set=(key,value)=>{try{map.setPaintProperty(layer.id,key,value)}catch(_){}};
   const hide=()=>{try{map.setLayoutProperty(layer.id,'visibility','none')}catch(_){}};
-  if(layer.type==='background'){set('background-color','#8db36e');continue}
+  if(layer.type==='background'){set('background-color','#72b86b');continue}
   if(layer.type==='symbol'){
    if(/poi|housenumber|address|transit|airport|building/.test(id))hide();
    else{
@@ -1664,17 +1664,17 @@ function styleOverworld(){
   if(layer.type==='fill-extrusion'){hide();continue}
   if(layer.type==='fill'){
    if(/water|ocean|lake|river|reservoir|wetland/.test(id)){
-    set('fill-color','#347ca7');set('fill-outline-color','#285e75');
+    set('fill-color','#2088b8');set('fill-outline-color','#174b83');
    }else if(/forest|wood|park|garden|nature/.test(id)){
-    set('fill-color','#639a62');
+    set('fill-color','#327952');
    }else if(/grass|meadow|pitch|golf/.test(id)){
-    set('fill-color','#93be79');
+    set('fill-color','#6dbb75');
    }else if(/sand|beach|dune/.test(id)){
-    set('fill-color','#e0bf8d');
+    set('fill-color','#e5c891');
    }else if(/building/.test(id)){
     set('fill-color','#86b7ba');set('fill-outline-color','#789da1');set('fill-opacity',0.16);
    }else if(/residential|industrial|commercial|landuse/.test(id)){
-    set('fill-color','#b3d49d');
+    set('fill-color','#91c39d');
    }
    continue;
   }
@@ -1700,13 +1700,13 @@ function addGeographicTerrainTextures(){
  if(!map||!map.getStyle())return;
  const host=$('#map'),style=map.getStyle(),size=256;
  const palettes={
-  'lw-ground':['#91bb79','#78a96e','#a9c98a','#c2d89a','#629a62'],
-  'lw-meadow':['#83b876','#63a66b','#acd48b','#d5d998','#4f9368'],
-  'lw-park':['#80b77a','#5d9b68','#aad08e','#dee4a1','#447e64'],
-  'lw-forest':['#407d56','#2b654b','#63a46a','#9bc589','#214c3e'],
-  'lw-water':['#317fac','#236a95','#59a8c4','#a5d7dd','#1e587f'],
-  'lw-sand':['#dec18c','#c6a977','#f0d6a5','#fae0b5','#ae976d'],
-  'lw-settlement':['#99bc8e','#82ae85','#accba0','#c8d6ad','#769f85']
+  'lw-ground':['#72b86b','#529d63','#96cf83','#bfde9b','#337e58'],
+  'lw-meadow':['#6dbb75','#419f66','#a4d98b','#e1dfa1','#277b51'],
+  'lw-park':['#63af73','#368d5e','#9ad88a','#e4dfa2','#236f50'],
+  'lw-forest':['#327952','#215e44','#60ac6d','#a1ce8b','#153f34'],
+  'lw-water':['#2088b8','#0e6395','#64b9d5','#b2e6e6','#174b83'],
+  'lw-sand':['#e5c891','#c6a56f','#f2dba7','#ffebc1','#a88256'],
+  'lw-settlement':['#91c39d','#70a88f','#b3d5aa','#d6dfb9','#5f9786']
  };
  function makeMaterial(name,colors){
   const canvas=document.createElement('canvas');canvas.width=size;canvas.height=size;
@@ -1732,7 +1732,7 @@ function addGeographicTerrainTextures(){
    }
    g.globalAlpha=1;
   }
-  const count=water?230:forest?300:park?245:215;
+  const count=water?205:forest?245:park?165:142;
   for(let i=0;i<count;i++){
    const x=pos(252)+2,y=pos(252)+2,bright=i%7===0;
    if(water){
@@ -1750,8 +1750,8 @@ function addGeographicTerrainTextures(){
    }else{
     // Pixel tuft: clustered dark blades with one or two light tips.
     px(bright?colors[3]:colors[4],x+2,y+2,2,3);
-    px(colors[1],x,y+4,3,2);
-    px(colors[2],x+4,y+5,3,1);
+    px(colors[1],x,y+4,2,3);
+    px(colors[2],x+4,y+3,2,3);
     if(i%4===0)px(colors[2],x+3,y,2,2);
     if(i%12===0)px(colors[3],x+5,y-2,2,2);
     if((park||name==='lw-meadow')&&i%17===0){
