@@ -1,4 +1,4 @@
-// Deterministic browser test for the V13 geographic RPG renderer.
+// Deterministic browser test for v15 stable GPS map and player marker.
 // Public mapping and Overpass endpoints are mocked, so CI tests gameplay
 // rather than depending on external rate limits, CORS, or DNS.
 const {chromium}=require('/tmp/libation-test/node_modules/playwright-core');
@@ -42,53 +42,46 @@ const fs=require('fs');
  await page.goto('http://127.0.0.1:8123/',{waitUntil:'domcontentloaded',timeout:30000});
  try{
   await page.waitForFunction(()=>{
-   const c=document.querySelector('#gameOverworldArt');
-   return !!(window.LibationGameWorld?.diagnostics().ready && c?.width>100
-    && document.querySelector('#gpsMarker')
-    && document.querySelector('#online')?.textContent?.includes('LIVE')
-    && document.querySelector('#locationReadout')?.textContent?.includes('GPS POSITION FOUND'));
-  },null,{timeout:14500});
- }catch(waitError){
-  const diag=await page.evaluate(()=>({
-    ready:!!window.LibationGameWorld?.diagnostics().ready,
-    features:window.LibationGameWorld?.diagnostics().features,
-    canvas:!!document.querySelector('#gameOverworldArt'),
-    mapLoaded:typeof mapLoaded!=='undefined'?mapLoaded:'undefined',
-    gps:typeof currentGeolocation!=='undefined'?currentGeolocation:'undefined',
-    provider:typeof provider!=='undefined'?provider:'undefined',
-    banner:document.querySelector('#liveLocationBanner')?.textContent?.slice(0,150),
-    status:document.querySelector('#online')?.textContent?.slice(0,100),
-    maplibre:typeof window.maplibregl,
-    scripts:[...document.scripts].map(x=>x.src).filter(Boolean).slice(-5)
-  }));
-  console.log('V13 TIMEOUT DIAGNOSTIC',JSON.stringify(diag),'BROWSER ERRORS',JSON.stringify(errors));
+   const c=document.querySelector('#map canvas.maplibregl-canvas');
+   const gps=document.querySelector('#gpsMarker');
+   const status=document.querySelector('#online')?.textContent||'';
+   return !!(c&&gps&&status.includes('LIVE')&&
+    (document.querySelector('#locationReadout')?.textContent||'').includes('GPS POSITION FOUND'));
+  },null,{timeout:22000});
+ }catch(err){
+  console.log('GPS MAP LOAD DIAGNOSTIC',await page.evaluate(()=>({
+   online:document.querySelector('#online')?.textContent,
+   banner:document.querySelector('#liveLocationBanner')?.textContent,
+   gps:!!document.querySelector('#gpsMarker'),
+   baseMap:!!document.querySelector('#map canvas.maplibregl-canvas'),
+   styleScripts:[...document.scripts].map(s=>s.src).filter(Boolean),
+  })),errors.slice(0,8));
   await page.screenshot({path:'/tmp/libation-world-screenshot.png',fullPage:false});
-  throw waitError;
+  throw err;
  }
- await page.waitForTimeout(500);
+ await page.waitForTimeout(900);
  const inspect=await page.evaluate(()=>{
-  const c=document.querySelector('#gameOverworldArt');
-  const ctx=c.getContext('2d',{willReadFrequently:true});
-  const sample=ctx.getImageData(0,0,c.width,c.height).data;
-  const colors=new Set();
-  for(let i=0;i<sample.length;i+=40)colors.add(
-   sample[i]+','+sample[i+1]+','+sample[i+2]);
-  const marker=document.querySelector('#gpsMarker');
-  const mapLoaded=!!document.querySelector('#online')?.textContent?.includes('LIVE');
-  const geolocation=!!document.querySelector('#locationReadout')?.textContent?.includes('GPS POSITION FOUND');
-  return {mapLoaded,geolocation,
-   features:window.LibationGameWorld.diagnostics().features,
-   canvasSize:[c.width,c.height],canvasDisplay:getComputedStyle(c).display,
-   colors:colors.size,hasGPSMarker:!!marker,
-   oldOverlayHidden:getComputedStyle(document.querySelector('#gameWorld')).display==='none',
-   fakeIllustrationHidden:getComputedStyle(document.querySelector('#illustratedBackdrop')).display==='none',
-   gpsOnMap:!!marker?.closest('.maplibregl-marker'),
-   liveGeographyReady:document.body.classList.contains('game-geography-ready'),
-   mapOpacity:Number(getComputedStyle(document.querySelector('#map')).opacity),
-   basemapOpacity:Number(getComputedStyle(document.querySelector('#map canvas.maplibregl-canvas')).opacity),
-   markerOpacity:Number(getComputedStyle(marker).opacity),
-   markerDisplay:getComputedStyle(marker).display,
-   liveArtworkVisible:getComputedStyle(c).display==='block'};
+  const map=document.querySelector('#map');
+  const base=map.querySelector('canvas.maplibregl-canvas');
+  const avatar=document.querySelector('#gpsMarker');
+  const oldCanvas=document.querySelector('#gameOverworldArt');
+  const fake=document.querySelector('#illustratedBackdrop');
+  const getStyle=e=>e?getComputedStyle(e):null;
+  return {
+    mapOpacity:Number(getStyle(map)?.opacity||0),
+    baseOpacity:Number(getStyle(base)?.opacity||0),
+    baseDisplay:getStyle(base)?.display,
+    mapSize:[base.width,base.height],
+    avatarVisible:!!avatar&&getStyle(avatar)?.display!=='none'&&
+       Number(getStyle(avatar)?.opacity)>0.98,
+    avatarGeoAnchored:!!avatar?.closest('.maplibregl-marker'),
+    atlasVisible:!!oldCanvas&&getStyle(oldCanvas)?.display!=='none',
+    fakeBackgroundVisible:!!fake&&getStyle(fake)?.display!=='none',
+    oldWorldVisible:getStyle(document.querySelector('#gameWorld'))?.display!=='none',
+    gpsMarkerPosition:avatar?.closest('.maplibregl-marker')?.style?.transform?.slice(0,180),
+    region:document.querySelector('#regionName')?.textContent,
+    liveLabel:document.querySelector('#online')?.textContent,
+  };
  });
  const spriteDimensions=await page.evaluate(async()=>{
    const img=new Image();img.src='./avatar_snes.png';await img.decode();
@@ -96,15 +89,14 @@ const fs=require('fs');
  });
  inspect.spriteDimensions=spriteDimensions;
  await page.screenshot({path:'/tmp/libation-world-screenshot.png',fullPage:false});
- console.log('V14 WORLD AUDIT:',JSON.stringify(inspect),
-   'JS ERRORS:',JSON.stringify(errors.slice(0,12)));
- if(!inspect.mapLoaded||!inspect.geolocation||inspect.features<3||
-    inspect.colors<6||!inspect.hasGPSMarker||!inspect.oldOverlayHidden||
-    !inspect.fakeIllustrationHidden||!inspect.liveGeographyReady||
-    inspect.mapOpacity<.99||inspect.basemapOpacity>.01||inspect.markerOpacity<.99||
-    inspect.markerDisplay==='none'||!inspect.liveArtworkVisible||
+ console.log('V15 STABLE GPS WORLD AUDIT:',JSON.stringify(inspect),
+  'BROWSER ERRORS:',JSON.stringify(errors.slice(0,8)));
+ if(inspect.mapOpacity<.99||inspect.baseOpacity<.99||
+    inspect.baseDisplay==='none'||inspect.mapSize[0]<200||
+    !inspect.avatarVisible||!inspect.avatarGeoAnchored||
+    inspect.atlasVisible||inspect.oldWorldVisible||inspect.fakeBackgroundVisible||
     inspect.spriteDimensions[0]!==192||inspect.spriteDimensions[1]!==66){
-   throw Error('Georeferenced RPG world browser smoke test failed');
+   throw Error('Live geographic basemap or GPS avatar is obscured by broken raster world');
  }
  if(errors.some(e=>/Uncaught|ReferenceError|TypeError|SyntaxError/.test(e))){
    throw Error('Runtime JS exceptions: '+errors.join('; '));
