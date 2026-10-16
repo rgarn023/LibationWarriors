@@ -189,7 +189,7 @@ body.walking #gpsMarker .sprite{animation:travelSteps .48s steps(2,end) infinite
 
 /* V11: forward-looking mobile exploration, contrasting with the old flat atlas. */
 #scene{background:#6cb7db}
-#skyHorizon{position:absolute;top:0;left:0;right:0;height:37%;z-index:3;pointer-events:none;
+#skyHorizon{position:absolute;top:0;left:0;right:0;height:20%;z-index:3;pointer-events:none;
  background:linear-gradient(180deg,#57abdf 0%,#80c9ed 25%,#bbdef0 57%,#d1e6d47d 83%,transparent 100%);}
 #skyHorizon:before,#skyHorizon:after{content:"";position:absolute;display:block;border-radius:50%;
  background:#f8fcf9d8;filter:blur(4px);box-shadow:
@@ -211,11 +211,53 @@ body.walking #gpsMarker .sprite{animation:travelSteps .48s steps(2,end) infinite
 .pixel-marker img{animation:none!important}
 #grain{display:none}
 @media(max-width:530px){
- #skyHorizon{height:35%}
+ #skyHorizon{height:19%}
  #hud{min-height:62px}
  #topChips{top:calc(env(safe-area-inset-top) + 74px)}
  #mapStats{top:calc(env(safe-area-inset-top) + 122px)}
  #leftSide{top:calc(env(safe-area-inset-top) + 130px)}
+}
+
+
+/* The main screen should feel like a game viewport, not a dashboard. */
+#hud{min-height:56px;padding:calc(env(safe-area-inset-top) + 5px) 12px 5px;
+ background:linear-gradient(180deg,#163a4cdd,#153a4b4d);border-bottom:1px solid #d5e7a077;box-shadow:none}
+.brandmark{height:30px;width:30px;font-size:16px;border-width:2px;box-shadow:none}
+.brandname{font-size:13px;letter-spacing:.5px}
+.brandsub{font-size:8px;opacity:.8}
+.coin{font-size:11px;padding:5px;border:1px solid #d0d2aa;box-shadow:none}
+#topChips{top:calc(env(safe-area-inset-top) + 69px);justify-content:flex-start;gap:7px}
+#topChips .chip{padding:7px 10px;border-radius:16px;border:1px solid #d7e2ce;
+ background:#194858c7;color:#fff;box-shadow:0 2px 5px #072c3f3b;font-size:10px}
+#topChips .chip.active{background:#e1bd69;color:#27423d;border-color:#fff1b8}
+#leftSide{top:calc(env(safe-area-inset-top) + 126px);left:12px}
+.floatbtn{border-radius:50%;width:43px;height:43px;box-shadow:0 3px 10px #20403950;
+ background:#eff9ecdd;border:2px solid #d5e9c9;color:#2f6661;font-size:23px}
+#mapStats{top:calc(env(safe-area-inset-top) + 130px);right:11px;min-width:0;
+ max-width:137px;border:1px solid #b8dbbd;border-radius:11px;box-shadow:0 3px 14px #2040393d;
+ background:#153d4caf;padding:8px}
+#mapStats .eyebrow{font-size:8px}
+#mapStats .city{font-size:11px}
+#mapStats .tiny{font-size:9px}
+#footnav{max-width:600px;height:calc(72px + env(safe-area-inset-bottom));
+ background:linear-gradient(0deg,#164654ec,#16465400);
+ border-top:0;box-shadow:none;gap:9px;padding:5px 11px calc(env(safe-area-inset-bottom) + 6px)}
+#footnav .navbtn{border-radius:50%;aspect-ratio:1;max-width:67px;margin:auto;
+ border:2px solid #edebd1;background:#fffaf0e8;color:#315258;font-size:7px;
+ box-shadow:0 3px 12px #19445757}
+#footnav .navbtn.active{background:#f4d18a;border-color:#fff6d2;color:#304a3e}
+#footnav .navbtn .em{font-size:23px}
+#liveLocationBanner{max-width:min(92vw,480px)}
+#locationReadout{opacity:.78}
+#map .maplibregl-ctrl-attrib{opacity:.5}
+.pixel-marker .location-title{font-size:8px;border-radius:8px}
+#gpsMarker .gps-ground{box-shadow:0 0 0 4px #e4f3dc50,0 0 0 13px #e9ffe721;border-color:#f9f5ca}
+#gpsMarker .sprite{filter:drop-shadow(2px 4px 2px #174f43a3)}
+@media(max-width:530px){
+ #topChips{top:calc(env(safe-area-inset-top) + 65px)}
+ #leftSide{top:calc(env(safe-area-inset-top) + 125px)}
+ #mapStats{top:calc(env(safe-area-inset-top) + 125px)}
+ #footnav{height:calc(69px + env(safe-area-inset-bottom));gap:3px}
 }
 
 </style>
@@ -900,72 +942,92 @@ function snesPattern(kind){
  }
  return g.getImageData(0,0,64,64);
 }
+// V12 visual rebuild: clean geographical shapes, deliberately illustrated colors,
+// cartoony outlined pathways, tiny 3-D low-rise buildings, no screen-filling
+// hatch patterns. Geographic data remains directly from OpenFreeMap/OSM.
 function styleOverworld(){
  if(!map||!map.isStyleLoaded())return;
- try{
-  for(const k of ['forest','water','grass','meadow','sand','town']){
-   if(!map.hasImage('lw-'+k))map.addImage('lw-'+k,snesPattern(k),{pixelRatio:1});
-  }
- }catch(err){console.warn('Terrain tiles unavailable',err)}
- const style=map.getStyle(),layers=style.layers||[];
- const isLand=id=>/(landuse|residential|urban|neighbourhood|neighborhood)/.test(id);
+ const style=map.getStyle();
+ const layers=style.layers||[];
+ const roadOutlines=[];
+ const match=(id,re)=>re.test(id);
  for(const layer of layers){
-  const id=layer.id.toLowerCase(),set=(property,value)=>{
-   try{map.setPaintProperty(layer.id,property,value)}catch(_){}};
-  const hide=()=>{try{map.setLayoutProperty(layer.id,'visibility','none')}catch(_){}};
-  // Cut out all navigation-style 3D and nearly all text labels.
-  if(layer.type==='fill-extrusion'){hide();continue}
+  const id=layer.id.toLowerCase();
+  const set=(prop,value)=>{try{map.setPaintProperty(layer.id,prop,value)}catch(_){}};
+  const layout=(prop,value)=>{try{map.setLayoutProperty(layer.id,prop,value)}catch(_){}};
+  if(layer.type==='background'){
+   set('background-color','#8dc4a3');continue;
+  }
   if(layer.type==='symbol'){
-   if(/^(?!.*(country|state|city|town|village|settlement|place)).*/.test(id)){hide();continue}
-   if(/road|street|poi|house|building|water|airport|rail|transit/.test(id)){hide();continue}
-   set('text-color','#2b574f');set('text-halo-color','#e3eaca');set('text-halo-width',2);
+   // Full-screen navigation labels overpower game-world objects.
+   layout('visibility','none');continue;
+  }
+  if(layer.type==='fill-extrusion'){
+   // Low, readable structures at actual OSM building geometry; not skyscrapers.
+   layout('visibility','visible');
+   set('fill-extrusion-color','#c5ceb0');
+   set('fill-extrusion-base',0);
+   set('fill-extrusion-height',5);
+   set('fill-extrusion-opacity',.88);
    continue;
   }
-  if(layer.type==='background'){set('background-color','#9abe80');continue}
   if(layer.type==='fill'){
-   if(/water|ocean|lake|river|reservoir|wetland/.test(id)){
-    set('fill-color','#3b8eae');set('fill-pattern','lw-water');
-    set('fill-outline-color','#9fdfc5');
-   }else if(/forest|wood|tree|park|national|vegetation/.test(id)){
-    set('fill-color','#5a955d');set('fill-pattern','lw-forest');
-    set('fill-outline-color','#306344');
-   }else if(/meadow|grass|pitch|recreation|golf/.test(id)){
-    set('fill-color','#a2ca7c');set('fill-pattern','lw-grass');
-   }else if(/beach|sand|dune/.test(id)){
-    set('fill-color','#dfd4a2');set('fill-pattern','lw-sand');
-   }else if(/build/.test(id)){
-    set('fill-color','#cba979');set('fill-outline-color','#8f8064');
-    set('fill-pattern',null);
-   }else if(isLand(id)){
-    set('fill-color','#b7c898');set('fill-pattern','lw-town');
+   // Remove all repeated water/grass patterns. Their high-frequency geometry
+   // made the recorded build look like a badly scrolling raster map.
+   set('fill-pattern',null);
+   set('fill-opacity',1);
+   if(match(id,/water|ocean|lake|river|reservoir|wetland|sea/)){
+    set('fill-color','#5ab7d4');set('fill-outline-color','#3995ba');
+   }else if(match(id,/park|forest|wood|tree|nature|vegetation/)){
+    set('fill-color','#76b47c');set('fill-outline-color','#5c9c70');
+   }else if(match(id,/grass|meadow|recreation|pitch|golf/)){
+    set('fill-color','#8dc889');set('fill-outline-color','#75b77f');
+   }else if(match(id,/sand|beach|dune/)){
+    set('fill-color','#e8d5a7');set('fill-outline-color','#c9b98f');
+   }else if(match(id,/building|house/)){
+    set('fill-color','#d8d0ab');set('fill-outline-color','#b9bd9c');
+   }else if(match(id,/residential|neighbourhood|neighborhood|urban|industrial|landuse/)){
+    set('fill-color','#97c6a6');set('fill-outline-color','#91c4a7');
+   }else{
+    set('fill-color','#96c9ad');
    }
-  }else if(layer.type==='line'){
-   if(/river|stream|water|canal/.test(id)){
-    set('line-color','#56adbf');set('line-opacity',1);
-   }else if(/rail|tram/.test(id)){
-    set('line-color','#a58b67');set('line-opacity',.52);
-   }else if(/motorway|trunk|primary|secondary|tertiary|residential|road|street|path|track|pedestrian|footway/.test(id)){
-    // A light stone/dirt pathway line on accurate OSM road geometry.
-    set('line-color',/motorway|trunk/.test(id)?'#ead4a2':'#f0dfb4');
-    if(/road|street|motorway|trunk|primary|secondary|tertiary|residential|path|footway/.test(id)){
-      const isSmall=/path|footway|pedestrian|track/.test(id);
-      const isMajor=/motorway|trunk|primary/.test(id);
-      set('line-width',isSmall?3:isMajor?9:6);
-      set('line-opacity',1);
-    }
+   continue;
+  }
+  if(layer.type==='line'){
+   set('line-pattern',null);
+   if(match(id,/water|river|stream|canal/)){
+    set('line-color','#479dbb');set('line-opacity',1);
+    set('line-width',4);continue;
+   }
+   if(match(id,/rail|tram|metro/)){
+    set('line-opacity',.12);continue;
+   }
+   if(!match(id,/road|street|highway|motorway|trunk|primary|secondary|tertiary|residential|path|footway|pedestrian|track|service|living/)){
+    set('line-opacity',.15);continue;
+   }
+   const foot=match(id,/foot|path|pedestrian|track|trail|cycle/);
+   const major=match(id,/motorway|trunk|primary/);
+   const width=foot?3.5:major?10.5:8;
+   set('line-opacity',1);set('line-color',foot?'#ebdba9':'#677a71');
+   set('line-width',width);
+   set('line-dasharray',null);
+   if(layer.source&&layer['source-layer']&&roadOutlines.length<28){
+    roadOutlines.push({source:layer.source,sourceLayer:layer['source-layer'],
+      filter:layer.filter,original:layer.id,width,foot});
    }
   }
  }
- // Add map-anchored grass tiles beneath the geography, not a moving screen filter.
- if(!map.getSource('lw-world-floor')){
-  const box=[[-179.9,-84.8],[179.9,-84.8],[179.9,84.8],[-179.9,84.8],[-179.9,-84.8]];
-  try{
-   map.addSource('lw-world-floor',{type:'geojson',data:{type:'Feature',
-    properties:{},geometry:{type:'Polygon',coordinates:[box]}}});
-   const firstForeground=layers.find(l=>l.type!=='background')?.id;
-   map.addLayer({id:'lw-world-grass',type:'fill',source:'lw-world-floor',
-    paint:{'fill-pattern':'lw-grass','fill-opacity':.87}},firstForeground);
-  }catch(err){console.warn('Floor tile overlay not available',err)}
+ // Edges make OSM road geometries read as authored game paths. They're inserted
+ // BELOW the source road, not a second overlay that can drift independently.
+ for(let i=0;i<roadOutlines.length;i++){
+  const l=roadOutlines[i],id='lw-path-border-'+i;
+  if(map.getLayer(id))continue;
+  const definition={id,type:'line',source:l.source,'source-layer':l.sourceLayer,
+    layout:{'line-join':'round','line-cap':'round'},
+    paint:{'line-color':l.foot?'#cdbd8b':'#f4d89a',
+      'line-width':l.width+(l.foot?2:3),'line-opacity':1}};
+  if(l.filter)definition.filter=l.filter;
+  try{map.addLayer(definition,l.original)}catch(err){console.warn('Path border skipped:',err?.message)}
  }
 }
 function offline(reason){
