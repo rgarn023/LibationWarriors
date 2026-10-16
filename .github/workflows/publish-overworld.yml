@@ -67,6 +67,7 @@ jobs:
           path: |
             /tmp/libation-world-screenshot.png
             /tmp/libation-world-movement.png
+            /tmp/libation-world-touch-turn.png
           if-no-files-found: ignore
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
