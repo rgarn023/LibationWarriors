@@ -1,0 +1,40 @@
+name: Publish Libation Warriors Overworld
+
+on:
+  push:
+    branches:
+      - cursor/pirate-master-poses-0762
+    paths:
+      - web/overworld/**
+      - .github/workflows/publish-overworld.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: libation-overworld-pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+      - name: Verify prototype files
+        run: test -s web/overworld/index.html
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+      - name: Package prototype
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: web/overworld
+      - name: Deploy HTTPS site
+        id: deployment
+        uses: actions/deploy-pages@v4
