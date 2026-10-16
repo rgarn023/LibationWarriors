@@ -162,11 +162,25 @@ const fs=require('fs');
   roofCount:Number(el.dataset.buildingLayers)
  }));
  console.log('REAL-FOOTPRINT ROOF ART:',JSON.stringify(buildingsPresentation));
- if(buildingsPresentation.appearance!=='patterned-real-footprints'||
-  buildingsPresentation.depth!=='roof-only'||
+ if(buildingsPresentation.appearance!=='subtle-outlined-footprints'||
+  buildingsPresentation.depth!=='flat-outlines'||
   buildingsPresentation.blocks!=='removed'||
   buildingsPresentation.houseIcons!=='yes'||buildingsPresentation.roofCount<2)
-  throw Error('Buildings still render as giant brown blocks or repeated houses: '+JSON.stringify(buildingsPresentation));
+  throw Error('Buildings still render as filled roofs or tall blocks: '+JSON.stringify(buildingsPresentation));
+ const mappedPaint=await page.evaluate(()=>{
+  const style=map.getStyle(),ids=style.layers.map(l=>l.id);
+  const footprint=ids.find(id=>/^lw-visible-building-\d+-footprint$/.test(id));
+  const border=ids.find(id=>/^lw-visible-building-\d+-outline$/.test(id));
+  return {footprint,fillOpacity:footprint?map.getPaintProperty(footprint,'fill-opacity'):null,
+   border,strokeOpacity:border?map.getPaintProperty(border,'line-opacity'):null,
+   roofOrSolidLayers:ids.filter(id=>/^lw-visible-building-\d+-(roof|solid)$/.test(id)),
+   texture:document.querySelector('#map')?.dataset.buildingHatch};
+ });
+ console.log('SUBTLE BUILDING FOOTPRINT RENDER:',JSON.stringify(mappedPaint));
+ if(!mappedPaint.footprint||mappedPaint.fillOpacity>.25||
+    !mappedPaint.border||mappedPaint.strokeOpacity<.65||
+    mappedPaint.roofOrSolidLayers.length||mappedPaint.texture!=='subtle')
+  throw Error('Building polygons are too heavy or still contain old roof art: '+JSON.stringify(mappedPaint));
  const buildings=await page.locator('#map').evaluate(el=>({
   status:el.dataset.geographicBuildings,
   layers:Number(el.dataset.buildingLayers),
@@ -175,6 +189,28 @@ const fs=require('fs');
  console.log('ACTUAL MAPPED BUILDING FOOTPRINT RENDER AUDIT:',JSON.stringify(buildings));
  if(buildings.status!=='footprints-visible'||buildings.layers<2||buildings.visible<1)
   throw Error('Mapped real-world building footprints were hidden by sprite collision: '+JSON.stringify(buildings));
+ const solarThemes=await page.evaluate(()=>{
+  const at=iso=>window.LibationWorldTime.resolve(new Date(iso),[-76.284,36.771]);
+  return {night:at('2026-10-16T04:00:00Z'),
+   morning:at('2026-10-16T12:00:00Z'),
+   day:at('2026-10-16T17:00:00Z'),
+   evening:at('2026-10-16T22:00:00Z'),
+   late:at('2026-10-16T23:00:00Z')};
+ });
+ console.log('GPS SUNLIT WORLD PHASES:',JSON.stringify(solarThemes));
+ for(const [key,expected] of Object.entries({
+  night:'night',morning:'morning',day:'day',evening:'evening',late:'night'
+ })){
+  if(solarThemes[key]?.phase!==expected||solarThemes[key]?.source!=='gps-solar')
+   throw Error('Solar position did not produce correct real-world phase: '+JSON.stringify({key,solarThemes}));
+ }
+ const liveTheme=await page.locator('#map').evaluate(el=>({
+  phase:el.dataset.worldTimePhase,source:el.dataset.worldTimeSource,
+  filter:getComputedStyle(el.querySelector('canvas.maplibregl-canvas')).filter}));
+ if(!['morning','day','evening','night'].includes(liveTheme.phase)||
+    liveTheme.source!=='gps-solar')
+  throw Error('Live geographic map did not use solar time: '+JSON.stringify(liveTheme));
+ console.log('CURRENT GPS LIGHTING:',JSON.stringify(liveTheme));
  const initialCamera=await readCamera();
  console.log('LOCAL EXPLORER CAMERA:',JSON.stringify(initialCamera));
  if(!(initialCamera.zoom>=18.1&&initialCamera.zoom<=18.4&&
@@ -253,6 +289,28 @@ const fs=require('fs');
  await page.screenshot({path:'/tmp/libation-building-forest-sprites.png',fullPage:false});
  await page.screenshot({path:'/tmp/libation-visible-buildings.png',fullPage:false});
  await page.screenshot({path:'/tmp/libation-refined-rooftops.png',fullPage:false});
+ // Exercise all lighting phases on the same fixed GPS geometry. A CSS filter
+ // applied to only the geographic WebGL canvas must leave avatar/portals unfiltered.
+ await page.evaluate(()=>{
+  document.querySelector('#map canvas.maplibregl-canvas').style.transition='none';
+  updateWorldTimeTheme(new Date('2026-10-16T17:00:00Z'));
+ });
+ await page.waitForTimeout(150);
+ await page.screenshot({path:'/tmp/libation-time-day.png',fullPage:false});
+ const daytime=await page.locator('#map canvas.maplibregl-canvas').evaluate(el=>getComputedStyle(el).filter);
+ await page.evaluate(()=>updateWorldTimeTheme(new Date('2026-10-16T22:00:00Z')));
+ await page.waitForTimeout(150);
+ await page.screenshot({path:'/tmp/libation-time-evening.png',fullPage:false});
+ const sunset=await page.locator('#map canvas.maplibregl-canvas').evaluate(el=>getComputedStyle(el).filter);
+ await page.evaluate(()=>updateWorldTimeTheme(new Date('2026-10-16T04:00:00Z')));
+ await page.waitForTimeout(150);
+ await page.screenshot({path:'/tmp/libation-time-night.png',fullPage:false});
+ const nighttime=await page.locator('#map canvas.maplibregl-canvas').evaluate(el=>getComputedStyle(el).filter);
+ if(daytime!=='none'||sunset==='none'||nighttime==='none'||sunset===nighttime)
+  throw Error('Sunrise/sunset changes did not visibly recolor geographic world: '+
+   JSON.stringify({daytime,sunset,nighttime}));
+ await page.evaluate(()=>updateWorldTimeTheme(new Date()));
+ console.log('DAY EVENING NIGHT MAP RENDER:',JSON.stringify({daytime,sunset,nighttime}));
  // Simulate actual location movement and then a horizontal camera swipe.
  await context.setGeolocation({longitude:-76.2838,latitude:36.77105,accuracy:6});
  await page.waitForFunction(()=>document.body.classList.contains('walking'),null,{timeout:4500});
