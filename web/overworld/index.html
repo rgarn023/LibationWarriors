@@ -378,9 +378,11 @@ function makeCustomAvatarSprite(frame=0,facing=avatarFacing){
  if(liveAvatarAtlasReady){
   const c=document.createElement('canvas');c.width=64;c.height=88;
   const g=c.getContext('2d',{willReadFrequently:true});g.imageSmoothingEnabled=false;
-  const row={down:0,up:1,left:2,right:3}[facing]??0;
-  const col=(frame%4+4)%4;
-  g.drawImage(liveAvatarAtlas,col*48,row*66,48,66,0,0,64,88);
+  const col={down:0,up:1,left:2,right:3}[facing]??0;
+  const walkingOffset=(frame%4===1?-2:frame%4===3?1:0);
+  // Atlas contains four distinct cardinal views. An idle/walking bob adds
+  // motion while full hand-authored directional walk frames remain future art.
+  g.drawImage(liveAvatarAtlas,col*48,0,48,66,0,walkingOffset,64,88);
   const data=g.getImageData(0,0,64,88),pix=data.data;
   const hairColors=['#302a34','#714b30','#cd8247','#f2d4a0','#9856bd'];
   const coatColors=['#328ea4','#bb5977','#5e9962','#886cae','#caa156'];
@@ -641,7 +643,15 @@ function updateZoom(){const n=$('#zoomLevel');if(n)n.textContent='Z '+zoomNow().
 function mapBanner(html){const e=$('#liveLocationBanner');e.innerHTML=html;e.classList.add('visible')}
 function hideBanner(){const e=$('#liveLocationBanner');e.classList.remove('visible')}
 function updateStatus(label,alive){const el=$('#online');el.innerHTML=label;el.classList.toggle('is-off',!alive)}
-function updateRegion(){let count=venues.filter(v=>v.type==='rupture').length,ch=venues.filter(v=>v.type==='challenge').length;$('#venueCount').textContent=mapLoaded?(count+' ruptures · '+ch+' wormholes'):('Sample game world · live map unavailable');$('#regionName').textContent=searchCity;}
+function updateRegion(){
+ const count=venues.filter(v=>v.type==='rupture').length;
+ const challenge=venues.filter(v=>v.type==='challenge').length;
+ const label=venueCountMode==='unavailable'?'Venue data unavailable · real map active':
+  venueCountMode==='loading'?'Finding nearby venues…':
+  mapLoaded?(count+' ruptures · '+challenge+' wormholes'):
+  'Offline illustration · not real geography';
+ $('#venueCount').textContent=label;$('#regionName').textContent=searchCity;
+}
 function setFilter(f){currentFilter=f;$$('[data-filter]').forEach(b=>b.classList.toggle('active',b.dataset.filter===f));renderMarkers();toast(f==='all'?'Showing all venue types':f==='challenge'?'Showing challenge wormholes':'Showing spacetime ruptures');}
 $$('[data-filter]').forEach(b=>b.addEventListener('click',()=>setFilter(b.dataset.filter)));
 function position(){if(provider==='osm'&&map){const c=map.getCenter();return[c.lng,c.lat]}if(provider==='google'&&gm){const c=gm.getCenter();return[c.lng(),c.lat()]}return lastPosition;}
@@ -1145,7 +1155,7 @@ async function startLive(){
      mapLoaded=true;localMapStarting=false;hideBanner();
      $('#map').classList.add('map-live');$('#loadingMap').style.display='none';
      $('#demoMarkers').style.display='none';
-     updateStatus('LIVE<br>WORLD',true);
+     updateStatus('MAP<br>ONLINE',true);
      styleOverworld();document.body.classList.remove('offline-scenic');document.body.classList.add('live-map','go-perspective');window.LibationGameWorld?.attach(map);
      // Avoid creating hundreds of DOM/world objects on every viewport change.
      registerAdventureCameraControls();
@@ -1933,6 +1943,12 @@ avatarAnimationTimer=setInterval(()=>{
  }
 },170);
 window.addEventListener('resize',()=>{if(mapLoaded){resizeScenery();lastSceneryArea='';rebuildScenery()}});
+window.addEventListener('libation-world-ready',e=>{
+ if(mapLoaded&&currentGeolocation){
+  updateStatus('LIVE<br>WORLD',true);
+  document.body.classList.add('game-geography-ready');
+ }
+});
 window.addEventListener('load',()=>{if(window.isSecureContext){locateMe()}else mapBanner('GPS is required for the nearby overworld. Open the HTTPS prototype in Chrome and allow location.')});
 })();
 </script>
