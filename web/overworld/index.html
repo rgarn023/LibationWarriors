@@ -332,6 +332,12 @@ body:not(.live-map) #online{letter-spacing:.4px}
  position:absolute!important;top:0!important;left:0!important;margin:0!important;
 }
 
+/* Local close-up camera and minimal touch guidance. */
+#map{touch-action:none}
+body.live-map #gameHint{display:block!important;top:auto;bottom:calc(90px + env(safe-area-inset-bottom));
+ left:50%;width:max-content;max-width:90vw;z-index:8;opacity:.86;
+ background:#234b40ba;border:1px solid #ccdaad80;pointer-events:none;
+ padding:5px 9px;font-size:9px;letter-spacing:.15px}
 /* v15 emergency map-stability patch: no false fantasy map behind GPS. */
 #map{z-index:1!important;opacity:1!important;pointer-events:auto!important;background:#a8cf91!important}
 #map canvas.maplibregl-canvas,
@@ -352,7 +358,7 @@ body.live-map #map .maplibregl-ctrl-attrib{display:block!important}
 </head>
 <body>
 <div id="scene"><div id="skyHorizon" aria-hidden="true"></div><div id="illustratedBackdrop"></div><canvas id="offlineCanvas"></canvas><div id="map" role="application" aria-label="Geographic data layer"></div><canvas id="gameWorld" aria-label="Interactive local fantasy adventure overworld"></canvas><div id="demoMarkers"></div><div id="playerPin"><img class="playerImage" alt="Your warrior avatar"><div class="label">YOU</div><div class="playerBeacon"></div></div><div id="accuracyCircle"></div><div id="playerSpot">✦</div></div>
-<div id="grain"></div><div id="vignette"></div><div id="gameHint">SWIPE TO TURN · WALK TO EXPLORE</div><div id="loadingMap" class="pixfont">LOADING REAL OVERWORLD...<br><span class="xsmall muted">Live map requires internet · GPS requires HTTPS</span></div>
+<div id="grain"></div><div id="vignette"></div><div id="gameHint">DRAG TO TURN · SWIPE UP TO LOOK AHEAD</div><div id="loadingMap" class="pixfont">LOADING REAL OVERWORLD...<br><span class="xsmall muted">Live map requires internet · GPS requires HTTPS</span></div>
 <header id="hud"><div class="brand"><div class="brandmark pixfont">cg</div><div><div class="brandname pixfont">LIBATION WARRIORS</div><div class="brandsub">CHAROITE GAMES · LIVE 16-BIT MAP</div></div></div><div class="hudright"><div class="coin">🟡 2,850</div><div id="online" class="online is-off">MAP<br>CONNECTING</div></div></header>
 <div id="topChips"><button class="chip active" data-filter="all"><span class="symbol">✦</span> ALL</button><button class="chip" data-filter="rupture"><span class="symbol">⚔</span> RUPTURES</button><button class="chip special" data-filter="challenge"><span class="symbol">✺</span> WORMHOLES</button><button class="chip right" id="searchButton">⌕ FIND</button></div>
 <div id="leftSide"><button class="floatbtn tiny" id="avatarBtn" title="Customize your overworld avatar" aria-label="Customize your overworld avatar">✎</button><button class="floatbtn" id="locateBtn" title="Show my current GPS location" aria-label="Show my real current location">⌖</button><button class="floatbtn" id="zoomInBtn" title="Zoom in">＋</button><button class="floatbtn" id="zoomOutBtn" title="Zoom out">－</button><button class="floatbtn tiny" id="refreshBtn" title="Refresh real venues">↻</button></div>
@@ -367,12 +373,13 @@ body.live-map #map .maplibregl-ctrl-attrib{display:block!important}
 'use strict';
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const centerStart=[-76.273,36.768]; // Unused until GPS arrives.
-const LOCAL_ZOOM=16.35,LOCAL_RADIUS_METERS=1600,ADVENTURE_PITCH=34;
+const LOCAL_ZOOM=18.25,LOCAL_RADIUS_METERS=1600,ADVENTURE_PITCH=63;
 const presets={"Chesapeake, VA":[-76.273,36.768],"Virginia Beach, VA":[-75.976,36.852],"New York, NY":[-73.985,40.748],"Boston, MA":[-71.06,42.356],"Tokyo, Japan":[139.701,35.658]};
 let provider='offline', map=null,gm=null,gmMarkers=[],markers=[],venues=[],demoVenues=[],selectedVenue=null,lastPosition=centerStart.slice(),currentFilter='all',mapLoading=false,mapLoaded=false,fetchSerial=0,fetchController=null,venueTimer=null,searchCity='Your nearby overworld',activePanel='map',avatarKey='712340000032',claimed=new Set(),shadowPath=null,openedAt=Date.now(),countdownHandle=null,loadingHint='',currentGeolocation=null,gpsWatchId=null,gpsAccuracy=null,gpsMarker=null,gpsAccuracyCircle=null,offlineZoom=13,liveMapFailure=false,locationAccess='not-requested',venueCache=new Map(),lastVenueKey='',lastVenueLoadAt=0;
 let toastTimer=null,venueCountMode='idle',followPlayer=true;
 let gpsDrawnPosition=null,gpsTransitionFrame=null,lastGpsReceiveAt=0,lastGpsCameraAt=0;
 let cameraBearing=0,cameraTilt=ADVENTURE_PITCH,acceptedGpsAccuracy=Infinity,lastAcceptedSpeed=0;
+let cameraGestureActive=false;
 let lastSceneryMode='light';
 const AVATAR_KEY='libation-overworld-avatar-v1';
 const defaultAvatar={skin:1,hair:1,outfit:2,hairStyle:0,body:1};
@@ -1114,43 +1121,72 @@ function moveGeoreferencedAvatar(next,speed,heading){
  gpsTransitionFrame=requestAnimationFrame(tick);
  return duration;
 }
+// Center remains the actual GPS point. Asymmetric padding places the hero near
+// the lower part of the screen to show nearby world geography ahead.
+function adventurePadding(){
+ const h=map?.getCanvas().clientHeight||window.innerHeight;
+ return {top:Math.round(h*.46),bottom:Math.round(h*.04),left:0,right:0};
+}
+function syncAdventureCameraState(){
+ if(!map)return;
+ const el=$('#map');
+ el.dataset.cameraBearing=map.getBearing().toFixed(2);
+ el.dataset.cameraPitch=map.getPitch().toFixed(2);
+ el.dataset.cameraZoom=map.getZoom().toFixed(2);
+}
 function explorerCamera(isFirst=false,duration=650){
- if(!currentGeolocation||provider!=='osm'||!map||!mapLoaded||!followPlayer)return;
- const h=map.getCanvas().clientHeight||window.innerHeight;
- // Bias the player toward the lower third, preserving a broad forward view.
- const pad={top:Math.round(h*.34),bottom:Math.round(h*.035),left:0,right:0};
- map.easeTo({center:currentGeolocation,pitch:cameraTilt,bearing:cameraBearing,
-  zoom:LOCAL_ZOOM,padding:pad,
-  easing:t=>t*t*(3-2*t),
-  duration:isFirst?850:Math.max(300,Math.min(2000,duration))});
+ if(!currentGeolocation||provider!=='osm'||!map||!mapLoaded||!followPlayer||cameraGestureActive)return;
+ map.easeTo({center:gpsDrawnPosition||currentGeolocation,pitch:cameraTilt,bearing:cameraBearing,
+  zoom:LOCAL_ZOOM,padding:adventurePadding(),easing:t=>t*t*(3-2*t),
+  duration:isFirst?700:Math.max(200,Math.min(1100,duration))});
  refreshAdventureAvatar();
 }
 function registerAdventureCameraControls(){
  if(!map)return;
- const canvas=map.getCanvas();
- // Pokemon GO-like horizontal swipes orbit the GPS location. We intentionally
- // do not pan across the world or change the fixed neighborhood zoom.
- let start=null;
- canvas.style.touchAction='none';
- canvas.addEventListener('pointerdown',e=>{
-  if(e.pointerType==='mouse'&&e.button!==0)return;
-  start={x:e.clientX,y:e.clientY,bearing:cameraBearing,pitch:cameraTilt,id:e.pointerId};
-  try{canvas.setPointerCapture(e.pointerId)}catch(_){}
+ // Root-level pointer capture prevents touchswipes being lost to the nested
+ // MapLibre canvas. Portal taps remain available.
+ const surface=$('#map');
+ let gesture=null,pendingFrame=0;
+ surface.style.touchAction='none';
+ const render=()=>{
+  pendingFrame=0;
+  if(!gesture||!mapLoaded||!currentGeolocation)return;
+  map.jumpTo({center:gpsDrawnPosition||currentGeolocation,bearing:cameraBearing,
+   pitch:cameraTilt,zoom:LOCAL_ZOOM,padding:adventurePadding()});
+  syncAdventureCameraState();
+ };
+ surface.addEventListener('pointerdown',e=>{
+  if(!currentGeolocation||!mapLoaded||gesture||
+     (e.pointerType==='mouse'&&e.button!==0)||
+     e.target.closest('.pixel-marker')||e.target.closest('button'))return;
+  map.stop();cameraGestureActive=true;
+  gesture={id:e.pointerId,x:e.clientX,y:e.clientY,
+   bearing:map.getBearing(),pitch:map.getPitch()};
+  try{surface.setPointerCapture(e.pointerId)}catch(_){}
+  e.preventDefault();e.stopPropagation();
+ },true);
+ surface.addEventListener('pointermove',e=>{
+  if(!gesture||e.pointerId!==gesture.id)return;
+  const dx=e.clientX-gesture.x,dy=e.clientY-gesture.y;
+  cameraBearing=(gesture.bearing+dx*.63+3600)%360;
+  cameraTilt=Math.max(48,Math.min(70,gesture.pitch-dy*.13));
+  if(!pendingFrame)pendingFrame=requestAnimationFrame(render);
+  e.preventDefault();e.stopPropagation();
+ },true);
+ const stop=e=>{
+  if(!gesture||e.pointerId!==gesture.id)return;
+  if(pendingFrame){cancelAnimationFrame(pendingFrame);pendingFrame=0}
+  render();gesture=null;cameraGestureActive=false;
+  try{if(surface.hasPointerCapture(e.pointerId))surface.releasePointerCapture(e.pointerId)}catch(_){}
+  e.preventDefault();e.stopPropagation();
+ };
+ surface.addEventListener('pointerup',stop,true);
+ surface.addEventListener('pointercancel',stop,true);
+ surface.addEventListener('lostpointercapture',e=>{
+  if(!gesture||gesture.id!==e.pointerId)return;
+  if(pendingFrame){cancelAnimationFrame(pendingFrame);pendingFrame=0}
+  gesture=null;cameraGestureActive=false;
  });
- canvas.addEventListener('pointermove',e=>{
-  if(!start||e.pointerId!==start.id||!mapLoaded)return;
-  const dx=e.clientX-start.x,dy=e.clientY-start.y;
-  cameraBearing=(start.bearing+dx*.36)%360;
-  cameraTilt=Math.max(20,Math.min(40,start.pitch+dy*.045));
-  if(currentGeolocation&&followPlayer){
-   // No camera easing during an active swipe, avoiding competing animations.
-   map.jumpTo({center:gpsDrawnPosition||currentGeolocation,bearing:cameraBearing,
-    pitch:cameraTilt,zoom:LOCAL_ZOOM});
-  }
- });
- const stop=e=>{if(start&&e.pointerId===start.id)start=null};
- canvas.addEventListener('pointerup',stop);
- canvas.addEventListener('pointercancel',stop);
 }
 
 function refreshSoon(force=false){clearTimeout(venueTimer);venueTimer=setTimeout(()=>loadVenues(force),650)};
@@ -1178,8 +1214,8 @@ async function startLive(){
  try{
    document.body.classList.remove('google-active');$('#map').style.display='block';map=new maplibregl.Map({container:'map',style:'https://tiles.openfreemap.org/styles/liberty',
      center:currentGeolocation,zoom:LOCAL_ZOOM,minZoom:LOCAL_ZOOM,maxZoom:LOCAL_ZOOM,
-     attributionControl:true,preserveDrawingBuffer:false,pitch:ADVENTURE_PITCH,maxPitch:40,dragPan:false,dragRotate:false,
-     touchPitch:false,minPitch:20,scrollZoom:false,doubleClickZoom:false,boxZoom:false,
+     attributionControl:true,preserveDrawingBuffer:false,pitch:ADVENTURE_PITCH,maxPitch:70,dragPan:false,dragRotate:false,
+     touchPitch:false,minPitch:48,scrollZoom:false,doubleClickZoom:false,boxZoom:false,
      touchZoomRotate:false,cooperativeGestures:false,renderWorldCopies:false});
    applyLocalViewportBounds();
    map.scrollZoom.disable();map.doubleClickZoom.disable();map.touchZoomRotate.disable();map.dragPan.disable();
@@ -1192,13 +1228,14 @@ async function startLive(){
      styleOverworld();document.body.classList.remove('offline-scenic','game-geography-ready');document.body.classList.add('live-map','go-perspective','stable-map');
      // Avoid creating hundreds of DOM/world objects on every viewport change.
      registerAdventureCameraControls();
+     syncAdventureCameraState();
      if(currentGeolocation){moveGeoreferencedAvatar(currentGeolocation,0,null);explorerCamera(true)}
      refreshSoon();updateZoom();updateGpsOverlay();
     });
    map.on('moveend',()=>{lastPosition=position();updateZoom()});
    // Tile POIs are checked only after the movement has settled.
    map.on('idle',()=>{if(gpsTransitionFrame===null)integrateMapTileVenues()});
-   map.on('move',updateGpsOverlay);map.on('zoom',updateZoom);
+   map.on('move',()=>{updateGpsOverlay();syncAdventureCameraState()});map.on('zoom',updateZoom);
    // Retry a second geographic map source if the vector style cannot load.
    // We never use fictional scene art to impersonate real GPS/map geography.
    let rasterFallbackAttempted=false;
@@ -1897,7 +1934,7 @@ function receivedGps(p){
   acceptedGpsAccuracy=Number(p.coords.accuracy)||8;
   applyLocalViewportBounds();
   const duration=moveGeoreferencedAvatar(currentGeolocation,p.coords.speed,p.coords.heading);
-  if(firstFix||followPlayer)explorerCamera(firstFix,duration||750);
+  if((firstFix||followPlayer)&&!cameraGestureActive)explorerCamera(firstFix,duration||750);
   updateGpsOverlay();updateRegion();
  }else if(provider==='google'&&gm){
   updateGpsOverlay();
