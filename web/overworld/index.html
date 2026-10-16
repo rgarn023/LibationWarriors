@@ -510,8 +510,8 @@ function buildPortalArt(type){
  const dot=(col,a,b,w=1,h=1)=>{x.fillStyle=col;x.fillRect(Math.round(a),Math.round(b),Math.ceil(w),Math.ceil(h))};
  const isWormhole=type==='challenge';
  const pal=isWormhole?
-  ['#111f47','#314ca3','#4568d3','#73bdf5','#b6f2ff','#f2f6ff']:
-  ['#291338','#52306e','#8651b9','#d36bf1','#f6b8ff','#fff3ff'];
+  ['#291338','#52306e','#8651b9','#d36bf1','#f6b8ff','#fff3ff']:
+  ['#0d3150','#246c98','#318bbd','#66d1e5','#a9fff0','#f2fffb'];
  // Uneven stone threshold; the portal is precisely anchored on the site coordinate.
  dot('#23303e',5,46,38,6);dot('#708397',7,45,34,5);dot('#f4d399',11,44,26,3);
  dot('#344052',12,51,24,4);dot('#091b29',10,55,28,2);
@@ -737,30 +737,44 @@ function worldSprite(kind,v){
  return worldState.avatars[key];
 }
 function worldAvatar(){
- const key='hero:'+avatarFacing+':'+avatarFrame;
+ const compass={up:0,right:90,down:180,left:270};
+ const turn=(compass[avatarFacing]??0)-worldState.bearing;
+ const angle=(turn+3600)%360;
+ const facing=angle>=315||angle<45?'up':angle<135?'right':angle<225?'down':'left';
+ const key='hero:'+facing+':'+avatarFrame;
  if(!worldState.avatars[key]){
-  const image=new Image();
-  image.src=makeCustomAvatarSprite(avatarFrame,avatarFacing);
-  worldState.avatars[key]=image;
+  const img=new Image();img.src=makeCustomAvatarSprite(avatarFrame,facing);
+  worldState.avatars[key]=img;
  }
  return worldState.avatars[key];
 }
 function worldVisiblePortals(){
- const origin=currentGeolocation||centerStart,arr=[];
+ const origin=currentGeolocation||centerStart,all=[];
+ const seen=new Set();
  for(const v of venues){
   if(currentFilter!=='all'&&currentFilter!==v.type)continue;
-  if(!Number.isFinite(v.lon)||!Number.isFinite(v.lat)||geoMeters(origin,[v.lon,v.lat])>280)continue;
-  // A venue object's *actual* position is never relocated onto shore.
-  // If its OSM centroid lies inside water, omit it until a verified
-  // entrance/point address exists. No imaginary waterborne portals.
+  if(!Number.isFinite(v.lon)||!Number.isFinite(v.lat))continue;
+  const distance=geoMeters(origin,[v.lon,v.lat]);
+  if(distance>280)continue;
+  // A polygon centroid in the harbor is not an accessible land entrance.
   if(worldState.features.water.some(g=>worldInside([v.lon,v.lat],g.coords)))continue;
+  const key=[String(v.name||'').trim().toLowerCase(),Math.round(v.lat*10000),Math.round(v.lon*10000)].join(':');
+  if(seen.has(key))continue;seen.add(key);
   const point=worldProj(v.lon,v.lat);
-  if(point.d< -30||point.d>380||point.x< -45||point.x>worldState.width+45||
+  if(point.d< -25||point.d>350||point.x< -40||point.x>worldState.width+40||
     point.y<100||point.y>worldState.height+45)continue;
-  arr.push({...point,venue:v});
+  all.push({...point,venue:v,distance});
  }
- arr.sort((a,b)=>geoMeters(origin,[a.venue.lon,a.venue.lat])-geoMeters(origin,[b.venue.lon,b.venue.lat]));
- return arr.slice(0,6).map(v=>({...v,radius:Math.max(24,34*v.scale)}));
+ all.sort((a,b)=>a.distance-b.distance);
+ const chosen=[];
+ for(const v of all){
+  // Keep neighboring dungeon entrances individually geolocated, but don't
+  // pack them into a visually unreadable wall of identical rift sprites.
+  if(chosen.some(p=>Math.hypot(p.x-v.x,p.y-v.y)<62))continue;
+  chosen.push({...v,radius:Math.max(24,34*v.scale)});
+  if(chosen.length>=6)break;
+ }
+ return chosen;
 }
 function worldBackdrop(ctx,w,h){
  const sky=ctx.createLinearGradient(0,0,0,h*.30);
@@ -1808,7 +1822,8 @@ avatarAnimationTimer=setInterval(()=>{
  if(document.hidden)return;
  avatarFrame=(avatarFrame+1)%(avatarIsWalking?4:16);
  const frame=avatarIsWalking?avatarFrame:(avatarFrame%16===0?2:0);
- const src=makeCustomAvatarSprite(frame,avatarFacing);delete worldState.avatars['hero:'+avatarFacing+':'+frame];
+ const src=makeCustomAvatarSprite(frame,avatarFacing);
+ for(const d of ['up','down','left','right'])delete worldState.avatars['hero:'+d+':'+frame];
  if(gpsMarker?.getElement){
   const el=gpsMarker.getElement(),img=el.querySelector('.sprite');if(img)img.src=src;
  }
