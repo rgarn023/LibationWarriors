@@ -83,10 +83,54 @@ body.google-active #map{bottom:calc(88px + env(safe-area-inset-bottom))} @media(
  #locationReadout{bottom:calc(env(safe-area-inset-bottom) + 82px);font-size:9px}
  #caption{bottom:calc(env(safe-area-inset-bottom) + 115px);max-width:72vw}
 }
+
+/* V7: GPS-centered adventure map, without Google-Street-View-like skyscrapers. */
+#map{background:#b8d6a4}
+body.live-map #caption{display:none}
+#adventureAvatar{position:absolute;top:62%;left:50%;transform:translate(-50%,-100%);
+ z-index:7;pointer-events:none;display:none;filter:drop-shadow(1px 5px 3px #0b24379a)}
+#adventureAvatar .footprint{position:absolute;width:70px;height:20px;left:50%;bottom:12px;transform:translateX(-50%);
+ border:3px solid #d9fff499;background:#1ecfc339;border-radius:50%;
+ box-shadow:0 0 0 7px #7cebd421,0 0 22px #37e8ec55}
+#adventureAvatar .sprite{position:relative;display:block;width:76px;height:104px;object-fit:contain;
+ image-rendering:pixelated;filter:drop-shadow(3px 4px 0 #10283f9c)}
+#adventureAvatar .nameplate{position:relative;display:block;margin:0 auto;width:max-content;
+ max-width:116px;padding:3px 7px;background:#183147de;border:2px solid #90eee0;
+ color:#fff3ca;font:900 10px monospace;text-shadow:1px 1px #001825;text-align:center}
+body.following #adventureAvatar{display:block}
+body.following #gpsMarker{display:none}
+#mapStats{background:#153d42e8;border:2px solid #6fa6a1;min-width:135px;max-width:165px;
+ padding:7px 9px;box-shadow:2px 3px #0b2534}
+#mapStats .eyebrow{color:#baf2d5;font-size:8px}
+#mapStats .city{font-size:12px}
+#mapStats .tiny{font-size:9px}
+.pixel-marker{width:52px;height:64px;filter:drop-shadow(2px 3px 2px #122b35a0)}
+.pixel-marker img{width:52px;height:58px;left:0;top:0;image-rendering:pixelated}
+.pixel-marker .spark,.pixel-marker .base{display:none}
+.pixel-marker .location-title{bottom:66px;background:#14253edb;border-color:#d3bc7d}
+.pixel-marker.selected img{filter:drop-shadow(0 0 6px #eaffc9)}
+#footnav{max-width:520px;left:50%;transform:translateX(-50%);border:0;background:linear-gradient(0deg,#153447e3,#15344766 75%,transparent);
+ box-shadow:none;height:calc(80px + env(safe-area-inset-bottom));gap:7px;padding:8px 9px calc(env(safe-area-inset-bottom) + 8px)}
+.navbtn{border-radius:18px;background:#143d53e9;border:2px solid #a0c9bd;color:#f9efd5;
+ box-shadow:0 3px 0 #092135;padding:5px 2px;font-size:9px;letter-spacing:0;min-width:0}
+.navbtn.active{background:#186b72;border-color:#ffe6a2;color:#fff4cc}
+.navbtn .em{font-size:23px}
+#hud{background:linear-gradient(180deg,#142d40f6,#17374bef);border-color:#297b80}
+#grain{opacity:.06}
+#vignette{box-shadow:inset 0 0 65px #17374c41}
+@media(max-width:530px){
+ #hud{min-height:66px;padding:calc(env(safe-area-inset-top) + 5px) 9px 6px}
+ #topChips{top:calc(env(safe-area-inset-top) + 75px)}
+ #leftSide{top:calc(env(safe-area-inset-top) + 128px)}
+ #mapStats{top:calc(env(safe-area-inset-top) + 128px);right:8px;min-width:0;max-width:147px}
+ #footnav{height:calc(76px + env(safe-area-inset-bottom));gap:4px;padding:5px 6px calc(env(safe-area-inset-bottom) + 7px)}
+ .navbtn{font-size:8px}.navbtn .em{font-size:22px}
+}
+
 </style>
 </head>
 <body>
-<div id="scene"><div id="illustratedBackdrop"></div><canvas id="offlineCanvas"></canvas><div id="map" role="application" aria-label="Interactive real geographic map"></div><div id="demoMarkers"></div><div id="playerPin"><img class="playerImage" alt="Your warrior avatar"><div class="label">YOU</div><div class="playerBeacon"></div></div><div id="accuracyCircle"></div><div id="playerSpot">✦</div></div>
+<div id="scene"><div id="illustratedBackdrop"></div><canvas id="offlineCanvas"></canvas><div id="map" role="application" aria-label="Interactive real geographic map"></div><div id="demoMarkers"></div><div id="playerPin"><img class="playerImage" alt="Your warrior avatar"><div class="label">YOU</div><div class="playerBeacon"></div></div><div id="accuracyCircle"></div><div id="playerSpot">✦</div><div id="adventureAvatar" aria-label="Your live GPS overworld explorer"><div class="footprint"></div><img class="sprite" alt="Your customized 16-bit adventurer"><span class="nameplate">EXPLORER</span></div></div>
 <div id="grain"></div><div id="vignette"></div><div id="loadingMap" class="pixfont">LOADING REAL OVERWORLD...<br><span class="xsmall muted">Live map requires internet · GPS requires HTTPS</span></div>
 <header id="hud"><div class="brand"><div class="brandmark pixfont">cg</div><div><div class="brandname pixfont">LIBATION WARRIORS</div><div class="brandsub">CHAROITE GAMES · LIVE 16-BIT MAP</div></div></div><div class="hudright"><div class="coin">🟡 2,850</div><div id="online" class="online is-off">MAP<br>CONNECTING</div></div></header>
 <div id="topChips"><button class="chip active" data-filter="all"><span class="symbol">✦</span> ALL</button><button class="chip" data-filter="rupture"><span class="symbol">⚔</span> RUPTURES</button><button class="chip special" data-filter="challenge"><span class="symbol">✺</span> WORMHOLES</button><button class="chip right" id="searchButton">⌕ FIND</button></div>
@@ -148,6 +192,7 @@ function makeCustomAvatarSprite(){
  return cv.toDataURL('image/png');
 }
 function repaintCustomAvatar(){
+ const front=$('#adventureAvatar .sprite');if(front)front.src=makeCustomAvatarSprite();
  const img=$('#gpsMarker .sprite');if(img)img.src=makeCustomAvatarSprite();
  if(window._googlePlayer&&window.google?.maps){
   window._googlePlayer.setIcon({url:makeCustomAvatarSprite(),scaledSize:new google.maps.Size(52,70),anchor:new google.maps.Point(26,70)});
@@ -206,7 +251,28 @@ function updateRegion(){let count=venues.filter(v=>v.type==='rupture').length,ch
 function setFilter(f){currentFilter=f;$$('[data-filter]').forEach(b=>b.classList.toggle('active',b.dataset.filter===f));renderMarkers();toast(f==='all'?'Showing all venue types':f==='challenge'?'Showing challenge wormholes':'Showing spacetime ruptures');}
 $$('[data-filter]').forEach(b=>b.addEventListener('click',()=>setFilter(b.dataset.filter)));
 function position(){if(provider==='osm'&&map){const c=map.getCenter();return[c.lng,c.lat]}if(provider==='google'&&gm){const c=gm.getCenter();return[c.lng(),c.lat()]}return lastPosition;}
-function moveTo(lon,lat,z=14){lastPosition=[lon,lat];if(provider==='osm'&&map)map.flyTo({center:[lon,lat],zoom:z,speed:1.6});else if(provider==='google'&&gm){gm.panTo({lng:lon,lat});gm.setZoom(z)}else{offlineZoom=z;drawOffline()}updateZoom();updateGpsOverlay();}
+function moveTo(lon,lat,z=14){followPlayer=false;refreshAdventureAvatar();lastPosition=[lon,lat];if(provider==='osm'&&map)map.flyTo({center:[lon,lat],zoom:z,speed:1.6});else if(provider==='google'&&gm){gm.panTo({lng:lon,lat});gm.setZoom(z)}else{offlineZoom=z;drawOffline()}updateZoom();updateGpsOverlay();}
+
+function refreshAdventureAvatar(){
+ const follow=!!(followPlayer&&currentGeolocation&&provider==='osm'&&mapLoaded&&map);
+ document.body.classList.toggle('following',follow);
+ const icon=$('#adventureAvatar .sprite');
+ if(icon&&!icon.getAttribute('src'))icon.src=makeCustomAvatarSprite();
+ if(gpsMarker?.getElement)gpsMarker.getElement().style.display=follow?'none':'';
+}
+function explorerCamera(isFirst=false){
+ if(!currentGeolocation||provider!=='osm'||!map||!mapLoaded||!followPlayer)return;
+ // Put the geolocated explorer in the lower-center of the actual map view.
+ const h=map.getCanvas().clientHeight||window.innerHeight;
+ const top=Math.round(h*.28),bottom=Math.round(h*.04);
+ const screenY=(h+top-bottom)/2;
+ $('#adventureAvatar').style.top=screenY+'px';
+ map.easeTo({center:currentGeolocation,pitch:49,bearing:0,
+  zoom:isFirst?Math.max(16,map.getZoom()):map.getZoom(),
+  padding:{top,bottom,left:0,right:0},duration:isFirst?750:380});
+ refreshAdventureAvatar();
+}
+
 function refreshSoon(force=false){clearTimeout(venueTimer);venueTimer=setTimeout(()=>loadVenues(force),650)};
 async function startLive(){
  if(!window.maplibregl){
@@ -218,10 +284,10 @@ async function startLive(){
  try{
    document.body.classList.remove('google-active');$('#map').style.display='block';map=new maplibregl.Map({container:'map',style:'https://tiles.openfreemap.org/styles/liberty',center:centerStart,zoom:13.2,attributionControl:true,preserveDrawingBuffer:false,pitch:0,dragRotate:false,touchPitch:false,minZoom:3,maxZoom:19,cooperativeGestures:false,renderWorldCopies:false,maxBounds:[[-179.95,-84.8],[179.95,84.8]]});
    provider='osm';map.getCanvas().setAttribute('aria-label','Real geographic map. Drag to pan and pinch to zoom.');
-   map.on('load',()=>{mapLoaded=true;hideBanner();$('#map').classList.add('map-live');$('#loadingMap').style.display='none';$('#demoMarkers').style.display='none';updateStatus('LIVE<br>WORLD',true);styleOverworld();if(currentGeolocation)map.easeTo({center:currentGeolocation,zoom:Math.max(15,zoomNow()),pitch:42,duration:800});else map.easeTo({pitch:42,duration:450});refreshSoon();updateZoom();updateGpsOverlay();});
+   map.on('load',()=>{mapLoaded=true;hideBanner();$('#map').classList.add('map-live');$('#loadingMap').style.display='none';$('#demoMarkers').style.display='none';updateStatus('LIVE<br>WORLD',true);styleOverworld();if(currentGeolocation)explorerCamera(true);else map.easeTo({pitch:49,duration:450});document.body.classList.add('live-map');refreshSoon();updateZoom();updateGpsOverlay();});
    map.on('moveend',()=>{lastPosition=position();integrateMapTileVenues();refreshSoon();updateZoom()});
    map.on('idle',integrateMapTileVenues);
-   map.on('dragstart',()=>{followPlayer=false;$('#locateBtn').classList.remove('active')});
+   map.on('dragstart',()=>{followPlayer=false;$('#locateBtn').classList.remove('active');refreshAdventureAvatar()});
    map.on('move',()=>updateGpsOverlay());map.on('zoom',updateZoom);
    // Retry a second geographic map source if the vector style cannot load.
    // We never use fictional scene art to impersonate real GPS/map geography.
@@ -293,7 +359,7 @@ function styleOverworld(){if(!map||!map.isStyleLoaded())return;
  }}catch(e){} }
 function offline(reason){
  if(provider==='google')return;
- if(map){try{map.remove()}catch(_){}}map=null;provider='offline';mapLoaded=false;
+ if(map){try{map.remove()}catch(_){}}map=null;provider='offline';mapLoaded=false;document.body.classList.remove('live-map','following');
  $('#map').style.display='none';$('#loadingMap').style.display='none';$('#demoMarkers').style.display='block';updateStatus('OFFLINE<br>DEMO',false);
  makeDemo();drawOffline();updateRegion();mapBanner('⚠ Offline scenic illustration — not your real location.<button id="retryConnection" type="button" class="launchLocation">RETRY LIVE MAP</button>');$('#retryConnection').onclick=()=>{hideBanner();startLive()};toast(reason||'Live map unavailable. Check connection.');
 }
@@ -570,6 +636,7 @@ async function loadGoogle(key){if(!key){toast('Enter a valid Google Maps API key
 $('#searchButton').onclick=()=>setPanel('find');$('#refreshBtn').onclick=()=>{if(provider==='offline')startLive();else loadVenues(true)};$('#zoomInBtn').onclick=()=>{if(provider==='osm'&&map)map.zoomIn({duration:270});else if(provider==='google')gm.setZoom(gm.getZoom()+1);else{offlineZoom=Math.min(19,offlineZoom+1);drawOffline();toast('Scenic illustration only; live map unavailable')}updateZoom()};$('#zoomOutBtn').onclick=()=>{if(provider==='osm'&&map)map.zoomOut({duration:270});else if(provider==='google')gm.setZoom(gm.getZoom()-1);else{offlineZoom=Math.max(3,offlineZoom-1);drawOffline();toast('Scenic illustration only; live map unavailable')}updateZoom()};
 function updateGpsOverlay(){
  if(!currentGeolocation)return;
+ refreshAdventureAvatar();
  if(provider==='osm'&&map){
   if(!gpsMarker){
    const e=document.createElement('div');e.id='gpsMarker';e.innerHTML='<img class="sprite" alt="16-bit warrior avatar" src="'+makeCustomAvatarSprite()+'"><div class="gpsTitle">YOUR LOCATION</div><div class="gpsArrow"></div>';
@@ -599,7 +666,7 @@ function receivedGps(p){
  $('#locationReadout').textContent='✦ GPS POSITION FOUND  ·  ±'+Math.round(gpsAccuracy)+' m  ·  PRIVATE';
  $('#locationReadout').classList.add('visible');hideBanner();
  if(provider==='osm'||provider==='google'){
-  searchCity='Near your position';if(firstFix||followPlayer){if(provider==='osm'&&map)map.easeTo({center:currentGeolocation,zoom:Math.max(15,zoomNow()),pitch:42,duration:firstFix?800:450});else moveTo(currentGeolocation[0],currentGeolocation[1],Math.max(15,zoomNow()))}updateRegion();
+  searchCity='Near your position';if(firstFix||followPlayer){if(provider==='osm'&&map)explorerCamera(firstFix);else moveTo(currentGeolocation[0],currentGeolocation[1],Math.max(15,zoomNow()))}updateRegion();
  }else{mapBanner('✓ GPS found, but live map tiles are unavailable. This illustrated background is NOT geographic. <button id="retryConnection" class="launchLocation">RETRY LIVE MAP</button>');$('#retryConnection').onclick=()=>{hideBanner();startLive()}}
  updateGpsOverlay();toast('GPS location received. Your exact position is only displayed on this device.');
 }
@@ -612,7 +679,7 @@ function locateMe(){
  followPlayer=true;
  if(!window.isSecureContext){mapBanner('⚠ Real GPS requires a secure HTTPS website. Android downloaded <code>content://</code> files may block location. Open the GitHub Pages HTTPS version instead.');toast('Use the HTTPS-hosted prototype for GPS on Android.');return}
  if(!navigator.geolocation){mapBanner('⚠ This browser does not support GPS. Try Chrome on Android over HTTPS.');return}
- if(currentGeolocation){if(provider==='osm'&&map)map.easeTo({center:currentGeolocation,zoom:Math.max(15,zoomNow()),pitch:42,duration:650});else moveTo(...currentGeolocation,Math.max(15,zoomNow()));updateGpsOverlay();toast('Following your live GPS position.');return}
+ if(currentGeolocation){if(provider==='osm'&&map)explorerCamera(true);else moveTo(...currentGeolocation,Math.max(15,zoomNow()));updateGpsOverlay();toast('Following your live GPS position.');return}
  $('#locateBtn').classList.add('busy');mapBanner('⌖ Requesting your phone’s precise location. Tap Allow when Chrome asks.');
  if(gpsWatchId!==null)navigator.geolocation.clearWatch(gpsWatchId);
  gpsWatchId=navigator.geolocation.watchPosition(receivedGps,locationFailure,{enableHighAccuracy:true,timeout:22000,maximumAge:15000});
