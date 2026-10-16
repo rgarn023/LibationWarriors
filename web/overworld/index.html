@@ -152,7 +152,7 @@ body.walking #adventureAvatar .sprite{animation:travelSteps .54s steps(2,end) in
    The grounding oval touches the GPS coordinate; no framed portrait or fixed overlay. */
 #adventureAvatar{display:none!important}
 #gpsMarker{
-  width:84px;height:116px;position:relative;
+  width:90px;height:119px;position:relative;
   display:block;pointer-events:none;user-select:none;
   filter:drop-shadow(2px 5px 2px #062c31a6);
 }
@@ -164,7 +164,7 @@ body.walking #adventureAvatar .sprite{animation:travelSteps .54s steps(2,end) in
 }
 #gpsMarker .sprite{
   position:absolute;left:50%;bottom:8px;transform:translateX(-50%);
-  width:70px;height:94px;object-fit:contain;object-position:center bottom;
+  width:83px;height:105px;object-fit:contain;object-position:center bottom;
   border:none;box-shadow:none;background:transparent;image-rendering:pixelated;
   z-index:1;filter:drop-shadow(2px 3px 1px #1544369c)
 }
@@ -221,130 +221,139 @@ function hashStr(v){let h=2166136261;for(const c of String(v)){h^=c.charCodeAt(0
 
 // A custom 48x64 hand-pixeled adventurer, drawn in layered 16-bit palette groups.
 // This is NOT a scanned beverage warrior and is customized per user.
-const AVATAR_W=48,AVATAR_H=64;
+const AVATAR_W=64,AVATAR_H=80;
 let avatarFacing='down',avatarFrame=0,avatarIsWalking=false,avatarAnimationTimer=null;
 function makeCustomAvatarSprite(frame=0,facing=avatarFacing){
- const c=document.createElement('canvas');c.width=AVATAR_W;c.height=AVATAR_H;
+ // An original 64x80 SNES-era action-RPG explorer. Flowing contours and 5-tone
+ // shadow clusters replace the old rectangular doll. 4 directional views.
+ const c=document.createElement('canvas');c.width=64;c.height=80;
  const x=c.getContext('2d');x.imageSmoothingEnabled=false;
- const p=(col,a,b,w=1,h=1)=>{x.fillStyle=col;x.fillRect(a,b,w,h)};
- const skinTones=[
-  ['#8a5047','#d79275','#f4c4a0','#ffe0b9'],
-  ['#815145','#b77b61','#deb08c','#f3cc9e'],
-  ['#754333','#985d42','#bf805d','#dca381'],
-  ['#4f312d','#704434','#915e43','#b9815c'],
-  ['#302630','#452d2d','#593927','#855138']
+ const block=(color,a,b,w=1,h=1)=>{x.fillStyle=color;x.fillRect(a,b,w,h)};
+ const shape=(color,coords)=>{x.fillStyle=color;x.beginPath();
+  coords.forEach(([a,b],i)=>i?x.lineTo(a,b):x.moveTo(a,b));x.closePath();x.fill()};
+ const ell=(color,a,b,w,h)=>{x.fillStyle=color;x.beginPath();x.ellipse(a,b,w,h,0,0,Math.PI*2);x.fill()};
+ const skin=[
+ ['#784940','#b77d61','#e8b18e','#ffddae','#ffeed0'],
+ ['#654238','#ab7560','#d59e7d','#f1c69d','#ffe2bd'],
+ ['#563630','#885641','#b97b56','#dca37a','#ffcca0'],
+ ['#382a2a','#684238','#935b48','#bc7e5b','#e3a480'],
+ ['#29232b','#4b332f','#704635','#945d46','#b87d58']
  ][avatarConfig.skin];
- const hairs=[
-  ['#211e2e','#3b3442','#676174'],
-  ['#39292f','#69432e','#a16b45'],
-  ['#69402f','#b97841','#e8a45d'],
-  ['#8d7c61','#d7c59a','#fff0bc'],
-  ['#3a274d','#784a92','#b38dc4']
+ const hair=[
+ ['#1b1a28','#34303b','#5c515a','#a18c85'],
+ ['#281c24','#503229','#7b4d35','#b77d4c'],
+ ['#3d2730','#81412d','#bf7544','#f5ae6b'],
+ ['#716456','#a79578','#e5c9a0','#fff0bf'],
+ ['#30233d','#563768','#9664ab','#d5a3df']
  ][avatarConfig.hair];
- const coats=[
-  ['#183d53','#337e90','#71b9bd','#b4e5ce'],
-  ['#4c253b','#91465f','#d17b82','#ffb6a3'],
-  ['#27412f','#5b8a58','#91bd69','#d4e6a1'],
-  ['#332c5d','#745f9f','#b39acc','#dfccf3'],
-  ['#70442f','#b2824a','#dab46d','#ffdb8b']
+ const cloth=[
+ ['#122c40','#255973','#367e8a','#70bac0','#b6e7d0'],
+ ['#422333','#6b3549','#ac5472','#e38e91','#ffb8ad'],
+ ['#1c352a','#34613f','#558b53','#8ec16d','#d2e8a5'],
+ ['#282344','#503d79','#8062a4','#b09bdb','#e5d5f3'],
+ ['#493326','#79502d','#b77f3e','#e4b46c','#ffe1a3']
  ][avatarConfig.outfit];
- const [shadow,mid,base,shine]=coats;
- const [deep,medium,skin,light]=skinTones;
- const [hairDark,hair,hairLight]=hairs;
- const outline='#1e293f', black='#141c2e',steel='#8799a2',gold='#fbd486';
- const walking=frame%4!==0;const stride=walking?(frame%4===1?2:frame%4===3?-2:0):0;
- const fromBehind=facing==='up',side=facing==='left'||facing==='right';
- if(facing==='left'){x.translate(AVATAR_W,0);x.scale(-1,1)}
- // Soft circular drop shadow under boots: a separate grounding graphic, not a badge.
- p('#345c5780',8,58,33,3);p('#173b4a9a',11,60,27,2);
- // Legs: independent poses with boots, trousers, socks and highlights.
- const legs=[{x:15+stride,y:43+Math.max(0,-stride)},{x:27-stride,y:43+Math.max(0,stride)}];
- for(const leg of legs){
-  p(outline,leg.x-2,leg.y,10,16);
-  p(shadow,leg.x,leg.y,7,9);p(medium,leg.x+1,leg.y+1,5,5);
-  p(black,leg.x-1,leg.y+10,10,6);
-  p('#6f5349',leg.x,leg.y+10,9,4);
-  p('#b08960',leg.x+1,leg.y+10,5,2);
-  p(outline,leg.x-3,leg.y+14,13,4);
-  p('#655342',leg.x-2,leg.y+15,11,2);
+ const edge='#1d2639',dark='#2c3845',gold='#e4ad5e',glint='#fff1b5';
+ const side=facing==='left'||facing==='right',back=facing==='up';
+ if(facing==='left'){x.translate(64,0);x.scale(-1,1)}
+ const step=frame%4===1?3:frame%4===3?-3:0;
+ const sway=frame%4===1?1:frame%4===3?-1:0;
+ const wide=avatarConfig.body===0?3:avatarConfig.body===2?-2:0;
+ // Ground cast shadow is part of the game object, not a framed portrait.
+ ell('#173b3b54',33,75,21,4);ell('#193b416b',33,76,14,2);
+ // Boots and split legs with softened angular silhouettes.
+ const legs=[[23-step,58+(step<0?1:0)],[35+step,58+(step>0?1:0)]];
+ for(const [lx,ly] of legs){
+  shape(edge,[[lx-4,ly],[lx+8,ly],[lx+9,ly+13],[lx+6,ly+17],[lx-5,ly+17],[lx-6,ly+12]]);
+  shape(cloth[0],[[lx-2,ly],[lx+6,ly],[lx+5,ly+9],[lx-2,ly+10]]);
+  block(cloth[2],lx,ly+1,4,5);
+  shape('#6f5542',[[lx-3,ly+10],[lx+7,ly+10],[lx+9,ly+16],[lx+6,ly+18],[lx-5,ly+18],[lx-6,ly+15]]);
+  block('#b19368',lx-2,ly+12,7,2);block('#3d3034',lx-3,ly+16,11,2);
  }
- // Tapered mantle with broad shoulder silhouette and four tones.
- const bw=avatarConfig.body===0?36:avatarConfig.body===2?28:32;
- const start=Math.round(24-bw/2);
- p(outline,start,27,bw,18);
- p(shadow,start+2,29,bw-4,19);
- p(mid,start+4,30,bw-8,16);
- p(base,start+5,31,bw-11,11);
- p(shine,start+7,32,4,9);p(medium,start+bw-12,35,4,8);
- // Sleeves drape below shoulder; hands follow walking.
- p(outline,start-3,30,8,17);
- p(shadow,start-2,32,7,12);p(base,start,31,4,11);
- p(outline,start+bw-4,30,8,17);
- p(shadow,start+bw-2,32,7,13);p(base,start+bw-1,31,3,10);
- p(deep,start-2,44,7,5);p(skin,start-1,44,5,4);p(light,start,44,2,2);
- p(deep,start+bw-3,44,7,5);p(skin,start+bw-2,44,5,4);
- // Belt and buckle + cloak folds.
- p(outline,start+4,44,bw-8,4);
- p('#815d45',start+5,44,bw-10,3);
- p(gold,22,43,6,5);p('#fff1bd',24,44,2,2);
- p(shadow,start+7,47,3,5);p(mid,start+bw-12,45,4,5);
- p(shine,start+6,49,2,5);
- // A narrow scarf with true pixel folds adds JRPG costume detail.
- p(steel,19,26,13,4);p('#d2d9bd',20,25,10,3);
- if(!fromBehind){p('#ecddba',21,28,8,3);p('#fff1d2',22,27,4,2)}
- p('#d6c9a8',20,31,3,4);
- // Neck and head silhouette.
- p(outline,15,8,19,23);
- p(deep,16,11,18,19);
- p(skin,17,13,16,15);
- p(light,19,14,10,8);
- p(medium,17,22,14,4);
- // Ears, cheek and subtle nose; not a giant rectangular facial patch.
- if(!side){p(deep,14,20,4,6);p(skin,15,21,3,4);p(deep,32,20,3,6);p(skin,32,22,2,2)}
- else{p(deep,33,20,3,6);p(skin,34,21,2,3)}
- if(!fromBehind){
+ // Flowing split cape, under the torso.
+ shape(edge,[[24-wide,33],[41+wide,32],[50+wide,53],[45,69],[38,65],[32,72],[25,67],[17,69],[14-wide,55]]);
+ shape(cloth[0],[[24-wide,35],[42+wide,34],[48,54],[43,66],[37,62],[32,69],[25,64],[18,66],[17,54]]);
+ shape(cloth[1],[[26,37],[40,37],[42,48],[38,62],[32,65],[28,57]]);
+ block(cloth[3],21,50,3,12);block(cloth[2],42,50,3,9);
+ // Arms/sleeves taper to hands instead of disconnected squared tubes.
+ shape(edge,[[19-wide,36],[24,38],[23,50],[20,60],[13-wide,57],[12-wide,47]]);
+ shape(cloth[1],[[19-wide,38],[23,40],[21,51],[19,56],[15-wide,54],[15-wide,47]]);
+ shape(cloth[3],[[17-wide,40],[20,40],[18,48],[16-wide,49]]);
+ shape(edge,[[40,38],[45+wide,35],[51+wide,47],[52+wide,56],[45,60],[41,52]]);
+ shape(cloth[1],[[43,39],[46+wide,39],[49+wide,48],[48+wide,55],[45,56],[43,49]]);
+ block(cloth[3],46+wide,41,2,7);
+ shape(skin[0],[[15-wide,55],[20,55],[20,62],[16-wide,63],[13-wide,60]]);
+ shape(skin[2],[[16-wide,56],[19,57],[19,61],[16-wide,61]]);
+ shape(skin[0],[[46,55],[51+wide,55],[54+wide,59],[51,63],[46,61]]);
+ shape(skin[2],[[47,56],[50,56],[52,60],[49,61]]);
+ // Tunic body with a diagonal bright sash and gold hardware.
+ shape(edge,[[24-wide,34],[40+wide,34],[46,42],[44,57],[38,62],[24,61],[18,55],[19,43]]);
+ shape(cloth[1],[[24,36],[40,35],[44,43],[42,57],[37,60],[24,59],[21,54],[22,44]]);
+ shape(cloth[2],[[26,38],[39,37],[41,44],[40,53],[35,57],[26,56],[24,51]]);
+ shape(cloth[3],[[25,39],[29,37],[28,52],[25,55]]);
+ shape(cloth[0],[[40,42],[42,44],[40,55],[36,58],[34,57]]);
+ shape('#d4be91',[[27,39],[32,38],[39,51],[36,54],[29,44]]);
+ block('#faf0c7',29,39,2,4);
+ shape('#534232',[[21,55],[43,54],[44,59],[23,60]]);
+ block('#b18a5a',22,56,20,2);
+ block(gold,30,55,7,7);block('#80513a',32,57,3,3);block(glint,31,56,2,1);
+ // Collar and leather neck strap.
+ shape(edge,[[25,33],[40,33],[39,39],[32,43],[25,39]]);
+ shape('#f5deb1',[[25,34],[33,38],[40,33],[37,40],[32,42],[27,39]]);
+ shape(cloth[4],[[26,34],[30,36],[32,39],[28,38]]);
+ block(gold,38,36,3,3);
+ // Skin/head has curved pixel contours and a taller shaded crown.
+ shape(edge,[[23,15],[29,10],[37,10],[43,14],[46,22],[45,33],[41,38],[29,40],[22,35],[19,27],[20,19]]);
+ shape(skin[0],[[24,18],[29,14],[38,14],[43,19],[43,31],[39,36],[29,38],[23,33],[21,25]]);
+ shape(skin[2],[[26,18],[33,15],[40,18],[42,30],[38,34],[30,35],[25,30],[24,23]]);
+ shape(skin[3],[[28,18],[36,16],[40,19],[39,29],[36,32],[28,31],[26,25]]);
+ shape(skin[4],[[30,19],[35,18],[37,20],[31,22]]);
+ block(skin[1],25,30,4,3);block(skin[1],37,30,3,3);
+ if(!back){
   if(side){
-   p(black,28,20,3,2);p('#f4f0d5',29,20,1,1);
-   p(medium,31,24,3,2);p(deep,27,27,5,1);
+   block('#1c2631',38,26,2,3);block('#f5eddb',38,26,1,1);
+   block(skin[1],41,30,3,2);block(skin[0],37,34,4,1);
   }else{
-   p(black,20,19,3,3);p(black,28,19,3,3);
-   p('#fff7e2',20,19,1,1);p('#fff7e2',28,19,1,1);
-   p(medium,24,23,4,2);p(deep,24,27,3,1);
-   p('#ce8f7a',18,24,3,2);p('#ce8f7a',30,24,2,2);
+   block('#202435',27,27,3,3);block('#202435',37,27,3,3);
+   block('#fff6db',27,27,1,1);block('#fff6db',37,27,1,1);
+   block(skin[1],32,30,3,2);block(skin[0],31,34,5,1);
+   block('#dc967e',25,31,3,2);block('#dc967e',39,31,2,2);
   }
  }
- // Layered hair cap: asymmetric tufts and actual light/shadow clusters.
- p(hairDark,14,7,21,12);
- p(hair,16,6,18,11);
- p(hairLight,17,7,9,3);
- p(hairDark,14,11,5,13);
- if(fromBehind){
-  p(hair,16,13,18,17);p(hairLight,18,15,4,8);
-  p(hairDark,26,17,6,12);
+ // Voluminous layered haircut, where contour changes with hairstyle.
+ shape(hair[0],[[19,23],[19,15],[23,9],[28,6],[38,7],[44,11],[48,21],[44,28],[40,20],[24,22]]);
+ shape(hair[1],[[21,19],[23,12],[29,8],[39,9],[44,13],[45,19],[41,23],[36,15],[31,21],[25,18]]);
+ shape(hair[2],[[24,13],[28,9],[35,9],[40,12],[38,15],[32,13],[28,16],[24,16]]);
+ shape(hair[3],[[29,10],[36,10],[38,12],[31,12]]);
+ if(back){
+  shape(hair[1],[[22,15],[40,15],[46,27],[43,42],[37,45],[25,44],[20,35]]);
+  shape(hair[2],[[26,21],[34,20],[35,39],[29,41],[26,34]]);
+  block(hair[3],27,23,3,9);
  }else{
-  p(hair,15,10,11,5);p(hairLight,17,10,5,3);
-  p(hairDark,27,9,7,8);
-  p(hair,29,12,5,5);
+  shape(hair[0],[[19,16],[22,13],[28,15],[26,23],[22,29],[19,24]]);
+  shape(hair[2],[[23,13],[29,10],[34,13],[29,18],[25,20]]);
+  shape(hair[1],[[40,15],[45,17],[47,24],[42,27],[39,22]]);
  }
  if(avatarConfig.hairStyle===1||avatarConfig.hairStyle===4){
-  p(hairDark,12,14,6,17);p(hair,13,15,4,15);
-  p(hairDark,32,15,5,15);p(hair,33,16,3,12);
+  shape(hair[0],[[19,20],[25,20],[24,43],[21,51],[16,45],[17,30]]);
+  shape(hair[1],[[20,22],[23,22],[22,43],[20,47],[19,38]]);
+  shape(hair[0],[[41,20],[47,22],[49,41],[44,49],[40,39]]);
+  shape(hair[2],[[44,23],[46,27],[46,41],[43,42]]);
   if(avatarConfig.hairStyle===4){
-   p(hairLight,33,21,3,3);p(gold,32,28,6,3);p(hair,32,31,4,9);
+   block(gold,42,39,6,3);shape(hair[1],[[43,42],[48,42],[49,53],[46,59],[43,55]]);
+   block(hair[3],46,49,2,3);
   }
+ }else if(avatarConfig.hairStyle===2){
+  shape(hair[2],[[25,11],[31,7],[40,12],[42,17],[38,16],[34,13],[28,16]]);
+  block(hair[3],28,9,5,2);
+ }else if(avatarConfig.hairStyle===3){
+  shape(hair[0],[[28,9],[30,3],[35,7],[39,3],[42,13]]);
+  shape(hair[2],[[31,5],[34,6],[35,13],[32,11]]);
+  block(hair[3],32,6,2,5);
  }
- if(avatarConfig.hairStyle===2){
-  p(hairDark,13,14,5,7);p(hair,14,14,3,5);
-  p(hairDark,32,14,6,9);p(hair,33,16,3,6);
-  p(hairLight,21,6,8,2);
- }
- if(avatarConfig.hairStyle===3){
-  p(hairDark,18,3,13,5);p(hair,21,1,8,5);
-  p(hairLight,23,2,5,2);p(hairDark,28,5,8,4);
- }
- // Decorative colored earring/shoulder rivets with restrained 16-bit shading.
- p(gold,start+2,31,3,3);p('#fff1b5',start+3,31,1,1);
- p(gold,start+bw-6,31,3,3);
+ // Small asymmetrical ornamentation makes the costume visually legible.
+ block(gold,21,39,3,4);block(glint,22,39,1,1);
+ block(cloth[4],41,39,2,5);block(gold,40,43,2,2);
  return c.toDataURL('image/png');
 }
 function repaintCustomAvatar(){
