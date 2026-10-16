@@ -1694,142 +1694,184 @@ function styleOverworld(){
 // geographic projection keeps them attached to actual OSM terrain as the
 // player walks and turns. No artificial trees, roads or shorelines are added.
 function addGeographicTerrainTextures(){
- // A coordinate-projected pixel material pass. This does not replace the map
- // canvas or move any real road, coastline, GPS marker, or business.
+ // Materials repeat in geographic tile space, not screen space. The colored
+ // flecks and tiny flowers are abstract game-material details, not claims
+ // about individual surveyed flowers, rocks or trees.
  if(!map||!map.getStyle())return;
- const host=$('#map'), style=map.getStyle(), extent=128;
+ const host=$('#map'),style=map.getStyle(),size=256;
  const palettes={
-  'lw-ground': ['#8fb46e','#739b60','#a8c881','#c5d69b'],
-  'lw-forest': ['#53885a','#376e4e','#72a46a','#a7c18a'],
-  'lw-meadow': ['#92be79','#79ac6b','#b0d38c','#d8daa0'],
-  'lw-water': ['#317aa6','#235e8c','#4a9cb8','#94cbd0'],
-  'lw-sand': ['#dec08a','#c4a46e','#efd4a0','#fbdfac']
+  'lw-ground':['#91bb79','#78a96e','#a9c98a','#c2d89a','#629a62'],
+  'lw-meadow':['#83b876','#63a66b','#acd48b','#d5d998','#4f9368'],
+  'lw-park':['#80b77a','#5d9b68','#aad08e','#dee4a1','#447e64'],
+  'lw-forest':['#407d56','#2b654b','#63a46a','#9bc589','#214c3e'],
+  'lw-water':['#317fac','#236a95','#59a8c4','#a5d7dd','#1e587f'],
+  'lw-sand':['#dec18c','#c6a977','#f0d6a5','#fae0b5','#ae976d'],
+  'lw-settlement':['#99bc8e','#82ae85','#accba0','#c8d6ad','#769f85']
  };
- function pattern(name,colors){
-  const canvas=document.createElement('canvas');canvas.width=extent;canvas.height=extent;
-  const ctx=canvas.getContext('2d',{willReadFrequently:true});
-  if(!ctx)throw Error('Pixel terrain context unavailable');
-  ctx.imageSmoothingEnabled=false;ctx.fillStyle=colors[0];ctx.fillRect(0,0,extent,extent);
-  // A seeded atlas pattern gives cohesive material variation without randomly
-  // changing on camera pans. Unlike screen-projected particles it is anchored
-  // by MapLibre's geographic fill-pattern coordinate system.
+ function makeMaterial(name,colors){
+  const canvas=document.createElement('canvas');canvas.width=size;canvas.height=size;
+  const g=canvas.getContext('2d',{willReadFrequently:true});
+  if(!g)throw Error('Terrain pixel materials need a 2D context');
+  g.imageSmoothingEnabled=false;
+  const px=(color,x,y,w=2,h=2)=>{g.fillStyle=color;g.fillRect(x,y,w,h)};
+  px(colors[0],0,0,size,size);
   let seed=2166136261;
-  for(const c of name){seed^=c.charCodeAt(0);seed=Math.imul(seed,16777619)>>>0}
+  for(const ch of name){seed=(Math.imul(seed^ch.charCodeAt(0),16777619))>>>0}
   const rand=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296};
-  const put=(col,x,y,w,h)=>{ctx.fillStyle=col;ctx.fillRect(x,y,w,h)};
-  const water=name==='lw-water',sand=name==='lw-sand';
-  const count=water?62:(name==='lw-forest'?75:48);
+  const pos=(max)=>Math.floor(rand()*max);
+  const water=name==='lw-water',forest=name==='lw-forest',sand=name==='lw-sand',
+   settlement=name==='lw-settlement',park=name==='lw-park';
+  // Broad low-contrast pixel dabs break the monotonous green plane without
+  // drawing fictional topography or persistent screen-projected objects.
+  if(!water){
+   for(let i=0;i<55;i++){
+    const x=pos(258)-6,y=pos(258)-6,w=8+pos(22),h=4+pos(14);
+    g.globalAlpha=forest?.17:park?.12:.10;
+    px(colors[1+pos(3)],x,y,w,h);
+    px(colors[0],x+2,y+3,Math.max(2,w-6),Math.max(1,h-6));
+   }
+   g.globalAlpha=1;
+  }
+  const count=water?230:forest?300:park?245:215;
   for(let i=0;i<count;i++){
-   const x=Math.floor(rand()*61)*2+1,y=Math.floor(rand()*61)*2+1;
-   const light=i%5===0;
+   const x=pos(252)+2,y=pos(252)+2,bright=i%7===0;
    if(water){
-    // Short stacked pixel-wave highlights. These are texture, not new water.
-    put(light?colors[3]:i%3===0?colors[1]:colors[2],x,y,4+Math.floor(rand()*5)*2,2);
-    if(i%3===0)put(colors[1],x+4,y+3,4,1);
-    if(i%6===0)put(colors[3],x+3,y-3,2,1);
+    const width=4+pos(7)*2;
+    px(bright?colors[3]:i%3?colors[2]:colors[1],x,y,width,1+pos(2));
+    if(i%5===0)px(colors[4],x+4,y+3,5,1);
+    if(i%9===0)px(colors[3],x+3,y-4,3,1);
    }else if(sand){
-    put(light?colors[3]:colors[1],x,y,2+Math.floor(rand()*3)*2,2);
-    if(i%5===0)put(colors[2],x+3,y-2,6,2);
+    px(bright?colors[3]:colors[1],x,y,2+pos(4)*2,2);
+    if(i%6===0)px(colors[4],x+2,y+4,2,1);
+   }else if(settlement){
+    // Tiny warm/cool flecks, not imaginary houses or pavement geometry.
+    px(bright?colors[3]:colors[1],x,y,2+pos(3)*2,1+pos(2));
+    if(i%8===0)px(colors[4],x+2,y+3,3,1);
    }else{
-    // Hand-pixelled 2x2 grass clumps with negative space between tufts.
-    put(light?colors[3]:colors[1],x,y,2,3);
-    put(colors[2],x+3,y+2,3,2);
-    if(i%3===0)put(colors[1],x-2,y+3,2,2);
-    if(i%7===0)put(colors[3],x+1,y-2,2,1);
-   }
-  }
-  if(name==='lw-forest'){
-   // A forest can be *symbolized* by miniature canopies inside an actual
-   // woodland polygon. The motifs are not surveyed individual tree positions.
-   const pine=(x,y,size)=>{
-    put('#305f4b',x-3,y+size-4,7,4);
-    put('#6b6847',x-1,y+size-4,3,7);
-    for(let row=0;row<size-4;row+=4){
-     const w=Math.max(3,Math.floor(3+(row*.53)));
-     put('#2c5b43',x-w-1,y+row,w*2+2,4);
-     put(row%8===0?'#77ad72':'#4b8c61',x-w+1,y+row,w*2-2,3);
-     put('#9acb87',x-w+2,y+row,3,2);
+    // Pixel tuft: clustered dark blades with one or two light tips.
+    px(bright?colors[3]:colors[4],x+2,y+2,2,3);
+    px(colors[1],x,y+4,3,2);
+    px(colors[2],x+4,y+5,3,1);
+    if(i%4===0)px(colors[2],x+3,y,2,2);
+    if(i%12===0)px(colors[3],x+5,y-2,2,2);
+    if((park||name==='lw-meadow')&&i%17===0){
+     // A stylized material motif (tiny blossom) only on mapped green space.
+     px('#eee0b1',x,y,2,2);px('#c4deae',x-2,y,2,2);
+     px('#f1e4c8',x+2,y,2,2);
     }
-    put('#bbd4a1',x-2,y-2,4,3);
-   };
-   for(const [x,y,h] of [[26,18,23],[82,35,26],[51,85,27],[111,90,22]]){
-    pine(x,y,h);
    }
   }
-  map.addImage(name,ctx.getImageData(0,0,extent,extent),{pixelRatio:1});
+  if(forest){
+   // Mapped woodland gets layered canopy-like material. Individual tree
+   // locations are not inferred from OpenStreetMap landuse boundaries.
+   for(let k=0;k<20;k++){
+    const x=pos(244)+6,y=pos(244)+6,r=4+pos(6);
+    px(colors[4],x-r,y+r,r*2+5,3);
+    px(colors[1],x-r+1,y,r*2+3,r+6);
+    px(colors[2],x-r+3,y-2,r*2-2,r+1);
+    px(colors[3],x-r+4,y,3,2);
+   }
+  }
+  map.addImage(name,g.getImageData(0,0,size,size),{pixelRatio:1});
  }
- function copySource(layer, id, type, paint){
-  const spec={id,type,source:layer.source,paint};
-  if(layer['source-layer'])spec['source-layer']=layer['source-layer'];
-  if(layer.filter)spec.filter=layer.filter;
-  if(Number.isFinite(layer.minzoom))spec.minzoom=layer.minzoom;
-  if(Number.isFinite(layer.maxzoom))spec.maxzoom=layer.maxzoom;
+ function copySource(l,id,type,paint){
+  const spec={id,type,source:l.source,paint};
+  if(l['source-layer'])spec['source-layer']=l['source-layer'];
+  if(l.filter)spec.filter=l.filter;
+  if(Number.isFinite(l.minzoom))spec.minzoom=l.minzoom;
+  if(Number.isFinite(l.maxzoom))spec.maxzoom=l.maxzoom;
   return spec;
  }
- const report={materials:[],waterEdges:[],pathEdges:[]};
+ const layers=style.layers||[];
+ const report={materials:[],waterEdges:[],pathEdges:[],greenEdges:[],pathDetails:[]};
  try{
   for(const [name,colors] of Object.entries(palettes)){
-   if(!map.hasImage(name))pattern(name,colors);
+   if(!map.hasImage(name))makeMaterial(name,colors);
    report.materials.push(name);
   }
-  for(const layer of style.layers||[]){
+  for(const layer of layers){
    const id=String(layer.id).toLowerCase();
    if(layer.type==='background'){
     map.setPaintProperty(layer.id,'background-pattern','lw-ground');
    }else if(layer.type==='fill'){
+    // Determine material from source's factual feature classification. A
+    // built-up landuse polygon isn't transformed into a forest/flower field.
     const kind=/water|ocean|lake|river|reservoir|canal/.test(id)?'lw-water':
      /forest|wood|scrub/.test(id)?'lw-forest':
-     /park|garden|grass|meadow|pitch|nature/.test(id)?'lw-meadow':
-     /sand|beach|dune/.test(id)?'lw-sand':null;
+     /park|garden|nature/.test(id)?'lw-park':
+     /grass|meadow|pitch|golf/.test(id)?'lw-meadow':
+     /sand|beach|dune/.test(id)?'lw-sand':
+     /residential|industrial|commercial|landuse/.test(id)?'lw-settlement':null;
     if(kind)map.setPaintProperty(layer.id,'fill-pattern',kind);
    }
   }
-  // Style only shorelines already present in the OSM/vector source. Polygon
-  // outlines use exactly the same geographic vertices as the water polygon.
-  // They are bank/foam artwork, NOT claims of natural cliffs or elevation.
-  const waters=(style.layers||[]).filter(l=>l.type==='fill'&&l.source&&
-   /water|lake|river|ocean|reservoir/.test(l.id)&&!/wetland|island|outline|shadow/.test(l.id)).slice(0,4);
+  const waters=layers.filter(l=>l.type==='fill'&&l.source&&
+   /water|lake|river|ocean|reservoir/.test(l.id)&&
+   !/wetland|island|outline|shadow/.test(l.id)).slice(0,4);
   for(let n=0;n<waters.length;n++){
-   const layer=waters[n],id='lw-bank-edge-'+n,foam='lw-foam-edge-'+n;
-   const next=(style.layers||[])[style.layers.findIndex(x=>x.id===layer.id)+1]?.id;
-   if(!map.getLayer(id)){
-    map.addLayer(copySource(layer,id,'line',{
-     'line-color':'#315f67','line-opacity':0.9,
-     'line-width':['interpolate',['linear'],['zoom'],16,2.4,18,5.5,19,7]
+   const l=waters[n],bank='lw-bank-edge-'+n,foam='lw-foam-edge-'+n;
+   const next=layers[layers.findIndex(x=>x.id===l.id)+1]?.id;
+   if(!map.getLayer(bank)){
+    map.addLayer(copySource(l,bank,'line',{
+     'line-color':'#285b69','line-opacity':0.94,
+     'line-width':['interpolate',['linear'],['zoom'],16,2.3,18,5.0,19,7]
     }),next);
-    map.addLayer(copySource(layer,foam,'line',{
-     'line-color':'#b0dcd0','line-opacity':0.75,
-     'line-width':['interpolate',['linear'],['zoom'],16,0.7,18,1.4,19,2]
+    map.addLayer(copySource(l,foam,'line',{
+     'line-color':'#c2e5dd','line-opacity':0.77,
+     'line-width':['interpolate',['linear'],['zoom'],16,0.8,18,1.7,19,2.2]
     }),next);
    }
-   report.waterEdges.push(id,foam);
+   report.waterEdges.push(bank,foam);
   }
-  // Give actual OSM routes a darker dirt/stone shoulder, preserving all their
-  // mapped coordinates and keeping roads above coast and grass fills.
-  const routes=(style.layers||[]).filter(l=>l.type==='line'&&l.source&&
+  // Map a soft contour onto known park/wood polygons, never across real
+  // streets or rivers. This adds dimensional readability without fake cliffs.
+  const greens=layers.filter(l=>l.type==='fill'&&l.source&&
+   /forest|wood|park|garden|nature|meadow/.test(l.id)&&
+   !/outline|shadow|label/.test(l.id)).slice(0,6);
+  for(let n=0;n<greens.length;n++){
+   const l=greens[n],id='lw-green-edge-'+n;
+   if(!map.getLayer(id))map.addLayer(copySource(l,id,'line',{
+    'line-color':/forest|wood/.test(l.id)?'#315f49':'#699e6b',
+    'line-opacity':0.74,
+    'line-width':['interpolate',['linear'],['zoom'],16,1.1,18,2.3,19,3.1]
+   }));
+   report.greenEdges.push(id);
+  }
+  const routes=layers.filter(l=>l.type==='line'&&l.source&&
    /road|highway|street|primary|secondary|tertiary|residential|footway|track|path|pedestrian|service/.test(l.id)&&
    !/rail|tram|subway|border|tunnel|bridge-outline|casing|shoulder/.test(l.id)).slice(0,12);
   for(let n=0;n<routes.length;n++){
-   const layer=routes[n],id='lw-route-shoulder-'+n;
-   const narrow=/footway|track|path|pedestrian/.test(layer.id);
-   if(!map.getLayer(id)){
-    map.addLayer(copySource(layer,id,'line',{
-     'line-color':narrow?'#81744d':'#75674d',
-     'line-opacity':0.85,
-     'line-width':['interpolate',['linear'],['zoom'],16,narrow?3.5:5,18,narrow?9:14,19,narrow?11:17]
-    }),layer.id);
+   const l=routes[n],shoulder='lw-route-shoulder-'+n,stitch='lw-route-stitch-'+n;
+   const foot=/footway|track|path|pedestrian/.test(l.id);
+   if(!map.getLayer(shoulder))map.addLayer(copySource(l,shoulder,'line',{
+    'line-color':foot?'#6e704b':'#827251',
+    'line-opacity':0.9,
+    'line-width':['interpolate',['linear'],['zoom'],16,foot?4:5,18,foot?10:16,19,foot?12:19]
+   }),l.id);
+   map.setPaintProperty(l.id,'line-color',foot?'#cfae70':'#ead7ab');
+   map.setPaintProperty(l.id,'line-width',['interpolate',['linear'],['zoom'],16,foot?2.4:3,18,foot?6:10,19,foot?7:12]);
+   report.pathEdges.push(shoulder);
+   if(foot&&!map.getLayer(stitch)){
+    map.addLayer(copySource(l,stitch,'line',{
+     'line-color':'#f2e2bc','line-opacity':0.48,
+     'line-width':['interpolate',['linear'],['zoom'],16,0.5,18,1.1,19,1.5],
+     'line-dasharray':[0.8,2.1]
+    }));
+    report.pathDetails.push(stitch);
    }
-   map.setPaintProperty(layer.id,'line-color',narrow?'#dbbc80':'#e5cf9f');
-   map.setPaintProperty(layer.id,'line-width',['interpolate',['linear'],['zoom'],16,narrow?2:3,18,narrow?5:8,19,narrow?7:10]);
-   report.pathEdges.push(id);
   }
   host.dataset.terrainTiles='geographic';
-  host.dataset.terrainPhase='pixel-materials-1';
+  host.dataset.terrainPhase='pixel-materials-2';
+  host.dataset.terrainMaterials=String(report.materials.length);
   host.dataset.shorelineEdges=String(report.waterEdges.length);
   host.dataset.routeShoulders=String(report.pathEdges.length);
-  console.info('Geographic RPG terrain pass',JSON.stringify({water:report.waterEdges.length,paths:report.pathEdges.length}));
+  host.dataset.greenContours=String(report.greenEdges.length);
+  host.dataset.pathDetails=String(report.pathDetails.length);
+  console.info('Geographic material artwork',JSON.stringify({
+   materials:report.materials.length,water:report.waterEdges.length,
+   green:report.greenEdges.length,paths:report.pathEdges.length}));
  }catch(err){
-  console.warn('Geographic RPG terrain pass incomplete',err);
+  console.warn('Geographic world artwork incomplete',err);
   host.dataset.terrainTiles='unavailable';
   host.dataset.terrainPhase='error';
  }
