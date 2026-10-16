@@ -260,11 +260,32 @@ body.walking #gpsMarker .sprite{animation:travelSteps .48s steps(2,end) infinite
  #footnav{height:calc(69px + env(safe-area-inset-bottom));gap:3px}
 }
 
+
+/* v13 — a game-rendered scene, not a recolored MapLibre navigation map */
+#scene{background:#86b99a}
+#map{z-index:0;opacity:.001;pointer-events:none!important}
+#map .maplibregl-control-container{display:none!important}
+#gameWorld{display:block;position:absolute;inset:0;width:100%;height:100%;
+ z-index:3;image-rendering:auto;touch-action:none;pointer-events:auto}
+body:not(.game-ready) #gameWorld{opacity:0;pointer-events:none}
+#skyHorizon,#vignette,#grain{display:none!important}
+#gpsMarker,.pixel-marker,#accuracyCircle,#playerPin{display:none!important}
+#demoMarkers{display:none!important}
+#hud{z-index:10;min-height:60px;padding-top:calc(env(safe-area-inset-top) + 5px)}
+#topChips{z-index:10}
+#mapStats{z-index:10}
+#footnav{z-index:10}
+#gameHint{position:absolute;z-index:8;left:50%;transform:translateX(-50%);
+ top:calc(env(safe-area-inset-top) + 121px);
+ font-size:10px;color:#f8f1ce;text-align:center;background:#214e46a8;
+ padding:5px 12px;border-radius:22px;pointer-events:none;white-space:nowrap}
+@media(max-width:530px){#gameHint{top:calc(env(safe-area-inset-top) + 112px)}}
+
 </style>
 </head>
 <body>
-<div id="scene"><div id="skyHorizon" aria-hidden="true"></div><div id="illustratedBackdrop"></div><canvas id="offlineCanvas"></canvas><div id="map" role="application" aria-label="Interactive real geographic map"></div><div id="demoMarkers"></div><div id="playerPin"><img class="playerImage" alt="Your warrior avatar"><div class="label">YOU</div><div class="playerBeacon"></div></div><div id="accuracyCircle"></div><div id="playerSpot">✦</div></div>
-<div id="grain"></div><div id="vignette"></div><div id="loadingMap" class="pixfont">LOADING REAL OVERWORLD...<br><span class="xsmall muted">Live map requires internet · GPS requires HTTPS</span></div>
+<div id="scene"><div id="skyHorizon" aria-hidden="true"></div><div id="illustratedBackdrop"></div><canvas id="offlineCanvas"></canvas><div id="map" role="application" aria-label="Geographic data layer"></div><canvas id="gameWorld" aria-label="Interactive local fantasy adventure overworld"></canvas><div id="demoMarkers"></div><div id="playerPin"><img class="playerImage" alt="Your warrior avatar"><div class="label">YOU</div><div class="playerBeacon"></div></div><div id="accuracyCircle"></div><div id="playerSpot">✦</div></div>
+<div id="grain"></div><div id="vignette"></div><div id="gameHint">SWIPE TO TURN · WALK TO EXPLORE</div><div id="loadingMap" class="pixfont">LOADING REAL OVERWORLD...<br><span class="xsmall muted">Live map requires internet · GPS requires HTTPS</span></div>
 <header id="hud"><div class="brand"><div class="brandmark pixfont">cg</div><div><div class="brandname pixfont">LIBATION WARRIORS</div><div class="brandsub">CHAROITE GAMES · LIVE 16-BIT MAP</div></div></div><div class="hudright"><div class="coin">🟡 2,850</div><div id="online" class="online is-off">MAP<br>CONNECTING</div></div></header>
 <div id="topChips"><button class="chip active" data-filter="all"><span class="symbol">✦</span> ALL</button><button class="chip" data-filter="rupture"><span class="symbol">⚔</span> RUPTURES</button><button class="chip special" data-filter="challenge"><span class="symbol">✺</span> WORMHOLES</button><button class="chip right" id="searchButton">⌕ FIND</button></div>
 <div id="leftSide"><button class="floatbtn tiny" id="avatarBtn" title="Customize your overworld avatar" aria-label="Customize your overworld avatar">✎</button><button class="floatbtn" id="locateBtn" title="Show my current GPS location" aria-label="Show my real current location">⌖</button><button class="floatbtn" id="zoomInBtn" title="Zoom in">＋</button><button class="floatbtn" id="zoomOutBtn" title="Zoom out">－</button><button class="floatbtn tiny" id="refreshBtn" title="Refresh real venues">↻</button></div>
@@ -547,6 +568,318 @@ function moveTo(lon,lat,z=LOCAL_ZOOM){
 
 // One georeferenced character sprite is kept in the MapLibre scene. The marker's
 // bottom-center anchor is its real GPS location, not a fixed viewport position.
+
+// -- LIBATION WORLD RENDERER ------------------------------------------------
+// MapLibre retrieves geographic vector tiles in the background; nothing
+// from its 3D map renderer is visible. This canvas paints the SNES game world.
+// All world entities use geo coordinates. The canvas and GPS never store exact
+// location in localStorage or send it to any Libation Warriors server.
+const worldState={canvas:null,ctx:null,features:{water:[],parks:[],roads:[],buildings:[]},
+ scenery:[],loaded:false,started:false,width:0,height:0,ratio:1,bearing:0,
+ camera:null,drag:null,last:0,terrainStamp:0,lastCamera:null,avatars:{},
+ portalPhase:0,ready:false,lastGeoFetch:0,texture:null};
+function worldCoords(lon,lat,origin){
+ const latCos=Math.max(.24,Math.cos(origin[1]*Math.PI/180));
+ return [(lon-origin[0])*111320*latCos,(lat-origin[1])*111320];
+}
+function worldProj(lon,lat){
+ const o=worldState.camera||currentGeolocation||centerStart;
+ const [east,north]=worldCoords(lon,lat,o),rad=worldState.bearing*Math.PI/180;
+ const forward=east*Math.sin(rad)+north*Math.cos(rad);
+ const right=east*Math.cos(rad)-north*Math.sin(rad);
+ const w=worldState.width,h=worldState.height;
+ // A nonlinear Zelda-like depth transform: close features larger, distant
+ // geography compresses towards the horizon with the player in foreground.
+ const f=Math.max(-55,forward),sc=5.4/(1+Math.max(-75,f)/160);
+ return {x:w*.5+right*sc,y:h*.70-forward*sc*.78,d:forward,scale:sc/5.4};
+}
+function worldSize(){
+ const c=worldState.canvas;if(!c)return;
+ const rect=c.getBoundingClientRect(),ratio=Math.min(1.6,window.devicePixelRatio||1);
+ worldState.ratio=ratio;worldState.width=rect.width;worldState.height=rect.height;
+ c.width=Math.round(rect.width*ratio);c.height=Math.round(rect.height*ratio);
+ worldState.ctx.setTransform(ratio,0,0,ratio,0,0);
+ worldState.ctx.imageSmoothingEnabled=false;
+}
+function worldStart(){
+ if(worldState.started)return;
+ const canvas=$('#gameWorld');if(!canvas)return;
+ worldState.canvas=canvas;worldState.ctx=canvas.getContext('2d',{alpha:false});
+ worldState.started=true;worldState.bearing=0;
+ worldState.camera=(gpsDrawnPosition||currentGeolocation||centerStart).slice();
+ worldSize();
+ canvas.addEventListener('pointerdown',ev=>{
+  if(ev.pointerType==='mouse'&&ev.button!==0)return;
+  worldState.drag={x:ev.clientX,bearing:worldState.bearing,id:ev.pointerId};
+  try{canvas.setPointerCapture(ev.pointerId)}catch(_){}
+ });
+ canvas.addEventListener('pointermove',ev=>{
+  const p=worldState.drag;if(!p||ev.pointerId!==p.id)return;
+  worldState.bearing=(p.bearing+(ev.clientX-p.x)*.32+3600)%360;
+ });
+ const stop=ev=>{if(worldState.drag?.id===ev.pointerId)worldState.drag=null};
+ canvas.addEventListener('pointerup',stop);canvas.addEventListener('pointercancel',stop);
+ canvas.addEventListener('click',ev=>{
+  if(!currentGeolocation)return;
+  const rect=canvas.getBoundingClientRect();
+  const x=ev.clientX-rect.left,y=ev.clientY-rect.top;
+  const visible=worldVisiblePortals();
+  const v=visible.find(q=>Math.hypot(q.x-x,q.y-y)<Math.max(26,q.radius));
+  if(v)chooseVenue(v.venue);
+ });
+ window.addEventListener('resize',worldSize);
+ worldState.ready=true;document.body.classList.add('game-ready');
+ requestAnimationFrame(worldFrame);
+}
+function worldFeaturePoints(geometry){
+ if(!geometry)return [];
+ const {type,coordinates}=geometry;
+ if(type==='LineString')return [coordinates];
+ if(type==='MultiLineString')return coordinates;
+ if(type==='Polygon')return coordinates.slice(0,1);
+ if(type==='MultiPolygon')return coordinates.map(v=>v[0]);
+ return [];
+}
+function worldTileUpdate(){
+ if(!map||!mapLoaded||!currentGeolocation||!map.isStyleLoaded())return;
+ const sources=map.getStyle().sources||{};
+ const buckets={water:[],parks:[],roads:[],buildings:[]};
+ const wanted=[
+  ['water','water'],['waterway','water'],['landcover','parks'],
+  ['landuse','parks'],['park','parks'],['transportation','roads'],
+  ['building','buildings']];
+ for(const [sourceId,source] of Object.entries(sources)){
+  if(source.type!=='vector')continue;
+  for(const [layer,bucket] of wanted){
+   let feats;try{feats=map.querySourceFeatures(sourceId,{sourceLayer:layer})||[]}
+   catch(_){continue}
+   const seen=new Set();
+   for(const f of feats){
+    const p=f.properties||{},name=String(p.class||p.subclass||p.type||'').toLowerCase();
+    if(bucket==='parks'&&!/park|grass|forest|wood|tree|meadow|garden|green|nature|recreation|scrub/.test(name))continue;
+    if(bucket==='roads'&&/rail|subway|train|tram|ferry/.test(name))continue;
+    const geoms=worldFeaturePoints(f.geometry);
+    for(const coords of geoms){
+     if(!Array.isArray(coords)||coords.length<2)continue;
+     const center=coords[Math.floor(coords.length/2)];
+     if(!Array.isArray(center)||!Number.isFinite(center[0])||!Number.isFinite(center[1]))continue;
+     if(geoMeters(currentGeolocation,center)>650)continue;
+     const key=String(f.id||'')+':'+center.map(q=>q.toFixed(5)).join(':')+':'+coords.length;
+     if(seen.has(key))continue;seen.add(key);
+     if(buckets[bucket].length>=135)break;
+     buckets[bucket].push({coords,clazz:name});
+    }
+    if(buckets[bucket].length>=135)break;
+   }
+  }
+ }
+ const count=Object.values(buckets).reduce((n,x)=>n+x.length,0);
+ if(count>0)worldState.features=buckets;
+ worldState.lastGeoFetch=Date.now();
+ // Decoration is seeded from geography cells, never regenerated per frame.
+ worldSeedScenery();
+}
+function worldSeedScenery(){
+ if(!currentGeolocation)return;
+ const positions=[],base=currentGeolocation;
+ const step=35;
+ for(let n=-12;n<=12;n++)for(let e=-12;e<=12;e++){
+  const h=localHash(n+Math.floor(base[1]*1000),e+Math.floor(base[0]*1000));
+  if(h<.63)continue;
+  const north=(n+(localHash(e,n)-.5)*.55)*step;
+  const east=(e+(localHash(n,e)-.5)*.55)*step;
+  const lon=base[0]+east/(111320*Math.cos(base[1]*Math.PI/180));
+  const lat=base[1]+north/111320;
+  // Keep objects out of roads and bodies of water where map data is available.
+  const prohibited=worldState.features.water.some(g=>worldInside([lon,lat],g.coords))||
+   worldState.features.roads.some(g=>worldNearLine([lon,lat],g.coords,10));
+  if(prohibited)continue;
+  positions.push({lon,lat,kind:h>.91?'tree':h>.78?'bush':'grass',variant:Math.floor(h*11)%3});
+ }
+ worldState.scenery=positions;
+}
+function worldInside(pt,coords){
+ let inside=false;
+ for(let i=0,j=coords.length-1;i<coords.length;j=i++){
+  const a=coords[i],b=coords[j];
+  if(((a[1]>pt[1])!==(b[1]>pt[1]))&&
+   pt[0]<(b[0]-a[0])*(pt[1]-a[1])/(b[1]-a[1])+a[0])inside=!inside;
+ }
+ return inside;
+}
+function worldNearLine(p,coords,meters){
+ const pt=worldCoords(p[0],p[1],currentGeolocation);
+ for(let k=1;k<coords.length;k++){
+  const a=worldCoords(coords[k-1][0],coords[k-1][1],currentGeolocation);
+  const b=worldCoords(coords[k][0],coords[k][1],currentGeolocation);
+  const dx=b[0]-a[0],dy=b[1]-a[1],t=Math.max(0,Math.min(1,((pt[0]-a[0])*dx+(pt[1]-a[1])*dy)/(dx*dx+dy*dy||1)));
+  if(Math.hypot(pt[0]-(a[0]+dx*t),pt[1]-(a[1]+dy*t))<meters)return true;
+ }
+ return false;
+}
+function worldPath(ctx,coords,close=false){
+ let moved=false;
+ ctx.beginPath();
+ for(let i=0;i<coords.length;i++){
+  const c=coords[i],p=worldProj(c[0],c[1]);
+  if(!Number.isFinite(p.x)||!Number.isFinite(p.y))continue;
+  if(!moved){ctx.moveTo(p.x,p.y);moved=true}else ctx.lineTo(p.x,p.y);
+ }
+ if(close&&moved)ctx.closePath();
+ return moved;
+}
+function worldSprite(kind,v){
+ const key=kind+v;
+ if(!worldState.avatars[key]){
+  const c=buildScenerySprite(kind,v);
+  worldState.avatars[key]=c;
+ }
+ return worldState.avatars[key];
+}
+function worldAvatar(){
+ const key='hero:'+avatarFacing+':'+avatarFrame;
+ if(!worldState.avatars[key]){
+  const image=new Image();
+  image.src=makeCustomAvatarSprite(avatarFrame,avatarFacing);
+  worldState.avatars[key]=image;
+ }
+ return worldState.avatars[key];
+}
+function worldVisiblePortals(){
+ const origin=currentGeolocation||centerStart,arr=[];
+ for(const v of venues){
+  if(currentFilter!=='all'&&currentFilter!==v.type)continue;
+  if(!Number.isFinite(v.lon)||!Number.isFinite(v.lat)||geoMeters(origin,[v.lon,v.lat])>280)continue;
+  // A venue object's *actual* position is never relocated onto shore.
+  // If its OSM centroid lies inside water, omit it until a verified
+  // entrance/point address exists. No imaginary waterborne portals.
+  if(worldState.features.water.some(g=>worldInside([v.lon,v.lat],g.coords)))continue;
+  const point=worldProj(v.lon,v.lat);
+  if(point.d< -30||point.d>380||point.x< -45||point.x>worldState.width+45||
+    point.y<100||point.y>worldState.height+45)continue;
+  arr.push({...point,venue:v});
+ }
+ arr.sort((a,b)=>geoMeters(origin,[a.venue.lon,a.venue.lat])-geoMeters(origin,[b.venue.lon,b.venue.lat]));
+ return arr.slice(0,6).map(v=>({...v,radius:Math.max(24,34*v.scale)}));
+}
+function worldBackdrop(ctx,w,h){
+ const sky=ctx.createLinearGradient(0,0,0,h*.30);
+ sky.addColorStop(0,'#71b9de');sky.addColorStop(.55,'#abd9d6');sky.addColorStop(1,'#b3d9aa');
+ ctx.fillStyle=sky;ctx.fillRect(0,0,w,h*.33);
+ // A distant line of hills, trees and sky: feels like a game scene.
+ for(let i=-1;i<12;i++){
+  const xx=i*w/9,cy=h*.295+Math.sin(i*2.9)*12;
+  ctx.fillStyle=i%2?'#699e91':'#70a995';
+  ctx.beginPath();ctx.moveTo(xx-15,h*.37);ctx.lineTo(xx,cy);ctx.lineTo(xx+w/8,h*.37);ctx.fill();
+ }
+ ctx.fillStyle='#8fc18b';ctx.fillRect(0,h*.32,w,h);
+ // Fine low-frequency grass fields and glades, not a screen-aligned stripe filter.
+ const sz=26;
+ for(let y=h*.34;y<h;y+=sz)for(let x=0;x<w;x+=sz){
+  const k=localHash(Math.floor(x/sz),Math.floor(y/sz));
+  ctx.fillStyle=k>.72?'#97c68c':k<.25?'#82b980':'#8dc18a';
+  ctx.fillRect(x,y,sz+1,sz+1);
+ }
+}
+function worldPaint(ctx,w,h,now){
+ worldBackdrop(ctx,w,h);
+ const features=worldState.features;
+ // Geometry layers and paths originate from local geographic tiles.
+ for(const group of features.parks){
+  if(!worldPath(ctx,group.coords,true))continue;
+  ctx.fillStyle='#65ae75';ctx.fill();ctx.lineWidth=3;ctx.strokeStyle='#4e9160';ctx.stroke();
+ }
+ for(const group of features.water){
+  if(!worldPath(ctx,group.coords,true))continue;
+  ctx.fillStyle='#4a9fc3';ctx.fill();ctx.lineWidth=7;ctx.strokeStyle='#e0d398';ctx.stroke();
+  if(!worldPath(ctx,group.coords,true))continue;
+  ctx.save();ctx.clip();
+  ctx.strokeStyle='#77c6d4';ctx.lineWidth=2;
+  for(let y=h*.2;y<h;y+=29)for(let x=5;x<w;x+=56){
+   ctx.beginPath();ctx.moveTo(x+(y%24),y);ctx.lineTo(x+18+(y%24),y);ctx.stroke();
+  }
+  ctx.restore();
+ }
+ // Large stone-bordered tracks with warm earthen center.
+ for(const group of features.roads){
+  if(!worldPath(ctx,group.coords,false))continue;
+  const foot=/foot|path|cycle|pedestrian|track/.test(group.clazz);
+  ctx.lineCap='round';ctx.lineJoin='round';
+  ctx.strokeStyle='#648a75';ctx.lineWidth=foot?12:23;ctx.stroke();
+  if(!worldPath(ctx,group.coords,false))continue;
+  ctx.strokeStyle='#f3dcaa';ctx.lineWidth=foot?7:16;ctx.stroke();
+  if(!worldPath(ctx,group.coords,false))continue;
+  ctx.strokeStyle='#ffebbd';ctx.lineWidth=foot?3:9;ctx.stroke();
+ }
+ const scene=[];
+ for(const tree of worldState.scenery){
+  const p=worldProj(tree.lon,tree.lat);
+  if(p.d< -25||p.d>320||p.x< -48||p.x>w+48||p.y<80||p.y>h+64)continue;
+  scene.push({...p,kind:'scenery',item:tree});
+ }
+ for(const building of features.buildings){
+  const coords=building.coords;const midpoint=coords[Math.floor(coords.length/2)];
+  if(!midpoint)continue;
+  const p=worldProj(midpoint[0],midpoint[1]);
+  if(p.d< -25||p.d>250||p.x< -60||p.x>w+60||p.y<80||p.y>h+80)continue;
+  scene.push({...p,kind:'building'});
+ }
+ const portals=worldVisiblePortals();
+ for(const portal of portals)scene.push({...portal,kind:'portal'});
+ const av=worldProj((gpsDrawnPosition||currentGeolocation)[0],(gpsDrawnPosition||currentGeolocation)[1]);
+ scene.push({...av,kind:'avatar'});
+ // A genuine depth order: the avatar can walk in front of or behind objects.
+ scene.sort((a,b)=>b.d-a.d);
+ for(const obj of scene){
+  if(obj.kind==='scenery'){
+   const {kind,variant}=obj.item;
+   const img=worldSprite(kind,variant);if(!img)continue;
+   const height=(kind==='tree'?88:kind==='bush'?51:23)*Math.max(.35,obj.scale);
+   ctx.drawImage(img,obj.x-height*.40,obj.y-height,height*.8,height);
+  }else if(obj.kind==='building'){
+   const img=worldSprite('house',1),height=83*Math.max(.28,obj.scale);
+   ctx.drawImage(img,obj.x-height*.42,obj.y-height,height*.84,height);
+  }else if(obj.kind==='portal'){
+   const v=obj.venue;
+   const pulse=1+.06*Math.sin(now*.003+(v.id?.length||0));
+   const size=44*Math.max(.46,obj.scale)*pulse;
+   const img=worldState.avatars['portal:'+v.type]||(function(){
+    const image=new Image();image.src=portalSprites[v.type];
+    worldState.avatars['portal:'+v.type]=image;return image;})();
+   ctx.fillStyle='#13283c8a';ctx.beginPath();
+   ctx.ellipse(obj.x,obj.y,size*.34,size*.1,0,0,Math.PI*2);ctx.fill();
+   if(img.complete)ctx.drawImage(img,obj.x-size*.5,obj.y-size*1.12,size,size*1.12);
+  }else if(obj.kind==='avatar'){
+   const img=worldAvatar(),size=83;
+   ctx.fillStyle='#2f634b8a';ctx.beginPath();ctx.ellipse(obj.x,obj.y,27,9,0,0,Math.PI*2);ctx.fill();
+   if(img.complete)ctx.drawImage(img,obj.x-size*.4,obj.y-size,size*.8,size);
+   ctx.strokeStyle='#fff0b9';ctx.lineWidth=2;
+   ctx.beginPath();ctx.ellipse(obj.x,obj.y,28,9,0,0,Math.PI*2);ctx.stroke();
+  }
+ }
+ // Only a tiny positional cue, not a fake player portrait or map pin.
+ ctx.fillStyle='#143f3ca8';ctx.fillRect(w*.5-32,h-96,64,19);
+ ctx.font='bold 10px monospace';ctx.textAlign='center';ctx.fillStyle='#f7efd0';
+ ctx.fillText('GPS  ·  EXPLORE',w*.5,h-83);
+}
+function worldFrame(now){
+ if(!worldState.started)return;
+ requestAnimationFrame(worldFrame);
+ if(!worldState.ctx||!currentGeolocation)return;
+ if(now-worldState.last<40)return;
+ worldState.last=now;
+ const target=gpsDrawnPosition||currentGeolocation;
+ if(!worldState.camera)worldState.camera=target.slice();
+ // Smooth camera movement independently of raw GPS, preventing rubber-band.
+ const d=geoMeters(worldState.camera,target);
+ const t=d>130?1:Math.min(.19,Math.max(.035,d/160));
+ worldState.camera[0]+=(target[0]-worldState.camera[0])*t;
+ worldState.camera[1]+=(target[1]-worldState.camera[1])*t;
+ const ctx=worldState.ctx;
+ try{worldPaint(ctx,worldState.width,worldState.height,now)}
+ catch(e){if(!worldState.renderError){console.warn('RPG scene draw failed',e);worldState.renderError=true}}
+}
+
 function ensureGeoreferencedAvatar(){
  if(provider!=='osm'||!map||!mapLoaded||!currentGeolocation)return;
  if(gpsMarker){
@@ -695,7 +1028,7 @@ async function startLive(){
      $('#map').classList.add('map-live');$('#loadingMap').style.display='none';
      $('#demoMarkers').style.display='none';
      updateStatus('LIVE<br>WORLD',true);
-     styleOverworld();document.body.classList.add('live-map','go-perspective');
+     styleOverworld();document.body.classList.add('live-map','go-perspective');worldStart();worldTileUpdate();
      // Avoid creating hundreds of DOM/world objects on every viewport change.
      registerAdventureCameraControls();
      if(currentGeolocation){moveGeoreferencedAvatar(currentGeolocation,0,null);explorerCamera(true)}
@@ -703,7 +1036,7 @@ async function startLive(){
     });
    map.on('moveend',()=>{lastPosition=position();refreshSoon();updateZoom()});
    // Tile POIs are checked only after the movement has settled.
-   map.on('idle',()=>{if(gpsTransitionFrame===null)integrateMapTileVenues()});
+   map.on('idle',()=>{if(gpsTransitionFrame===null)integrateMapTileVenues();if(Date.now()-worldState.lastGeoFetch>12000)worldTileUpdate()});
    map.on('move',updateGpsOverlay);map.on('zoom',updateZoom);
    // Retry a second geographic map source if the vector style cannot load.
    // We never use fictional scene art to impersonate real GPS/map geography.
@@ -1035,7 +1368,7 @@ function offline(reason){
  localMapStarting=false;
  if(provider==='google')return;
  if(gpsTransitionFrame!==null){cancelAnimationFrame(gpsTransitionFrame);gpsTransitionFrame=null}
- if(gpsMarker){try{gpsMarker.remove()}catch(_){};gpsMarker=null}gpsDrawnPosition=null;
+ if(gpsMarker){try{gpsMarker.remove()}catch(_){};gpsMarker=null}gpsDrawnPosition=null;document.body.classList.remove('game-ready');worldState.started=false;worldState.ready=false;
  if(map){try{map.remove()}catch(_){}}map=null;sceneryCanvas=null;sceneryCtx=null;sceneryPoints=[];lastSceneryArea='';provider='offline';mapLoaded=false;document.body.classList.remove('live-map','following','walking');
  $('#map').style.display='none';$('#loadingMap').style.display='none';$('#demoMarkers').style.display='block';updateStatus('OFFLINE<br>DEMO',false);
  makeDemo();drawOffline();updateRegion();mapBanner('⚠ Offline scenic illustration — not your real location.<button id="retryConnection" type="button" class="launchLocation">RETRY LIVE MAP</button>');$('#retryConnection').onclick=()=>{hideBanner();startLive()};toast(reason||'Live map unavailable. Check connection.');
@@ -1475,7 +1808,7 @@ avatarAnimationTimer=setInterval(()=>{
  if(document.hidden)return;
  avatarFrame=(avatarFrame+1)%(avatarIsWalking?4:16);
  const frame=avatarIsWalking?avatarFrame:(avatarFrame%16===0?2:0);
- const src=makeCustomAvatarSprite(frame,avatarFacing);
+ const src=makeCustomAvatarSprite(frame,avatarFacing);delete worldState.avatars['hero:'+avatarFacing+':'+frame];
  if(gpsMarker?.getElement){
   const el=gpsMarker.getElement(),img=el.querySelector('.sprite');if(img)img.src=src;
  }
