@@ -312,7 +312,7 @@ function repaintCustomAvatar(){
  if(window._googlePlayer&&window.google?.maps){
   window._googlePlayer.setIcon({url:makeCustomAvatarSprite(),scaledSize:new google.maps.Size(52,70),anchor:new google.maps.Point(26,70)});
  }
- const preview=$('#avatarPreview');if(preview)preview.src=makeCustomAvatarSprite();
+ const preview=$('#avatarPreview');if(preview)preview.src=makeCustomAvatarSprite(0,'down');
 }
 function avatarOption(id,heading,labels,selected){
  return '<label class="label" for="'+id+'">'+heading+'</label><select class="inpt" id="'+id+'">'+
@@ -321,7 +321,7 @@ function avatarOption(id,heading,labels,selected){
 function renderAvatarEditor(){
  const body=$('#drawerContent');
  body.innerHTML=heading('YOUR EXPLORER','CUSTOM AVATAR','Create your own 16-bit adventurer for the GPS overworld. Scanned warriors remain separate dungeon characters.')+
- '<div class="box" style="display:grid;place-items:center;gap:8px;background:linear-gradient(#263b4b,#17312e)"><img id="avatarPreview" alt="Your custom overworld avatar" style="width:128px;height:176px;object-fit:contain;image-rendering:pixelated" src="'+makeCustomAvatarSprite()+'"><strong class="pixfont">YOUR OVERWORLD AVATAR</strong></div>'+
+ '<div class="box" style="display:grid;place-items:center;gap:8px;background:linear-gradient(#263b4b,#17312e)"><img id="avatarPreview" alt="Your custom overworld avatar" style="width:128px;height:176px;object-fit:contain;image-rendering:pixelated" src="'+makeCustomAvatarSprite(0,'down')+'"><strong class="pixfont">YOUR OVERWORLD AVATAR</strong></div>'+
  avatarOption('avatarSkin','SKIN TONE',['Light','Warm','Tan','Brown','Deep'],avatarConfig.skin)+
  avatarOption('avatarHair','HAIR COLOR',['Black','Brown','Copper','Blonde','Purple'],avatarConfig.hair)+
  avatarOption('avatarHairStyle','HAIRSTYLE',['Short','Long','Wavy','Spiky','Braided'],avatarConfig.hairStyle)+
@@ -984,7 +984,7 @@ avatarAnimationTimer=setInterval(()=>{
  if(gpsMarker?.getElement){
   const el=gpsMarker.getElement(),img=el.querySelector('.sprite');if(img)img.src=src;
  }
-},avatarIsWalking?160:520);
+},170);
 window.addEventListener('load',()=>{startLive();if(window.isSecureContext){locateMe()}else mapBanner('Open this prototype from an HTTPS site to enable your real GPS position. The downloadable file may show the map but cannot reliably access location on Android.')});
 })();
 </script>
