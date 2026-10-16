@@ -356,10 +356,11 @@ const fs=require('fs');
  await swipeTouch([80,550],[260,550]);
  const afterTurn=await readCamera();
  console.log('REAL TOUCH CAMERA TURN:',JSON.stringify({beforeSwipe,afterTurn}));
- let bearingDelta=Math.abs(afterTurn.bearing-beforeSwipe.bearing);
- bearingDelta=Math.min(bearingDelta,360-bearingDelta);
- if(bearingDelta<45||Math.abs(afterTurn.pitch-beforeSwipe.pitch)>2)
-  throw Error('Android finger drag did not reliably turn camera: '+JSON.stringify({beforeSwipe,afterTurn}));
+ // Signed shortest change: a rightward drag must now turn the camera
+ // in the reverse direction (negative bearing, rather than merely any turn).
+ const bearingDelta=((afterTurn.bearing-beforeSwipe.bearing+540)%360)-180;
+ if(bearingDelta>-45||bearingDelta<-110||Math.abs(afterTurn.pitch-beforeSwipe.pitch)>2)
+  throw Error('Reversed Android right-swipe turn did not move left: '+JSON.stringify({beforeSwipe,afterTurn,bearingDelta}));
  await page.screenshot({path:'/tmp/libation-world-touch-turn.png',fullPage:false});
  // Two-finger pinch zooms only within the neighborhood-scale range.
  await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',
@@ -385,8 +386,10 @@ const fs=require('fs');
  await page.waitForTimeout(500);
  await swipeTouch([90,650],[90,490]);
  const afterTilt=await readCamera();
- if(afterTilt.pitch<67||Math.abs(afterTilt.zoom-18.25)>.15)
-  throw Error('Android vertical swipe did not tilt camera toward the horizon: '+JSON.stringify(afterTilt));
+ // After reversing tilt, an upward finger swipe now lowers the pitch.
+ if(!(afterTilt.pitch<=beforeSwipe.pitch-8&&afterTilt.pitch>=47.8)||
+    Math.abs(afterTilt.zoom-18.25)>.15)
+  throw Error('Reversed Android upward swipe did not lower camera pitch: '+JSON.stringify({beforeSwipe,afterTilt}));
  const turned=await inspectMarkerAnchors();
  if(!anchored(turned.avatar)||!turned.portals.every(positioned))
    throw Error('Geographic markers detached after touch rotation: '+JSON.stringify(turned));
