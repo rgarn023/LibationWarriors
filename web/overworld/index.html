@@ -666,10 +666,10 @@ function worldTileUpdate(){
      if(geoMeters(currentGeolocation,center)>650)continue;
      const key=String(f.id||'')+':'+center.map(q=>q.toFixed(5)).join(':')+':'+coords.length;
      if(seen.has(key))continue;seen.add(key);
-     if(buckets[bucket].length>=135)break;
+     if(buckets[bucket].length>=95)break;
      buckets[bucket].push({coords,clazz:name});
     }
-    if(buckets[bucket].length>=135)break;
+    if(buckets[bucket].length>=95)break;
    }
   }
  }
@@ -681,20 +681,32 @@ function worldTileUpdate(){
 }
 function worldSeedScenery(){
  if(!currentGeolocation)return;
- const positions=[],base=currentGeolocation;
- const step=35;
- for(let n=-12;n<=12;n++)for(let e=-12;e<=12;e++){
-  const h=localHash(n+Math.floor(base[1]*1000),e+Math.floor(base[0]*1000));
-  if(h<.63)continue;
-  const north=(n+(localHash(e,n)-.5)*.55)*step;
-  const east=(e+(localHash(n,e)-.5)*.55)*step;
-  const lon=base[0]+east/(111320*Math.cos(base[1]*Math.PI/180));
-  const lat=base[1]+north/111320;
-  // Keep objects out of roads and bodies of water where map data is available.
-  const prohibited=worldState.features.water.some(g=>worldInside([lon,lat],g.coords))||
-   worldState.features.roads.some(g=>worldNearLine([lon,lat],g.coords,10));
-  if(prohibited)continue;
-  positions.push({lon,lat,kind:h>.91?'tree':h>.78?'bush':'grass',variant:Math.floor(h*11)%3});
+ const origin=currentGeolocation,stepMeters=30;
+ // Stable earth-anchored scenery: GPS corrections cannot slide trees sideways.
+ const dy=stepMeters/111320;
+ const dx=stepMeters/(111320*Math.max(.25,Math.cos(origin[1]*Math.PI/180)));
+ const baseY=Math.floor(origin[1]/dy),baseX=Math.floor(origin[0]/dx);
+ const positions=[],water=worldState.features.water;
+ const roads=worldState.features.roads.map(v=>{
+  const lats=v.coords.map(p=>p[1]),lons=v.coords.map(p=>p[0]);
+  return {coords:v.coords,minLat:Math.min(...lats),maxLat:Math.max(...lats),
+   minLon:Math.min(...lons),maxLon:Math.max(...lons)};
+ }).filter(v=>Number.isFinite(v.minLat));
+ for(let y=-9;y<=9;y++)for(let x=-9;x<=9;x++){
+  const gy=baseY+y,gx=baseX+x,r=localHash(gx,gy);
+  if(r<.64)continue;
+  const lat=(gy+.20+localHash(gx+23,gy)*.60)*dy;
+  const lon=(gx+.20+localHash(gx,gy+19)*.60)*dx;
+  if(geoMeters(origin,[lon,lat])>320)continue;
+  if(water.some(v=>worldInside([lon,lat],v.coords)))continue;
+  const near=roads.some(road=>{
+   const m=12/111320,n=12/(111320*Math.cos(origin[1]*Math.PI/180));
+   if(lat<road.minLat-m||lat>road.maxLat+m||lon<road.minLon-n||lon>road.maxLon+n)return false;
+   return worldNearLine([lon,lat],road.coords,11);
+  });
+  if(near)continue;
+  positions.push({lon,lat,kind:r>.91?'tree':r>.78?'bush':'grass',variant:Math.floor(r*11)%3});
+  if(positions.length>=105)break;
  }
  worldState.scenery=positions;
 }
