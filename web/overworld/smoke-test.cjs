@@ -19,7 +19,9 @@ const fs=require('fs');
  page.on('console',m=>{if(m.type()==='error')errors.push(m.text())});
  const featureCollection={type:'FeatureCollection',features:[
   {type:'Feature',properties:{kind:'park'},geometry:{type:'Polygon',coordinates:[[[-76.285,36.7695],[-76.282,36.7695],[-76.282,36.7725],[-76.285,36.7725],[-76.285,36.7695]]]}},
-  {type:'Feature',properties:{kind:'water'},geometry:{type:'Polygon',coordinates:[[[-76.281,36.767],[-76.278,36.767],[-76.278,36.774],[-76.281,36.774],[-76.281,36.767]]]}},
+  {type:'Feature',properties:{kind:'water'},geometry:{type:'Polygon',coordinates:[[[-76.28348,36.7693],[-76.28320,36.7693],[-76.28312,36.7703],[-76.28327,36.7711],[-76.28318,36.7726],[-76.28354,36.7726],[-76.28367,36.7711],[-76.28349,36.7703],[-76.28348,36.7693]]]}},
+  {type:'Feature',properties:{kind:'forest'},geometry:{type:'Polygon',coordinates:[[[-76.2852,36.7716],[-76.2849,36.7716],[-76.2849,36.7723],[-76.2852,36.7723],[-76.2852,36.7716]]]}},
+  {type:'Feature',properties:{kind:'sand'},geometry:{type:'Polygon',coordinates:[[[-76.28355,36.7717],[-76.28368,36.7717],[-76.28368,36.7723],[-76.28355,36.7723],[-76.28355,36.7717]]]}},
   {type:'Feature',properties:{kind:'building'},geometry:{type:'Polygon',coordinates:[[[-76.28448,36.7713],[-76.28430,36.7713],[-76.28430,36.77148],[-76.28448,36.77148],[-76.28448,36.7713]]]}},
   {type:'Feature',properties:{kind:'road'},geometry:{type:'LineString',coordinates:[[-76.287,36.7706],[-76.285,36.7708],[-76.281,36.7713],[-76.277,36.772]]}},
   {type:'Feature',properties:{kind:'trail'},geometry:{type:'LineString',coordinates:[[-76.2847,36.769],[-76.2841,36.77],[-76.284,36.773]]}}
@@ -29,6 +31,8 @@ const fs=require('fs');
    {id:'background',type:'background',paint:{'background-color':'#a1d2a0'}},
    {id:'park',type:'fill',source:'nearby',filter:['==',['get','kind'],'park'],paint:{'fill-color':'#6eaf83'}},
    {id:'water',type:'fill',source:'nearby',filter:['==',['get','kind'],'water'],paint:{'fill-color':'#55acc9'}},
+   {id:'forest',type:'fill',source:'nearby',filter:['==',['get','kind'],'forest'],paint:{'fill-color':'#457c52'}},
+   {id:'sand',type:'fill',source:'nearby',filter:['==',['get','kind'],'sand'],paint:{'fill-color':'#e3c38d'}},
    {id:'building',type:'fill',source:'nearby',filter:['==',['get','kind'],'building'],paint:{'fill-color':'#bdaa80'}},
    {id:'road-primary',type:'line',source:'nearby',filter:['==',['get','kind'],'road'],paint:{'line-color':'#e8d6b1','line-width':7}},
    {id:'path',type:'line',source:'nearby',filter:['==',['get','kind'],'trail'],paint:{'line-color':'#efe5c3','line-width':3}}
@@ -127,6 +131,15 @@ const fs=require('fs');
    zoom:Number(el.dataset.cameraZoom),pitch:Number(el.dataset.cameraPitch),
    bearing:Number(el.dataset.cameraBearing)
  }));
+ const terrainReport=await page.locator('#map').evaluate(el=>({
+   phase:el.dataset.terrainPhase,
+   shorelineEdges:Number(el.dataset.shorelineEdges),
+   routeShoulders:Number(el.dataset.routeShoulders)
+ }));
+ console.log('GEOGRAPHIC RPG TERRAIN PHASE:',JSON.stringify(terrainReport));
+ if(terrainReport.phase!=='pixel-materials-1'||
+   terrainReport.shorelineEdges<2||terrainReport.routeShoulders<2)
+  throw Error('Water/coast/path artwork not tied to geographic layers: '+JSON.stringify(terrainReport));
  const texture=await page.locator('#map').getAttribute('data-terrain-tiles');
  if(texture!=='geographic')throw Error('Native georeferenced terrain tile materials absent: '+texture);
  const depth=await page.locator('#map').getAttribute('data-geographic-depth');
@@ -205,6 +218,7 @@ const fs=require('fs');
   throw Error('Player or portal sprite does not render at true GPS coordinates: '+JSON.stringify(pixelAudit));
  await page.waitForTimeout(3500); // Allow location toast to clear.
  await page.screenshot({path:'/tmp/libation-world-screenshot.png',fullPage:false});
+ await page.screenshot({path:'/tmp/libation-fantasy-terrain.png',fullPage:false});
  // Simulate actual location movement and then a horizontal camera swipe.
  await context.setGeolocation({longitude:-76.2838,latitude:36.77105,accuracy:6});
  await page.waitForFunction(()=>document.body.classList.contains('walking'),null,{timeout:4500});
