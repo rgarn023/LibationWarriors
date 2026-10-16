@@ -178,6 +178,14 @@ body.following #gpsMarker{display:block!important}
 body.walking #gpsMarker .sprite{animation:travelSteps .48s steps(2,end) infinite}
 @media(prefers-reduced-motion:reduce){body.walking #gpsMarker .sprite{animation:none}}
 
+
+/* GPS-based local-only RPG overworld. */
+#zoomInBtn,#zoomOutBtn,#zoomLevel,#searchButton{display:none!important}
+#mapStats{background:#213f35e6;border:2px solid #ccb77c}
+#mapStats .eyebrow{color:#d7e6af}
+#mapStats .city{color:#ffedca}
+#hud{background:linear-gradient(180deg,#193c32f5,#264c3fb8);border-bottom-color:#c1a66e}
+#caption{display:none!important}
 </style>
 </head>
 <body>
@@ -186,7 +194,7 @@ body.walking #gpsMarker .sprite{animation:travelSteps .48s steps(2,end) infinite
 <header id="hud"><div class="brand"><div class="brandmark pixfont">cg</div><div><div class="brandname pixfont">LIBATION WARRIORS</div><div class="brandsub">CHAROITE GAMES · LIVE 16-BIT MAP</div></div></div><div class="hudright"><div class="coin">🟡 2,850</div><div id="online" class="online is-off">MAP<br>CONNECTING</div></div></header>
 <div id="topChips"><button class="chip active" data-filter="all"><span class="symbol">✦</span> ALL</button><button class="chip" data-filter="rupture"><span class="symbol">⚔</span> RUPTURES</button><button class="chip special" data-filter="challenge"><span class="symbol">✺</span> WORMHOLES</button><button class="chip right" id="searchButton">⌕ FIND</button></div>
 <div id="leftSide"><button class="floatbtn tiny" id="avatarBtn" title="Customize your overworld avatar" aria-label="Customize your overworld avatar">✎</button><button class="floatbtn" id="locateBtn" title="Show my current GPS location" aria-label="Show my real current location">⌖</button><button class="floatbtn" id="zoomInBtn" title="Zoom in">＋</button><button class="floatbtn" id="zoomOutBtn" title="Zoom out">－</button><button class="floatbtn tiny" id="refreshBtn" title="Refresh real venues">↻</button></div>
-<div id="zoomLevel" aria-live="polite">Z 13</div><div id="liveLocationBanner" role="status" aria-live="polite"></div><div id="locationReadout" role="status" aria-live="polite"></div><div id="mapStats"><div class="eyebrow pixfont">◉ REAL OVERWORLD</div><div id="regionName" class="city">Chesapeake, VA</div><div class="tiny" id="venueCount">Looking for nearby venues…</div></div>
+<div id="zoomLevel" aria-live="polite">Z 13</div><div id="liveLocationBanner" role="status" aria-live="polite"></div><div id="locationReadout" role="status" aria-live="polite"></div><div id="mapStats"><div class="eyebrow pixfont">◉ NEARBY REALM</div><div id="regionName" class="city">Finding GPS...</div><div class="tiny" id="venueCount">Looking for nearby venues…</div></div>
 <div id="toast" role="status"></div>
 <div id="caption">16-BIT MAP STYLE · LIVE OSM GEOGRAPHY WHEN ONLINE · GAMEPLAY SIMULATED</div>
 <nav id="footnav" aria-label="Main game panels"><button class="navbtn active" data-panel="map"><span class="em">🗺️</span>WORLD</button><button class="navbtn" data-panel="summon"><span class="em">💠</span>SUMMON</button><button class="navbtn" data-panel="collection"><span class="em">⚔️</span>WARRIORS</button><button class="navbtn" data-panel="paths"><span class="em">👾</span>SHADOWS</button><button class="navbtn" data-panel="settings"><span class="em">⚙️</span>OPTIONS</button></nav>
@@ -195,9 +203,10 @@ body.walking #gpsMarker .sprite{animation:travelSteps .48s steps(2,end) infinite
 (()=>{
 'use strict';
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
-const centerStart=[-76.273,36.768]; // Chesapeake, Virginia — default sample region, not player location.
+const centerStart=[-76.273,36.768]; // Unused until GPS arrives.
+const LOCAL_ZOOM=16.25,LOCAL_RADIUS_METERS=1350;
 const presets={"Chesapeake, VA":[-76.273,36.768],"Virginia Beach, VA":[-75.976,36.852],"New York, NY":[-73.985,40.748],"Boston, MA":[-71.06,42.356],"Tokyo, Japan":[139.701,35.658]};
-let provider='offline', map=null,gm=null,gmMarkers=[],markers=[],venues=[],demoVenues=[],selectedVenue=null,lastPosition=centerStart.slice(),currentFilter='all',mapLoading=false,mapLoaded=false,fetchSerial=0,fetchController=null,venueTimer=null,searchCity='Chesapeake, VA',activePanel='map',avatarKey='712340000032',claimed=new Set(),shadowPath=null,openedAt=Date.now(),countdownHandle=null,loadingHint='',currentGeolocation=null,gpsWatchId=null,gpsAccuracy=null,gpsMarker=null,gpsAccuracyCircle=null,offlineZoom=13,liveMapFailure=false,locationAccess='not-requested',venueCache=new Map(),lastVenueKey='',lastVenueLoadAt=0;
+let provider='offline', map=null,gm=null,gmMarkers=[],markers=[],venues=[],demoVenues=[],selectedVenue=null,lastPosition=centerStart.slice(),currentFilter='all',mapLoading=false,mapLoaded=false,fetchSerial=0,fetchController=null,venueTimer=null,searchCity='Your nearby overworld',activePanel='map',avatarKey='712340000032',claimed=new Set(),shadowPath=null,openedAt=Date.now(),countdownHandle=null,loadingHint='',currentGeolocation=null,gpsWatchId=null,gpsAccuracy=null,gpsMarker=null,gpsAccuracyCircle=null,offlineZoom=13,liveMapFailure=false,locationAccess='not-requested',venueCache=new Map(),lastVenueKey='',lastVenueLoadAt=0;
 let toastTimer=null,venueCountMode='idle',followPlayer=true;
 let gpsDrawnPosition=null,gpsTransitionFrame=null,lastGpsReceiveAt=0,lastGpsCameraAt=0;
 const AVATAR_KEY='libation-overworld-avatar-v1';
@@ -440,7 +449,16 @@ function updateRegion(){let count=venues.filter(v=>v.type==='rupture').length,ch
 function setFilter(f){currentFilter=f;$$('[data-filter]').forEach(b=>b.classList.toggle('active',b.dataset.filter===f));renderMarkers();toast(f==='all'?'Showing all venue types':f==='challenge'?'Showing challenge wormholes':'Showing spacetime ruptures');}
 $$('[data-filter]').forEach(b=>b.addEventListener('click',()=>setFilter(b.dataset.filter)));
 function position(){if(provider==='osm'&&map){const c=map.getCenter();return[c.lng,c.lat]}if(provider==='google'&&gm){const c=gm.getCenter();return[c.lng(),c.lat()]}return lastPosition;}
-function moveTo(lon,lat,z=14){followPlayer=false;refreshAdventureAvatar();lastPosition=[lon,lat];if(provider==='osm'&&map)map.flyTo({center:[lon,lat],zoom:z,speed:1.6});else if(provider==='google'&&gm){gm.panTo({lng:lon,lat});gm.setZoom(z)}else{offlineZoom=z;drawOffline()}updateZoom();updateGpsOverlay();}
+function moveTo(lon,lat,z=LOCAL_ZOOM){
+ if(currentGeolocation&&geoMeters(currentGeolocation,[lon,lat])>LOCAL_RADIUS_METERS){
+  toast('Walk to explore your nearby realm. Distant jumps are disabled.');return;
+ }
+ followPlayer=false;refreshAdventureAvatar();lastPosition=[lon,lat];
+ if(provider==='osm'&&map)map.easeTo({center:[lon,lat],zoom:LOCAL_ZOOM,pitch:0,duration:600});
+ else if(provider==='google'&&gm){gm.panTo({lng:lon,lat});gm.setZoom(LOCAL_ZOOM)}
+ else{offlineZoom=LOCAL_ZOOM;drawOffline()}
+ updateZoom();updateGpsOverlay();
+}
 
 // One georeferenced character sprite is kept in the MapLibre scene. The marker's
 // bottom-center anchor is its real GPS location, not a fixed viewport position.
@@ -520,25 +538,40 @@ function moveGeoreferencedAvatar(next,speed,heading){
 function explorerCamera(isFirst=false,duration=650){
  if(!currentGeolocation||provider!=='osm'||!map||!mapLoaded||!followPlayer)return;
  const h=map.getCanvas().clientHeight||window.innerHeight;
- // Top padding puts the GPS-anchored explorer in the lower-middle of the view.
- const pad={top:Math.round(h*.24),bottom:Math.round(h*.09),left:0,right:0};
- map.easeTo({center:currentGeolocation,pitch:24,bearing:0,
-   zoom:isFirst?Math.max(16,map.getZoom()):map.getZoom(),
-   padding:pad,duration:isFirst?850:Math.max(200,Math.min(2450,duration))});
+ const pad={top:Math.round(h*.08),bottom:Math.round(h*.14),left:0,right:0};
+ map.easeTo({center:currentGeolocation,pitch:0,bearing:0,zoom:LOCAL_ZOOM,
+  padding:pad,duration:isFirst?700:Math.max(180,Math.min(2000,duration))});
  refreshAdventureAvatar();
 }
 function refreshSoon(force=false){clearTimeout(venueTimer);venueTimer=setTimeout(()=>loadVenues(force),650)};
+let localMapStarting=false;
+function applyLocalViewportBounds(){
+ if(!currentGeolocation||!map)return;
+ const [lon,lat]=currentGeolocation;
+ const dy=LOCAL_RADIUS_METERS/111320;
+ const dx=LOCAL_RADIUS_METERS/(111320*Math.max(.25,Math.cos(lat*Math.PI/180)));
+ map.setMaxBounds([[lon-dx,lat-dy],[lon+dx,lat+dy]]);
+}
 async function startLive(){
+ if(localMapStarting||mapLoaded)return;
+ if(!currentGeolocation){mapBanner('⌖ Enable GPS to explore your nearby realm.');return}
+ localMapStarting=true;
  if(!window.maplibregl){
   try{await new Promise((resolve,reject)=>{const q=document.createElement('script');q.src='https://cdn.jsdelivr.net/npm/maplibre-gl@5.8.0/dist/maplibre-gl.js';q.onload=resolve;q.onerror=()=>reject(new Error('Map library failed'));document.head.append(q)})}
-  catch(_){offline('Live map library blocked. Check internet and open the HTTPS hosted version.');return}
+  catch(_){localMapStarting=false;offline('Live map library blocked. Check internet and open the HTTPS hosted version.');return}
  }
- if(!window.maplibregl){offline('Live map library unavailable.');return}
+ if(!window.maplibregl){localMapStarting=false;offline('Live map library unavailable.');return}
 
  try{
-   document.body.classList.remove('google-active');$('#map').style.display='block';map=new maplibregl.Map({container:'map',style:'https://tiles.openfreemap.org/styles/liberty',center:centerStart,zoom:13.2,attributionControl:true,preserveDrawingBuffer:false,pitch:0,dragRotate:false,touchPitch:false,minZoom:3,maxZoom:19,cooperativeGestures:false,renderWorldCopies:false,maxBounds:[[-179.95,-84.8],[179.95,84.8]]});
-   provider='osm';map.getCanvas().setAttribute('aria-label','Real geographic map. Drag to pan and pinch to zoom.');
-   map.on('load',()=>{mapLoaded=true;hideBanner();$('#map').classList.add('map-live');$('#loadingMap').style.display='none';$('#demoMarkers').style.display='none';updateStatus('LIVE<br>WORLD',true);styleOverworld();document.body.classList.add('live-map');if(currentGeolocation){moveGeoreferencedAvatar(currentGeolocation,0,null);explorerCamera(true)}else map.easeTo({pitch:24,duration:450});refreshSoon();updateZoom();updateGpsOverlay();});
+   document.body.classList.remove('google-active');$('#map').style.display='block';map=new maplibregl.Map({container:'map',style:'https://tiles.openfreemap.org/styles/liberty',
+     center:currentGeolocation,zoom:LOCAL_ZOOM,minZoom:LOCAL_ZOOM,maxZoom:LOCAL_ZOOM,
+     attributionControl:true,preserveDrawingBuffer:false,pitch:0,maxPitch:0,dragRotate:false,
+     touchPitch:false,minPitch:0,scrollZoom:false,doubleClickZoom:false,boxZoom:false,
+     touchZoomRotate:false,cooperativeGestures:false,renderWorldCopies:false});
+   applyLocalViewportBounds();
+   map.scrollZoom.disable();map.doubleClickZoom.disable();map.touchZoomRotate.disable();
+   provider='osm';map.getCanvas().setAttribute('aria-label','Nearby GPS overworld. Walk to move your avatar; drag to look nearby.');
+   map.on('load',()=>{mapLoaded=true;localMapStarting=false;hideBanner();$('#map').classList.add('map-live');$('#loadingMap').style.display='none';$('#demoMarkers').style.display='none';updateStatus('LIVE<br>WORLD',true);styleOverworld();document.body.classList.add('live-map');if(currentGeolocation){moveGeoreferencedAvatar(currentGeolocation,0,null);explorerCamera(true)}else map.easeTo({pitch:0,zoom:LOCAL_ZOOM,duration:450});refreshSoon();updateZoom();updateGpsOverlay();});
    map.on('moveend',()=>{lastPosition=position();integrateMapTileVenues();refreshSoon();updateZoom()});
    map.on('idle',integrateMapTileVenues);
    map.on('dragstart',()=>{followPlayer=false;$('#locateBtn').classList.remove('active');refreshAdventureAvatar()});
@@ -560,7 +593,7 @@ async function startLive(){
    map.on('error',e=>{if(!mapLoaded)tryRasterFallback();});
    setTimeout(tryRasterFallback,8000);
    setTimeout(()=>{if(!mapLoaded)offline('Live geography could not load from either map source. Check the connection and retry.')},22000);
- }catch(e){offline('Live map service failed: '+e.message)}
+ }catch(e){localMapStarting=false;offline('Live map service failed: '+e.message)}
 }
 // Tile art is generated locally once and used by real OSM geographic layers.
 // No invented street/venue geometry is introduced by this decorative rendering.
@@ -695,6 +728,7 @@ function styleOverworld(){
  }
 }
 function offline(reason){
+ localMapStarting=false;
  if(provider==='google')return;
  if(gpsTransitionFrame!==null){cancelAnimationFrame(gpsTransitionFrame);gpsTransitionFrame=null}
  if(gpsMarker){try{gpsMarker.remove()}catch(_){};gpsMarker=null}gpsDrawnPosition=null;
@@ -784,10 +818,10 @@ function integrateMapTileVenues(){
 // Nearby OSM venues are real locations. Do not invent fictional points on a live map.
 const OVERPASS=['https://overpass-api.de/api/interpreter','https://overpass.kumi.systems/api/interpreter','https://overpass.nchc.org.tw/api/interpreter'];
 function venueRequestArea(){
- const c=position();
- const zoom=zoomNow();
- // Public Overpass endpoints are not suitable for whole-city/global queries.
- const radius=zoom>=16?1200:zoom>=14?1800:zoom>=12?2600:3800;
+ const c=currentGeolocation||position();
+ const zoom=LOCAL_ZOOM;
+ // Query local venues only, around actual GPS rather than any browsed city.
+ const radius=LOCAL_RADIUS_METERS;
  const lat=Math.max(-84.8,Math.min(84.8,c[1]));
  const lon=Math.max(-179.95,Math.min(179.95,c[0]));
  return {lat,lon,radius,zoom};
@@ -1012,7 +1046,7 @@ async function loadGoogle(key){if(!key){toast('Enter a valid Google Maps API key
  ]});gm.addListener('idle',()=>{lastPosition=position();refreshSoon();updateZoom();updateGpsOverlay()});updateStatus('GOOGLE<br>MAPS',true);refreshSoon();updateZoom();updateGpsOverlay();closeDrawer();
  }catch(e){toast('Google Maps could not initialize: '+e.message)}
 }
-$('#searchButton').onclick=()=>setPanel('find');$('#refreshBtn').onclick=()=>{if(provider==='offline')startLive();else loadVenues(true)};$('#zoomInBtn').onclick=()=>{if(provider==='osm'&&map)map.zoomIn({duration:270});else if(provider==='google')gm.setZoom(gm.getZoom()+1);else{offlineZoom=Math.min(19,offlineZoom+1);drawOffline();toast('Scenic illustration only; live map unavailable')}updateZoom()};$('#zoomOutBtn').onclick=()=>{if(provider==='osm'&&map)map.zoomOut({duration:270});else if(provider==='google')gm.setZoom(gm.getZoom()-1);else{offlineZoom=Math.max(3,offlineZoom-1);drawOffline();toast('Scenic illustration only; live map unavailable')}updateZoom()};
+$('#searchButton').onclick=()=>toast('Explore your local overworld by walking. Distant city browsing is disabled.');$('#refreshBtn').onclick=()=>{if(provider==='offline')startLive();else loadVenues(true)};$('#zoomInBtn').onclick=()=>toast('The RPG overworld uses a fixed scale.');$('#zoomOutBtn').onclick=()=>toast('The RPG overworld uses a fixed scale.');
 function updateGpsAccuracyHalo(){
  if(!currentGeolocation||!gpsDrawnPosition||provider!=='osm'||!map)return;
  // Accuracy radius is always measured from the actual sprite coordinate and
@@ -1056,7 +1090,8 @@ function receivedGps(p){
  locationAccess='granted';$('#locateBtn').classList.remove('busy');$('#locateBtn').classList.add('active');
  $('#locationReadout').textContent='✦ GPS POSITION FOUND · ±'+Math.round(gpsAccuracy)+' m · PRIVATE';
  $('#locationReadout').classList.add('visible');hideBanner();
- searchCity='Near your position';
+ searchCity='Your nearby realm';
+ if(provider==='osm'&&map)applyLocalViewportBounds();
  if(provider==='osm'&&mapLoaded){
   // Movement is animated at geographic coordinates; the map projection handles
   // screen placement even when the player pans, zooms or rotates.
@@ -1068,7 +1103,8 @@ function receivedGps(p){
   if(firstFix||followPlayer){gm.panTo({lng:lon,lat});if(firstFix)gm.setZoom(Math.max(16,gm.getZoom()))}
   updateRegion();
  }else{
-  mapBanner('✓ GPS found. Waiting for live geography to load; the illustrated background is NOT your real location.');
+  mapBanner('✓ GPS acquired. Building your nearby overworld…');
+  startLive();
  }
  lastGpsReceiveAt=Date.now();
  if(firstFix)toast('Live GPS explorer connected. Walk to move your avatar on the real map.');
@@ -1100,7 +1136,7 @@ avatarAnimationTimer=setInterval(()=>{
   const el=gpsMarker.getElement(),img=el.querySelector('.sprite');if(img)img.src=src;
  }
 },170);
-window.addEventListener('load',()=>{startLive();if(window.isSecureContext){locateMe()}else mapBanner('Open this prototype from an HTTPS site to enable your real GPS position. The downloadable file may show the map but cannot reliably access location on Android.')});
+window.addEventListener('load',()=>{if(window.isSecureContext){locateMe()}else mapBanner('GPS is required for the nearby overworld. Open the HTTPS prototype in Chrome and allow location.')});
 })();
 </script>
 </body>
