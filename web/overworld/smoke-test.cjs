@@ -172,6 +172,7 @@ const fs=require('fs');
  }
  const walkUnique=new Set(walkingSamples.map(v=>v.tail));
  console.log('WALK ANIMATION SAMPLES:',JSON.stringify(walkingSamples));
+ await page.screenshot({path:'/tmp/libation-world-walking.png',fullPage:false});
  if(walkUnique.size<2)
   throw Error('Walking still uses a single static avatar frame: '+JSON.stringify(walkingSamples));
  await page.waitForTimeout(2500); // GPS interpolation ends within 2400ms.
