@@ -64,7 +64,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: libation-world-mobile-smoke
-          path: /tmp/libation-world-screenshot.png
+          path: |
+            /tmp/libation-world-screenshot.png
+            /tmp/libation-world-movement.png
           if-no-files-found: ignore
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
