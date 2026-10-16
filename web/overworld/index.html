@@ -348,6 +348,12 @@ body.live-map #gameHint{display:block!important;top:auto;bottom:calc(90px + env(
  left:50%;width:max-content;max-width:90vw;z-index:8;opacity:.86;
  background:#234b40ba;border:1px solid #ccdaad80;pointer-events:none;
  padding:5px 9px;font-size:9px;letter-spacing:.15px}
+/* Only geographic pixels change with the sun. Portals, avatar and HUD stay
+   fully visible, and all polygons retain their original GPS coordinates. */
+#map canvas.maplibregl-canvas{
+ filter:var(--world-time-filter,none)!important;
+ transition:filter 2.5s ease;
+}
 /* v15 emergency map-stability patch: no false fantasy map behind GPS. */
 #map{z-index:1!important;opacity:1!important;pointer-events:auto!important;background:#a8cf91!important}
 #map canvas.maplibregl-canvas,
@@ -1328,7 +1334,9 @@ async function startLive(){
      $('#map').classList.add('map-live');$('#loadingMap').style.display='none';
      $('#demoMarkers').style.display='none';
      updateStatus('MAP<br>ONLINE',true);
-     styleOverworld();addGeographicBuildingDepth();addGeographicTerrainTextures();addGeographicLandmarkArt();document.body.classList.remove('offline-scenic','game-geography-ready');document.body.classList.add('live-map','go-perspective','stable-map');
+     styleOverworld();addGeographicBuildingDepth();addGeographicTerrainTextures();addGeographicLandmarkArt();updateWorldTimeTheme();
+     if(worldTimeRefreshTimer)clearInterval(worldTimeRefreshTimer);
+     worldTimeRefreshTimer=setInterval(()=>{if(mapLoaded&&provider==='osm')updateWorldTimeTheme()},60000);document.body.classList.remove('offline-scenic','game-geography-ready');document.body.classList.add('live-map','go-perspective','stable-map');
      // Avoid creating hundreds of DOM/world objects on every viewport change.
      registerAdventureCameraControls();
      syncAdventureCameraState();
@@ -1583,6 +1591,60 @@ function snesPattern(kind){
 // STABLE RENDERER: MapLibre owns all geographic geometry and tile clipping.
 // Never redraw screen-space polygons using raw queryRenderedFeatures coordinates.
 // The original SNES palette stays, but projection and roads remain georeferenced.
+// Solar-themed geographic world. UTC plus latitude/longitude determines the
+// sun's apparent altitude, so there is no guessed timezone and no external
+// sunrise API. The device clock supplies the current instant.
+function getWorldTimeTheme(date=new Date(),point=currentGeolocation){
+ const h=date.getHours()+date.getMinutes()/60;
+ const localFallback=h>=6&&h<9?'morning':h>=9&&h<17?'day':h>=17&&h<20?'evening':'night';
+ if(!Array.isArray(point)||point.length<2||
+   !Number.isFinite(point[0])||!Number.isFinite(point[1])||
+   Math.abs(point[0])>180||Math.abs(point[1])>85)
+  return {phase:localFallback,source:'device-local-clock',elevation:null};
+ const deg=Math.PI/180,lat=point[1]*deg,lon=point[0];
+ const day=Math.floor((Date.UTC(date.getUTCFullYear(),date.getUTCMonth(),date.getUTCDate())-
+   Date.UTC(date.getUTCFullYear(),0,1))/86400000)+1;
+ const hour=date.getUTCHours()+date.getUTCMinutes()/60+date.getUTCSeconds()/3600;
+ const gamma=2*Math.PI/365*(day-1+(hour-12)/24);
+ const eqtime=229.18*(0.000075+0.001868*Math.cos(gamma)-0.032077*Math.sin(gamma)-
+  0.014615*Math.cos(2*gamma)-0.040849*Math.sin(2*gamma));
+ const decl=0.006918-0.399912*Math.cos(gamma)+0.070257*Math.sin(gamma)-
+  0.006758*Math.cos(2*gamma)+0.000907*Math.sin(2*gamma)-
+  0.002697*Math.cos(3*gamma)+0.00148*Math.sin(3*gamma);
+ // The NOAA equation-of-time approximation gives solar time without
+ // converting the coordinate into a politically defined time zone.
+ const trueMinutes=(hour*60+eqtime+4*lon+1440)%1440;
+ const angle=(trueMinutes/4-180)*deg;
+ const sinElev=Math.sin(lat)*Math.sin(decl)+Math.cos(lat)*Math.cos(decl)*Math.cos(angle);
+ const elevation=Math.asin(Math.max(-1,Math.min(1,sinElev)))/deg;
+ const phase=elevation<-6?'night':elevation<12?(angle<0?'morning':'evening'):'day';
+ return {phase,source:'gps-solar',elevation:Math.round(elevation*10)/10};
+}
+window.LibationWorldTime=Object.freeze({resolve:getWorldTimeTheme});
+let worldTimeRefreshTimer=null,lastWorldTimePhase='';
+function updateWorldTimeTheme(date=new Date()){
+ const host=$('#map');
+ if(!host)return;
+ const theme=getWorldTimeTheme(date,currentGeolocation);
+ host.dataset.worldTimePhase=theme.phase;
+ host.dataset.worldTimeSource=theme.source;
+ host.dataset.worldSunElevation=theme.elevation===null?'unknown':String(theme.elevation);
+ // Filter only the geographically rendered world, not the GPS character,
+ // portal objects, or UI. Keep night contrast sufficient to navigate.
+ const filters={
+  morning:'brightness(1.035) saturate(1.06) sepia(0.09)',
+  day:'none',
+  evening:'brightness(0.88) saturate(0.94) sepia(0.24) hue-rotate(-6deg)',
+  night:'brightness(0.57) saturate(0.76) sepia(0.17) hue-rotate(12deg)'
+ };
+ host.style.setProperty('--world-time-filter',filters[theme.phase]);
+ document.body.dataset.worldTimePhase=theme.phase;
+ if(theme.phase!==lastWorldTimePhase){
+  lastWorldTimePhase=theme.phase;
+  console.info('GPS fantasy overworld lighting:',theme.phase,theme.source);
+ }
+}
+
 function styleOverworld(){
  if(!map||!map.isStyleLoaded())return;
  const layers=map.getStyle().layers||[];
@@ -1993,6 +2055,7 @@ function addGeographicBuildingDepth(){
 
 function offline(reason){
  localMapStarting=false;
+ if(worldTimeRefreshTimer){clearInterval(worldTimeRefreshTimer);worldTimeRefreshTimer=null}
  if(provider==='google')return;
  if(gpsTransitionFrame!==null){cancelAnimationFrame(gpsTransitionFrame);gpsTransitionFrame=null}
  if(gpsMarker){try{gpsMarker.remove()}catch(_){};gpsMarker=null}gpsDrawnPosition=null;document.body.classList.remove('game-ready');worldState.started=false;worldState.ready=false;window.LibationGameWorld?.destroy();
@@ -2378,7 +2441,7 @@ function receivedGps(p){
  if(!Number.isFinite(lon)||!Number.isFinite(lat)||Math.abs(lat)>85||Math.abs(lon)>180)return;
  const firstFix=!currentGeolocation;
  const previous=currentGeolocation?currentGeolocation.slice():null;
- currentGeolocation=[lon,lat];gpsAccuracy=p.coords.accuracy;
+ currentGeolocation=[lon,lat];gpsAccuracy=p.coords.accuracy;updateWorldTimeTheme();
  locationAccess='granted';$('#locateBtn').classList.remove('busy');$('#locateBtn').classList.add('active');
  $('#locationReadout').textContent='✦ GPS POSITION FOUND · ±'+Math.round(gpsAccuracy)+' m · PRIVATE';
  $('#locationReadout').classList.add('visible');hideBanner();
