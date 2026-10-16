@@ -2053,6 +2053,21 @@ function addGeographicBuildingDepth(){
  audit();
 }
 
+
+ // Read-only browser diagnostics: never expose phone coordinates or account info.
+window.LibationWorldDiagnostics=Object.freeze({
+ buildingPaint:()=>{
+  if(!map||!map.getStyle())return null;
+  const ids=map.getStyle().layers.map(l=>l.id);
+  const footprint=ids.find(id=>/^lw-visible-building-\d+-footprint$/.test(id));
+  const border=ids.find(id=>/^lw-visible-building-\d+-outline$/.test(id));
+  return {footprint,fillOpacity:footprint?map.getPaintProperty(footprint,'fill-opacity'):null,
+   border,strokeOpacity:border?map.getPaintProperty(border,'line-opacity'):null,
+   roofOrSolidLayers:ids.filter(id=>/^lw-visible-building-\d+-(roof|solid)$/.test(id)),
+   texture:document.querySelector('#map')?.dataset.buildingHatch};
+ }
+});
+
 function offline(reason){
  localMapStarting=false;
  if(worldTimeRefreshTimer){clearInterval(worldTimeRefreshTimer);worldTimeRefreshTimer=null}
