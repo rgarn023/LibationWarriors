@@ -127,6 +127,14 @@ body.following #gpsMarker{display:none}
  .navbtn{font-size:8px}.navbtn .em{font-size:22px}
 }
 
+
+@keyframes riftBreathing {0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-3px) scale(1.025)}}
+.pixel-marker img{animation:riftBreathing 2.4s steps(4,end) infinite}
+.pixel-marker.challenge img{animation-duration:1.85s}
+@keyframes travelSteps{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+body.walking #adventureAvatar .sprite{animation:travelSteps .54s steps(2,end) infinite}
+@media(prefers-reduced-motion:reduce){.pixel-marker img,body.walking #adventureAvatar .sprite{animation:none}}
+
 </style>
 </head>
 <body>
@@ -474,7 +482,13 @@ let lastTileSignature='';
 function integrateMapTileVenues(){
  if(provider!=='osm'||!mapLoaded||!map)return;
  const b=map.getBounds();
- const merged=combineVenues(venues.filter(v=>b.contains([v.lon,v.lat])),nearbyTileVenues());
+ // Retain portals in a surrounding buffer as the GPS camera moves.
+ // Only the renderer should decide which ones are currently visible.
+ const sw=b.getSouthWest(),ne=b.getNorthEast();
+ const dlat=(ne.lat-sw.lat)*.65,dlon=(ne.lng-sw.lng)*.65;
+ const retained=venues.filter(v=>v.lat>=sw.lat-dlat&&v.lat<=ne.lat+dlat&&
+   v.lon>=sw.lng-dlon&&v.lon<=ne.lng+dlon);
+ const merged=combineVenues(retained,nearbyTileVenues());
  const signature=merged.map(v=>v.id).sort().join('|');
  if(lastTileSignature===signature)return;
  lastTileSignature=signature;
@@ -533,7 +547,7 @@ async function loadVenues(force=false){
  const key=venueQueryKey(area), now=Date.now();
  if(!force&&key===lastVenueKey&&now-lastVenueLoadAt<25000)return;
  lastVenueKey=key;lastVenueLoadAt=now;
- if(venueCache.has(key)){venues=combineVenues(venueCache.get(key),nearbyTileVenues());renderMarkers();updateRegion();}
+ if(venueCache.has(key)){venues=combineVenues(venues,combineVenues(venueCache.get(key),nearbyTileVenues()));renderMarkers();updateRegion();}
  // Cancel previous request when the user pans/zooms to a different area.
  if(fetchController)fetchController.abort();
  const request=new AbortController();
@@ -565,7 +579,7 @@ async function loadVenues(force=false){
      if(!response.ok)throw Error('HTTP '+response.status);
      const result=await response.json();
      if(request.signal.aborted||currentRequest!==fetchSerial)return;
-     venues=combineVenues(normalizeVenueRows(result.elements).slice(0,70),nearbyTileVenues());
+     venues=combineVenues(venues,combineVenues(normalizeVenueRows(result.elements).slice(0,70),nearbyTileVenues()));
      venueCache.set(key,venues);
      // Cap memory to recent areas; gameplay is not a venue database.
      if(venueCache.size>24)venueCache.delete(venueCache.keys().next().value);
@@ -583,7 +597,7 @@ async function loadVenues(force=false){
  if(request.signal.aborted||currentRequest!==fetchSerial)return;
  mapLoading=false;
  venueCountMode='unavailable';
- venues=combineVenues(venueCache.get(key)||[],nearbyTileVenues());
+ venues=combineVenues(venues,combineVenues(venueCache.get(key)||[],nearbyTileVenues()));
  renderMarkers();
  $('#venueCount').textContent=venues.length?
     venues.length+' mapped places · directory unavailable':
@@ -745,6 +759,7 @@ function updateGpsOverlay(){
 function receivedGps(p){
  const firstFix=!currentGeolocation;
  currentGeolocation=[p.coords.longitude,p.coords.latitude];gpsAccuracy=p.coords.accuracy;
+ document.body.classList.toggle('walking',Number.isFinite(p.coords.speed)&&p.coords.speed>.55);
  locationAccess='granted';$('#locateBtn').classList.remove('busy');$('#locateBtn').classList.add('active');
  $('#locationReadout').textContent='✦ GPS POSITION FOUND  ·  ±'+Math.round(gpsAccuracy)+' m  ·  PRIVATE';
  $('#locationReadout').classList.add('visible');hideBanner();
