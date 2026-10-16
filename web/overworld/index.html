@@ -384,6 +384,7 @@ body.live-map #map .maplibregl-ctrl-attrib{display:block!important}
 <nav id="footnav" aria-label="Main game panels"><button class="navbtn active" data-panel="map" aria-label="map" title="map"><span class="em">🗺️</span>WORLD</button><button class="navbtn" data-panel="summon" aria-label="summon" title="summon"><span class="em">💠</span>SUMMON</button><button class="navbtn" data-panel="collection" aria-label="Warriors" title="Warriors"><span class="em">⚔️</span>WARRIORS</button><button class="navbtn" data-panel="paths" aria-label="Shadows" title="Shadows"><span class="em">👾</span>SHADOWS</button><button class="navbtn" data-panel="settings" aria-label="settings" title="settings"><span class="em">⚙️</span>OPTIONS</button></nav>
 <div id="drawerWrap"><div id="shade" aria-hidden="true"></div><aside id="drawer" role="dialog" aria-label="Game panel"><div class="grab"></div><button class="close" id="closeDrawer" aria-label="Close">✕</button><main id="drawerContent"></main></aside></div>
 <script src="./game-world.js"></script>
+<script src="./dungeon.js"></script>
 <script>
 (()=>{
 'use strict';
@@ -393,6 +394,9 @@ const LOCAL_ZOOM=18.25,MIN_LOCAL_ZOOM=17.55,MAX_LOCAL_ZOOM=18.65,LOCAL_RADIUS_ME
 const presets={"Chesapeake, VA":[-76.273,36.768],"Virginia Beach, VA":[-75.976,36.852],"New York, NY":[-73.985,40.748],"Boston, MA":[-71.06,42.356],"Tokyo, Japan":[139.701,35.658]};
 let provider='offline', map=null,gm=null,gmMarkers=[],markers=[],venues=[],demoVenues=[],selectedVenue=null,lastPosition=centerStart.slice(),currentFilter='all',mapLoading=false,mapLoaded=false,fetchSerial=0,fetchController=null,venueTimer=null,searchCity='Your nearby overworld',activePanel='map',avatarKey='712340000032',claimed=new Set(),shadowPath=null,openedAt=Date.now(),countdownHandle=null,loadingHint='',currentGeolocation=null,gpsWatchId=null,gpsAccuracy=null,gpsMarker=null,gpsAccuracyCircle=null,offlineZoom=13,liveMapFailure=false,locationAccess='not-requested',venueCache=new Map(),lastVenueKey='',lastVenueLoadAt=0;
 let toastTimer=null,venueCountMode='idle',followPlayer=true;
+const developerPortals=[];
+let developerMode=new URLSearchParams(location.search).has('dev');
+try{developerMode=developerMode||sessionStorage.getItem('lw-dev-mode')==='on'}catch(_){}
 let gpsDrawnPosition=null,gpsTransitionFrame=null,lastGpsReceiveAt=0,lastGpsCameraAt=0;
 let cameraBearing=0,cameraTilt=ADVENTURE_PITCH,cameraZoom=LOCAL_ZOOM,acceptedGpsAccuracy=Infinity,lastAcceptedSpeed=0;
 let cameraGestureActive=false;
@@ -712,7 +716,7 @@ function buildPortalArt(type){
 }
 const portalSprites={rupture:buildPortalArt('rupture'),challenge:buildPortalArt('challenge')};
 
-function pinEl(v){let e=document.createElement('div');e.className='pixel-marker '+(v.type==='challenge'?'challenge':'rupture')+(v.demo?' demo':'');e.innerHTML='<span class="spark"></span><img alt="" src="'+portalSprites[v.type]+'"><span class="base"></span><span class="location-title">'+escapeHTML(v.name)+'</span>';e.setAttribute('title',v.name+' · '+(v.type==='challenge'?'Wormhole':'Rupture')+(v.demo?' · SAMPLE':' · OpenStreetMap'));e.dataset.venueId=v.id;e.addEventListener('click',ev=>{ev.stopPropagation();chooseVenue(v)});return e}
+function pinEl(v){let e=document.createElement('div');e.className='pixel-marker '+(v.type==='challenge'?'challenge':'rupture')+(v.demo||v.developer?' demo':'');e.innerHTML='<span class="spark"></span><img alt="" src="'+portalSprites[v.type]+'"><span class="base"></span><span class="location-title">'+escapeHTML(v.name)+'</span>';e.setAttribute('title',v.name+' · '+(v.type==='challenge'?'Wormhole':'Rupture')+(v.developer?' · LOCAL DEV TEST':v.demo?' · SAMPLE':' · OpenStreetMap'));e.dataset.venueId=v.id;e.addEventListener('click',ev=>{ev.stopPropagation();chooseVenue(v)});return e}
 function zoomNow(){return provider==='osm'&&map?map.getZoom():provider==='google'&&gm?gm.getZoom():offlineZoom}
 function updateZoom(){const n=$('#zoomLevel');if(n)n.textContent='Z '+zoomNow().toFixed(1)}
 function mapBanner(html){const e=$('#liveLocationBanner');e.innerHTML=html;e.classList.add('visible')}
@@ -2298,7 +2302,7 @@ function renderMarkers(){
   return;
  }
  const origin=currentGeolocation||position();
- const candidates=venues.filter(v=>
+ const candidates=[...venues,...(developerMode?developerPortals:[])].filter(v=>
    (currentFilter==='all'||v.type===currentFilter)&&
    geoMeters(origin,[v.lon,v.lat])<=LOCAL_RADIUS_METERS);
  candidates.sort((a,b)=>{
@@ -2343,6 +2347,51 @@ function renderMarkers(){
   }
  }
 }
+// Developer-only, session-local portals tied to a CONFIRMED GPS reading.
+function setDeveloperMode(enabled){
+ developerMode=!!enabled;
+ try{sessionStorage.setItem('lw-dev-mode',developerMode?'on':'off')}catch(_){}
+ const bar=$('#devPortalTools');if(bar)bar.hidden=!developerMode;
+ if(!developerMode)developerPortals.length=0;
+ renderMarkers();
+}
+function spawnDeveloperPortal(type){
+ if(!developerMode)return false;
+ if(!currentGeolocation||provider!=='osm'||!mapLoaded){
+  toast('Wait for a confirmed live GPS fix first.');return false;
+ }
+ if(developerPortals.length>=6){toast('Six test portals maximum. Clear them to start again.');return false}
+ const [lon,lat]=currentGeolocation,n=developerPortals.length+1;
+ if(!Number.isFinite(lon)||!Number.isFinite(lat))return false;
+ developerPortals.push({id:'dev-portal:'+Date.now()+':'+n,
+  name:'DEV '+(type==='challenge'?'Wormhole':'Rupture')+' '+n,
+  type:type==='challenge'?'challenge':'rupture',lon,lat,
+  developer:true,demo:true,kind:'developer-only'});
+ renderMarkers();toast('DEV TEST portal placed at last confirmed GPS position');return true;
+}
+function clearDeveloperPortals(){developerPortals.length=0;renderMarkers()}
+function initDeveloperTools(){
+ const bar=document.createElement('div');bar.id='devPortalTools';bar.hidden=!developerMode;
+ bar.innerHTML='<b>LOCAL TEST PORTALS</b><button id="devAddRupture">+ RUPTURE</button>'+
+  '<button id="devAddWormhole">+ WORMHOLE</button><button id="devPortalClear">CLEAR</button>';
+ const css=document.createElement('style');
+ css.textContent='#devPortalTools[hidden]{display:none!important}#devPortalTools{position:fixed;z-index:12;'+
+  'right:8px;bottom:calc(env(safe-area-inset-bottom) + 99px);max-width:260px;display:flex;'+
+  'flex-wrap:wrap;gap:5px;padding:7px;background:#1a3046e9;border:2px solid #dcbf88;color:#f8e2b4}'+
+  '#devPortalTools b{flex-basis:100%;font:700 10px monospace}'+
+  '#devPortalTools button{font:700 9px monospace;padding:8px 4px;background:#31495d;'+
+  'color:#fbe6b9;border:1px solid #d5b98e;touch-action:manipulation}'+
+  '#map .pixel-marker.demo{filter:drop-shadow(0 0 5px #e6a7ec);outline:2px dashed #f0ba80}';
+ document.head.appendChild(css);document.body.appendChild(bar);
+ $('#devAddRupture').onclick=()=>spawnDeveloperPortal('rupture');
+ $('#devAddWormhole').onclick=()=>spawnDeveloperPortal('challenge');
+ $('#devPortalClear').onclick=clearDeveloperPortals;
+}
+window.LibationDeveloper=Object.freeze({
+ enabled:()=>developerMode,
+ portals:()=>developerPortals.map(p=>({id:p.id,name:p.name,type:p.type,developer:true})),
+ enable:setDeveloperMode,spawn:spawnDeveloperPortal,clear:clearDeveloperPortals
+});
 function chooseVenue(v){selectedVenue=v;$$('.pixel-marker').forEach(p=>p.classList.toggle('selected',p.dataset.venueId===v.id));setPanel('venue');}
 function closeDrawer(){activePanel='map';$('#drawerWrap').classList.remove('open');$$('[data-panel]').forEach(b=>b.classList.toggle('active',b.dataset.panel==='map'));clearInterval(countdownHandle);countdownHandle=null}
 $('#shade').addEventListener('click',closeDrawer);$('#closeDrawer').addEventListener('click',closeDrawer);
@@ -2353,7 +2402,7 @@ function renderPanel(k){const body=$('#drawerContent');clearInterval(countdownHa
  if(k==='avatar'){renderAvatarEditor();return}
  if(k==='venue'){
   const v=selectedVenue;if(!v){body.innerHTML=heading('WORLD','No venue selected','Tap a glowing icon on the map.');return}
-  const ch=v.type==='challenge';const source=v.demo?'<span class="tag gold">FICTIONAL DEMO</span>':'<span class="tag green">REAL MAP LOCATION · OSM</span>';
+  const ch=v.type==='challenge';const source=v.developer?'<span class="tag gold">LOCAL DEV TEST · NOT A BUSINESS</span>':v.demo?'<span class="tag gold">FICTIONAL DEMO</span>':'<span class="tag green">REAL MAP LOCATION · OSM</span>';
   body.innerHTML=heading(ch?'CHALLENGE WORMHOLE':'SPACETIME RUPTURE',escapeHTML(v.name),ch?'A chaotic dimension has fractured around this site. Powerful foes guard a challenge dungeon.':'A real-world destination becomes an alternate-reality dungeon in the fantasy overworld.')+
   '<div class="stack">'+source+'<span class="tag '+(ch?'purple':'')+'">'+(ch?'✺ WORMHOLE':'⚔ RUPTURE')+'</span></div>'+
   '<div class="three"><div class="box"><div class="eyebrow">ROOMS</div><strong>10–25</strong></div><div class="box"><div class="eyebrow">PARTY</div><strong>1–4</strong></div><div class="box"><div class="eyebrow">FREE RUNS</div><strong>5 / 5</strong></div></div>'+
@@ -2362,11 +2411,22 @@ function renderPanel(k){const body=$('#drawerContent');clearInterval(countdownHa
   '<button class="secondary full" id="saveVenue">⌖ Center on this location</button>';
   $('#enterVenue').onclick=()=>setPanel('lobby');$('#saveVenue').onclick=()=>{moveTo(v.lon,v.lat,15);closeDrawer()};
  }else if(k==='lobby'){
-  body.innerHTML=heading('MATCH PORTAL', 'DUNGEON LOBBY','Your party has 2 minutes to form. One warrior per player. Maximum four players. This is a local concept simulation.')+
-   '<div class="box"><div class="eyebrow">LOCATION</div><strong>'+escapeHTML(selectedVenue?.name||'Spacetime Rift')+'</strong><div style="margin-top:12px" class="stack"><span class="tag green">YOU · READY?</span><span class="tag">＋ PLAYER SLOT</span><span class="tag">＋ PLAYER SLOT</span><span class="tag">＋ PLAYER SLOT</span></div></div>'+
-   '<div class="two"><div class="box"><div class="eyebrow">JOIN WINDOW</div><strong class="pixfont">02:00</strong></div><div class="box"><div class="eyebrow">WARrior</div><strong>♀ Pirate Lv.12</strong></div></div>'+
-   '<button id="readyButton" class="primary pixfont">✓ READY • SOLO</button><p class="note">Every joined player ready → 10-second countdown. Solo-ready does the same. No actual multiplayer connection is made.</p>';
-  $('#readyButton').onclick=()=>{let n=10;const b=$('#readyButton');b.disabled=true;b.textContent='OPENING PORTAL IN 10…';countdownHandle=setInterval(()=>{n--;if(n>0){b.textContent='OPENING PORTAL IN '+n+'…'}else{clearInterval(countdownHandle);countdownHandle=null;setPanel('dungeon')}},1000)};
+  const v=selectedVenue;
+  body.innerHTML=heading('SOLO DUNGEON','PORTAL STAGING','Playable local prototype. Dungeon rooms are fictional, not the real business interior.')+
+   '<div class="box"><strong>'+escapeHTML(v?.name||'Unknown Portal')+'</strong>'+
+   '<p class="dsub">'+(v?.type==='challenge'?'WORMHOLE · 14 harder rooms':'RUPTURE · 10 rooms')+
+   ' · touch D-pad movement · sword attacks · boss and victory.</p>'+
+   '<p class="note">No multiplayer or account-backed rewards yet. No real gold, XP, or ownership changes.</p></div>'+
+   '<button id="readyButton" class="primary">⚔ ENTER PLAYABLE DUNGEON</button>'+
+   '<button id="cancelDungeonLobby" class="secondary full">RETURN TO WORLD</button>';
+  $('#readyButton').onclick=()=>{
+   if(!selectedVenue)return;
+   const warriorCode=claimed.size?[...claimed][0]:null;
+   const warrior=warriorCode?baseWarrior(warriorCode).name:'Training Warrior';
+   const selected=selectedVenue;closeDrawer();
+   if(!window.LibationDungeon?.start({venue:selected,warrior}))toast('Dungeon scene failed to start');
+  };
+  $('#cancelDungeonLobby').onclick=closeDrawer;
  }else if(k==='dungeon'){
   body.innerHTML=heading('SIMULATED RUN','RUPTURE CLEARED','You defeated the dungeon boss in this concept battle.')+
    '<div class="box"><div class="eyebrow">YOUR RESULTS</div><div class="two"><div><div class="tag gold">+ 140 GOLD</div><p>Damage 2,870</p><p>Items 6</p></div><div><div class="tag green">HIGH SCORE</div><p>Damage taken 311</p><p>Consumables 2</p></div></div></div>'+
@@ -2406,8 +2466,10 @@ function renderPanel(k){const body=$('#drawerContent');clearInterval(countdownHa
    '<div class="divider"></div><button id="settingsLocate" class="primary">⌖ SHOW MY ACTUAL GPS LOCATION</button><p class="note">Uses your phone’s GPS with your permission. To work on Android, open over HTTPS—not from downloaded <code>content://</code> files.</p><div class="eyebrow">MAP PROVIDER</div><div class="box"><b>Active: '+(provider==='google'?'Google Maps':provider==='osm'?'OpenFreeMap / OpenStreetMap':'Offline demonstration')+'</b><p class="note">Google Maps JavaScript requires your own Google API key (or a Google demo key). Map views may be billed. The default OpenStreetMap-powered map works without a key.</p></div>'+
    '<label class="label" for="googleKey">OPTIONAL GOOGLE MAPS JAVASCRIPT KEY</label><input class="inpt mono" id="googleKey" type="password" autocomplete="off" placeholder="Paste restricted browser API key"><button class="secondary full" id="useGoogle">SWITCH TO GOOGLE BASE MAP</button>'+
    '<p class="note">Your key is only kept in this page memory for the current session. For security, use website-restricted keys on an HTTPS-hosted page. Custom SNES palettes, sprite venue markers and UI are layered above either provider.</p>'+
-   '<div class="divider"></div><div class="box"><div class="eyebrow">DATA SOURCES</div><p class="note">OpenFreeMap / © OpenStreetMap contributors; live venue points from OpenStreetMap via public Overpass service. The venue dataset is community-maintained; restaurant alcohol service and operating hours are not verified. Game dungeon, gold and character systems are fictional simulations. Registered home scan locations are never shown on the world map.</p></div>';
+   '<div class="divider"></div><div class="box"><div class="eyebrow">DEVELOPER MODE</div><p class="note">Temporary test portals appear at the last confirmed GPS fix. They are not real venues and disappear when the browser session ends.</p><button class="secondary full" id="devModeToggle">'+(developerMode?'DISABLE':'ENABLE')+' DEVELOPER MODE</button></div>'+
+   '<div class="divider"></div><div class="box"><div class="eyebrow">DATA SOURCES</div><p class="note">OpenFreeMap / © OpenStreetMap contributors; live venue points from OpenStreetMap from existing OSM vector tiles. The venue dataset is community-maintained; restaurant alcohol service and operating hours are not verified. Game dungeon, gold and character systems are fictional simulations. Registered home scan locations are never shown on the world map.</p></div>';
   $('#openAvatarEditor').onclick=()=>setPanel('avatar');
+  $('#devModeToggle').onclick=()=>{setDeveloperMode(!developerMode);renderPanel('settings')};
   $('#cities [data-city]').forEach(btn=>btn.onclick=()=>{const n=btn.dataset.city;searchCity=n;moveTo(...presets[n],13.8);updateRegion();closeDrawer()});const cityFinder=$('#findCity');if(cityFinder)cityFinder.onclick=geocode;$('#useGoogle').onclick=()=>loadGoogle($('#googleKey').value.trim());const locSettings=$('#settingsLocate');if(locSettings)locSettings.onclick=()=>{closeDrawer();locateMe()};
  }
 }
@@ -2532,7 +2594,7 @@ function locateMe(){
 $('#locateBtn').onclick=locateMe;
 $('#avatarBtn').onclick=()=>setPanel('avatar');
 
-makeDemo();drawOffline();updateRegion();updateZoom();// Frame animation is local and never changes GPS or a scanned warrior blueprint.
+makeDemo();drawOffline();updateRegion();updateZoom();initDeveloperTools();// Frame animation is local and never changes GPS or a scanned warrior blueprint.
 avatarAnimationTimer=setInterval(()=>{
  if(document.hidden)return;
  avatarFrame=(avatarFrame+1)%4;
