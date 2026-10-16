@@ -142,6 +142,14 @@ const fs=require('fs');
   throw Error('Water/coast/path artwork not tied to geographic layers: '+JSON.stringify(terrainReport));
  const texture=await page.locator('#map').getAttribute('data-terrain-tiles');
  if(texture!=='geographic')throw Error('Native georeferenced terrain tile materials absent: '+texture);
+ const nativeArt=await page.locator('#map').evaluate(el=>({
+  mode:el.dataset.geographicArt,
+  trees:Number(el.dataset.artTrees||0),
+  buildings:Number(el.dataset.artBuildings||0)
+ }));
+ console.log('NATIVE GEO-ANCHORED BUILDING AND WOODLAND ART:',JSON.stringify(nativeArt));
+ if(nativeArt.mode!=='native-symbols'||nativeArt.trees<1||nativeArt.buildings<1)
+  throw Error('No real-polygon-anchored fantasy buildings and woodland: '+JSON.stringify(nativeArt));
  const depth=await page.locator('#map').getAttribute('data-geographic-depth');
  if(depth!=='on')throw Error('Grounded building footprint depth missing: '+depth);
  const initialCamera=await readCamera();
@@ -219,6 +227,7 @@ const fs=require('fs');
  await page.waitForTimeout(3500); // Allow location toast to clear.
  await page.screenshot({path:'/tmp/libation-world-screenshot.png',fullPage:false});
  await page.screenshot({path:'/tmp/libation-fantasy-terrain.png',fullPage:false});
+ await page.screenshot({path:'/tmp/libation-building-forest-sprites.png',fullPage:false});
  // Simulate actual location movement and then a horizontal camera swipe.
  await context.setGeolocation({longitude:-76.2838,latitude:36.77105,accuracy:6});
  await page.waitForFunction(()=>document.body.classList.contains('walking'),null,{timeout:4500});
