@@ -158,6 +158,9 @@ const fs=require('fs');
    {available:'not-exported'};
  });
  console.log('WORLD TEXTURE MATERIAL AUDIT:',JSON.stringify(materialAudit));
+ if(materialAudit?.registered!==7||
+   !materialAudit.results.every(r=>r.ready&&r.width===256&&r.height===256))
+  throw Error('Geographic sprite materials missing or malformed: '+JSON.stringify(materialAudit));
  const texture=await page.locator('#map').getAttribute('data-terrain-tiles');
  if(texture!=='geographic')throw Error('Native georeferenced terrain tile materials absent: '+texture);
  const nativeArt=await page.locator('#map').evaluate(el=>({
