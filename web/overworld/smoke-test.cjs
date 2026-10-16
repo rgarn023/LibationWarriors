@@ -463,7 +463,7 @@ const fs=require('fs');
  console.log('DEV GPS TEST PORTALS:',JSON.stringify(placed));
  await page.screenshot({path:'/tmp/libation-dev-portals.png',fullPage:false});
  // Select a real clickable portal marker, not an internal test-only function.
- await page.locator('.pixel-marker.demo.maplibregl-marker').last().click({force:true});
+ await page.locator('.dev-select-portal[data-kind="challenge"]').click();
  await page.locator('#enterVenue').click();
  await page.locator('#readyButton').click();
  await page.waitForFunction(()=>window.LibationDungeon?.snapshot().active===true);
@@ -505,7 +505,7 @@ const fs=require('fs');
  if((await page.evaluate(()=>window.LibationDungeon.snapshot())).active)
   throw Error('Dungeon return did not restore the GPS overworld');
  // Ruptures get 10 rooms, fewer enemies and more health than wormholes.
- await page.locator('.pixel-marker.demo.maplibregl-marker').first().click({force:true});
+ await page.locator('.dev-select-portal[data-kind="rupture"]').click();
  await page.locator('#enterVenue').click();
  await page.locator('#readyButton').click();
  const rupture=await page.evaluate(()=>window.LibationDungeon.snapshot());
