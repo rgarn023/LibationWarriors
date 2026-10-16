@@ -260,5 +260,15 @@ function debugClearRoom(){
  if(!state||!(new URLSearchParams(location.search).has('dev')||window.LibationDeveloper?.enabled()))return false;
  state.enemies=[];state.roomClear=true;announce('DEV TEST: room clear — reach exit');return true;
 }
-window.LibationDungeon=Object.freeze({start,stop,snapshot,move:step,attack,debugClearRoom});
+// Isolated developer test combat encounter; cannot mint account rewards.
+function debugCombatEncounter(){
+ if(!state||!(new URLSearchParams(location.search).has('dev')||window.LibationDeveloper?.enabled()))return false;
+ const s=state,[dx,dy]=DIR[s.face];
+ s.enemies=[{x:s.player.x+dx,y:s.player.y+dy,hp:2,maxHP:2,
+  boss:false,kind:0,lastMove:performance.now(),lastAttack:performance.now()}];
+ s.roomClear=false;s.nextAttack=0;
+ announce('DEV COMBAT CHECK: use ATTACK to defeat adjacent enemy');
+ return true;
+}
+window.LibationDungeon=Object.freeze({start,stop,snapshot,move:step,attack,debugClearRoom,debugCombatEncounter});
 })();
