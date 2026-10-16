@@ -1328,7 +1328,7 @@ async function startLive(){
      $('#map').classList.add('map-live');$('#loadingMap').style.display='none';
      $('#demoMarkers').style.display='none';
      updateStatus('MAP<br>ONLINE',true);
-     styleOverworld();addGeographicBuildingDepth();addGeographicTerrainTextures();document.body.classList.remove('offline-scenic','game-geography-ready');document.body.classList.add('live-map','go-perspective','stable-map');
+     styleOverworld();addGeographicBuildingDepth();addGeographicTerrainTextures();addGeographicLandmarkArt();document.body.classList.remove('offline-scenic','game-geography-ready');document.body.classList.add('live-map','go-perspective','stable-map');
      // Avoid creating hundreds of DOM/world objects on every viewport change.
      registerAdventureCameraControls();
      syncAdventureCameraState();
@@ -1772,6 +1772,122 @@ function addGeographicTerrainTextures(){
   host.dataset.terrainPhase='error';
  }
 }
+// Original 16-bit landmark art, attached to *mapped* woodland and building
+// polygons. We deliberately use MapLibre symbols, NOT a separately projected
+// canvas or a fictitious collection of houses/tree coordinates.
+// Artwork is representative: neither a tree nor a roof design is surveyed.
+function makeGeographicLandmarkSprite(kind,variant=0){
+ const canvas=document.createElement('canvas');
+ canvas.width=72;canvas.height=88;
+ const ctx=canvas.getContext('2d',{willReadFrequently:true});
+ ctx.imageSmoothingEnabled=false;
+ const p=(color,x,y,w=1,h=1)=>{ctx.fillStyle=color;ctx.fillRect(x,y,w,h)};
+ const fill=(color,points)=>{
+  ctx.fillStyle=color;ctx.beginPath();
+  points.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));
+  ctx.closePath();ctx.fill();
+ };
+ const shade=['#365d4b','#2d6549','#467d51'];
+ const leaves=['#55965c','#70b96b','#8bc77b'];
+ if(kind==='forest'){
+  const x=36,v=variant%3;
+  // Pixel-art evergreen with a sloping silhouette, shaded layered boughs,
+  // sunlit clusters, and a small mapped ground contact shadow.
+  p('#244b3f',14,76,44,5);p('#305a43',19,74,34,6);
+  p('#66523d',33,62,7,17);p('#9e7b50',36,64,2,11);
+  for(let tier=0;tier<4;tier++){
+   const y=13+tier*14,r=10+tier*7;
+   fill('#203e3a',[[x,y-5],[x+r+4,y+20],[x-r-4,y+20]]);
+   fill(shade[v],[[x,y-8],[x+r+1,y+18],[x-r+2,y+18]]);
+   fill(leaves[v],[[x-3,y-4],[x+4,y+2],[x+r-4,y+16],[x-r+7,y+14]]);
+   p('#b7d99a',x-4-tier, y+4,6,2);p('#a4d68e',x+3, y+8,5,2);
+   p('#315741',x-9-tier,y+14,8,3);
+  }
+  p('#d3e9ab',34,5,3,3);p('#83b573',24,51,6,3);
+ }else if(kind==='building'){
+  const v=variant%3,roof=['#a05949','#6c6484','#707c68'][v],
+   roofLight=['#d18762','#9d86a4','#a3aa79'][v];
+  // Representative fantasy gabled facade, anchored to the real polygon
+  // centroid; footprint shape itself remains the factual world geometry.
+  p('#233c3b',6,76,61,7);p('#364943',9,69,57,8);
+  p('#775b48',12,35,49,40);p('#b39b73',15,35,42,37);
+  p('#d6bd8b',19,38,34,31);p('#ead49f',24,40,27,20);
+  for(let y=24;y<42;y+=4){
+   const inset=Math.floor((40-y)*.75);
+   p('#333f4a',inset,y,72-inset*2,4);
+   p(roof,inset+2,y,68-inset*2,4);
+   p(roofLight,inset+5,y+1,Math.max(3,58-inset*2),2);
+   if(y%8===0)p('#e5b989',inset+7,y+3,6,1);
+  }
+  fill('#3d4149',[[5,30],[36,7],[67,30],[64,38],[36,14],[8,38]]);
+  fill(roof,[[9,31],[36,11],[63,31],[58,34],[36,17],[15,34]]);
+  p(roofLight,29,18,14,2);p('#e3b885',25,23,6,2);
+  p('#3d3e43',48,12,9,14);p('#9e7763',50,10,5,13);
+  // Deep frame, lit window panes, stone foundation, wooden door.
+  p('#3f514c',20,46,13,16);p('#3d4b4d',41,46,12,16);
+  p('#f4c97e',23,49,7,10);p('#f4c97e',44,49,6,10);
+  p('#e9a75e',26,49,2,10);p('#e8dfaa',23,51,7,2);
+  p('#3f4d4d',21,53,12,2);p('#3e4c4b',46,47,2,16);
+  p('#4b3e3b',31,57,10,18);p('#926647',33,59,6,16);
+  p('#d2b18a',37,68,2,3);
+  p('#837d69',13,71,19,4);p('#8f896f',42,71,18,4);
+  for(let i=0;i<4;i++){p('#b6a282',13+i*12,73,5,2)}
+  p('#d8c79f',15,38,42,2);
+ }
+ return ctx.getImageData(0,0,72,88);
+}
+function addGeographicLandmarkArt(){
+ if(!map||!map.getStyle())return;
+ const host=$('#map'),style=map.getStyle(),layers=style.layers||[];
+ const landmarkImages=[
+  ['lw-pine-dusk','forest',0],['lw-pine-pine','forest',1],['lw-pine-sage','forest',2],
+  ['lw-roof-terracotta','building',0],['lw-roof-slate','building',1],['lw-roof-olive','building',2]
+ ];
+ const selected={building:[],forest:[]};
+ try{
+  for(const [name,kind,variant] of landmarkImages){
+   if(!map.hasImage(name))map.addImage(name,makeGeographicLandmarkSprite(kind,variant),{pixelRatio:1});
+  }
+  const choices=layers.filter(l=>l.type==='fill'&&l.source&&
+   !/outline|shadow|label|hatching|pattern/i.test(l.id));
+  for(const layer of choices){
+   const id=String(layer.id).toLowerCase();
+   const kind=/building/.test(id)?'building':
+    /forest|wood|scrub/.test(id)?'forest':null;
+   if(!kind||selected[kind].length>=2)continue;
+   // Do not replace forest/house geometry or infer individual real trees:
+   // each point anchor is generated by MapLibre from a mapped polygon.
+   const index=selected[kind].length,slot='lw-geographic-'+kind+'-'+index;
+   const symbol={id:slot,type:'symbol',source:layer.source,
+    filter:layer.filter||['==',['geometry-type'],'Polygon'],
+    layout:{
+     'symbol-placement':'point',
+     'icon-image':kind==='building'?'lw-roof-terracotta':'lw-pine-dusk',
+     'icon-size':['interpolate',['linear'],['zoom'],16,0.22,17.55,0.5,18.25,0.7,18.65,0.82],
+     'icon-anchor':'bottom',
+     'icon-rotation-alignment':'viewport','icon-pitch-alignment':'viewport',
+     'icon-allow-overlap':false,'icon-ignore-placement':false,
+     'icon-padding':kind==='building'?3:9
+    },
+    paint:{'icon-opacity':kind==='building'?0.97:0.92}
+   };
+   if(layer['source-layer'])symbol['source-layer']=layer['source-layer'];
+   if(Number.isFinite(layer.minzoom))symbol.minzoom=layer.minzoom;
+   if(Number.isFinite(layer.maxzoom))symbol.maxzoom=layer.maxzoom;
+   // Native symbol rendering stays clipped to loaded geography, repositions
+   // with the actual camera, and shares MapLibre's collision system.
+   if(!map.getLayer(slot))map.addLayer(symbol);
+   selected[kind].push(slot);
+  }
+  host.dataset.geographicArt='native-symbols';
+  host.dataset.artTrees=String(selected.forest.length);
+  host.dataset.artBuildings=String(selected.building.length);
+ }catch(err){
+  console.warn('Mapped building/woodland art failed',err);
+  host.dataset.geographicArt='unavailable';
+ }
+}
+
 // Real OSM building footprints become shallow game-style 3D forms when the
 // source exposes polygons. Unknown heights are a small artistic placeholder,
 // not a claim about real-world building elevations. Never add fake footprints.
