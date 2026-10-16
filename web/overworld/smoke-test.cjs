@@ -44,8 +44,9 @@ const fs=require('fs');
   await page.waitForFunction(()=>{
    const c=document.querySelector('#gameOverworldArt');
    return !!(window.LibationGameWorld?.diagnostics().ready && c?.width>100
-    && typeof mapLoaded!=='undefined'&&mapLoaded
-    && typeof currentGeolocation!=='undefined'&&!!currentGeolocation);
+    && document.querySelector('#gpsMarker')
+    && document.querySelector('#online')?.textContent?.includes('LIVE')
+    && document.querySelector('#locationReadout')?.textContent?.includes('GPS POSITION FOUND'));
   },null,{timeout:14500});
  }catch(waitError){
   const diag=await page.evaluate(()=>({
@@ -73,7 +74,9 @@ const fs=require('fs');
   for(let i=0;i<sample.length;i+=40)colors.add(
    sample[i]+','+sample[i+1]+','+sample[i+2]);
   const marker=document.querySelector('#gpsMarker');
-  return {mapLoaded,geolocation:!!currentGeolocation,
+  const mapLoaded=!!document.querySelector('#online')?.textContent?.includes('LIVE');
+  const geolocation=!!document.querySelector('#locationReadout')?.textContent?.includes('GPS POSITION FOUND');
+  return {mapLoaded,geolocation,
    features:window.LibationGameWorld.diagnostics().features,
    canvasSize:[c.width,c.height],canvasDisplay:getComputedStyle(c).display,
    colors:colors.size,hasGPSMarker:!!marker,
