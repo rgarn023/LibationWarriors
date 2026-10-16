@@ -577,7 +577,7 @@ function moveTo(lon,lat,z=LOCAL_ZOOM){
 const worldState={canvas:null,ctx:null,features:{water:[],parks:[],roads:[],buildings:[]},
  scenery:[],loaded:false,started:false,width:0,height:0,ratio:1,bearing:0,
  camera:null,drag:null,last:0,terrainStamp:0,lastCamera:null,avatars:{},
- portalPhase:0,ready:false,lastGeoFetch:0,texture:null};
+ portalPhase:0,ready:false,lastGeoFetch:0,texture:null,waterFlags:new Map()};
 function worldCoords(lon,lat,origin){
  const latCos=Math.max(.24,Math.cos(origin[1]*Math.PI/180));
  return [(lon-origin[0])*111320*latCos,(lat-origin[1])*111320];
@@ -644,6 +644,7 @@ function worldTileUpdate(){
  if(!map||!mapLoaded||!currentGeolocation||!map.isStyleLoaded())return;
  const sources=map.getStyle().sources||{};
  const buckets={water:[],parks:[],roads:[],buildings:[]};
+ const maxByGroup={water:22,parks:38,roads:75,buildings:55};
  const wanted=[
   ['water','water'],['waterway','water'],['landcover','parks'],
   ['landuse','parks'],['park','parks'],['transportation','roads'],
@@ -666,15 +667,15 @@ function worldTileUpdate(){
      if(geoMeters(currentGeolocation,center)>650)continue;
      const key=String(f.id||'')+':'+center.map(q=>q.toFixed(5)).join(':')+':'+coords.length;
      if(seen.has(key))continue;seen.add(key);
-     if(buckets[bucket].length>=95)break;
+     if(buckets[bucket].length>=maxByGroup[bucket])break;
      buckets[bucket].push({coords,clazz:name});
     }
-    if(buckets[bucket].length>=95)break;
+    if(buckets[bucket].length>=maxByGroup[bucket])break;
    }
   }
  }
  const count=Object.values(buckets).reduce((n,x)=>n+x.length,0);
- if(count>0)worldState.features=buckets;
+ if(count>0){worldState.features=buckets;worldState.waterFlags.clear()}
  worldState.lastGeoFetch=Date.now();
  // Decoration is seeded from geography cells, never regenerated per frame.
  worldSeedScenery();
@@ -769,7 +770,13 @@ function worldVisiblePortals(){
   const distance=geoMeters(origin,[v.lon,v.lat]);
   if(distance>280)continue;
   // A polygon centroid in the harbor is not an accessible land entrance.
-  if(worldState.features.water.some(g=>worldInside([v.lon,v.lat],g.coords)))continue;
+  const waterKey=v.id||String(v.name)+'@'+v.lat.toFixed(5)+':'+v.lon.toFixed(5);
+  let isWater=worldState.waterFlags.get(waterKey);
+  if(isWater===undefined){
+   isWater=worldState.features.water.some(g=>worldInside([v.lon,v.lat],g.coords));
+   worldState.waterFlags.set(waterKey,isWater);
+  }
+  if(isWater)continue;
   const key=[String(v.name||'').trim().toLowerCase(),Math.round(v.lat*10000),Math.round(v.lon*10000)].join(':');
   if(seen.has(key))continue;seen.add(key);
   const point=worldProj(v.lon,v.lat);
@@ -818,13 +825,7 @@ function worldPaint(ctx,w,h,now){
  for(const group of features.water){
   if(!worldPath(ctx,group.coords,true))continue;
   ctx.fillStyle='#4a9fc3';ctx.fill();ctx.lineWidth=7;ctx.strokeStyle='#e0d398';ctx.stroke();
-  if(!worldPath(ctx,group.coords,true))continue;
-  ctx.save();ctx.clip();
-  ctx.strokeStyle='#77c6d4';ctx.lineWidth=2;
-  for(let y=h*.2;y<h;y+=29)for(let x=5;x<w;x+=56){
-   ctx.beginPath();ctx.moveTo(x+(y%24),y);ctx.lineTo(x+18+(y%24),y);ctx.stroke();
-  }
-  ctx.restore();
+  // Calm painted water: no repetitive screen-space stripes or clip loops.
  }
  // Large stone-bordered tracks with warm earthen center.
  for(const group of features.roads){
