@@ -492,8 +492,26 @@ const fs=require('fs');
  await page.waitForTimeout(150);
  if(!await page.locator('#lwDCanvas').isVisible())
   throw Error('Sword attack removed the actual playable dungeon canvas');
+ // The real boss has full health and must survive several touchscreen blows.
+ if(!await page.evaluate(()=>window.LibationDungeon.debugBossEncounter()))
+  throw Error('Developer boss encounter unavailable');
+ const bossStart=await page.evaluate(()=>window.LibationDungeon.snapshot());
+ if(bossStart.room!==14||bossStart.bossHP!==17)
+  throw Error('Full-strength wormhole boss not initialized: '+JSON.stringify(bossStart));
+ await page.screenshot({path:'/tmp/libation-dungeon-boss.png',fullPage:false});
+ for(let strike=0;strike<10;strike++){
+  await page.locator('#lwDAttack').tap();
+  await page.waitForTimeout(375);
+  if((await page.evaluate(()=>window.LibationDungeon.snapshot())).bossHP===null)break;
+ }
+ const bossEnd=await page.evaluate(()=>window.LibationDungeon.snapshot());
+ if(bossEnd.bossHP!==null||bossEnd.enemies!==0||!bossEnd.cleared||bossEnd.defeated)
+  throw Error('Touch combat cannot defeat actual final guardian: '+JSON.stringify({bossStart,bossEnd}));
+ console.log('REAL TOUCH BOSS COMBAT:',JSON.stringify({bossStart,bossEnd}));
+ await page.screenshot({path:'/tmp/libation-dungeon-boss-cleared.png',fullPage:false});
+ await page.locator('#lwDRetry').click();
  // Complete all rooms through the explicitly labelled developer test hook.
- // The player must still walk into the exit to progress and beat the boss.
+ // This checks room transitions, not ordinary full-dungeon combat.
  const complete=await page.evaluate(()=>{
   const d=window.LibationDungeon;
   let failures=0;

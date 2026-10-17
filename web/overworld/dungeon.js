@@ -40,71 +40,139 @@ function rect(c,x,y,w,h){ctx.fillStyle=c;ctx.fillRect(x,y,w,h)}
 function render(now){
  if(!state||root.hidden)return;
  const s=state;ctx.imageSmoothingEnabled=false;
- rect(s.kind==='challenge'?'#22223c':'#223d44',0,0,X,Y);
+ const cursed=s.kind==='challenge';
+ const floor=cursed?['#696478','#716a7d','#766f80']:['#98876d','#a39071','#aa9777'];
+ rect(cursed?'#182536':'#23373a',0,0,X,Y);
  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
-  const xx=x*T,yy=y*T;
+  const xx=x*T,yy=y*T,grain=(x*37+y*71+s.room*13)%17;
   if(x===0||y===0||x===W-1||y===H-1){
-   rect('#40595b',xx,yy,32,32);rect('#5f7270',xx+2,yy+3,28,6);
-   rect('#223b43',xx,yy+24,32,8);
+   rect('#1c303a',xx,yy,T,T);
+   rect(cursed?'#4c5268':'#526867',xx+1,yy+2,30,24);
+   rect('#82908a',xx+3,yy+4,25,4);
+   rect('#253f47',xx+1,yy+23,30,8);
+   rect('#152c37',xx+1,yy+28,30,4);
+   rect('#a0a397',xx+2,yy+1,4,2);
+   if(x%3===1)rect('#303e49',xx+21,yy+12,2,10);
   }else{
-   rect((x+y)%2?'#a19b77':'#ada27d',xx,yy,32,32);
-   rect('#d6be90',xx+2,yy+2,26,2);
-   rect('#756c57',xx,yy+31,32,1);
-   if((x*13+y*7)%5===0)rect('#8a8268',xx+7,yy+17,7,2);
+   rect(floor[(x+2*y+grain)%floor.length],xx,yy,T,T);
+   rect(cursed?'#918b9a':'#cab68a',xx+2,yy+2,27,2);
+   rect(cursed?'#514d62':'#776c57',xx,yy+30,32,2);
+   rect('#5a5660',xx+30,yy+3,2,26);
+   if(grain%3===0){
+    rect(cursed?'#9690a5':'#d7bc8d',xx+5,yy+10,3,2);
+    rect('#5a5d5a',xx+19,yy+23,4,1);
+   }
+   if(grain%5===0){
+    rect('#4f5958',xx+15,yy+13,9,2);
+    rect('#a6a08c',xx+20,yy+15,2,2);
+   }
    if(s.walls.has(x+','+y)){
-    rect('#334b56',xx+2,yy+7,28,25);rect('#69818a',xx+2,yy+4,28,11);
-    rect('#acc2bb',xx+5,yy+5,14,3);
+    rect('#192f3b',xx+2,yy+12,30,20);
+    rect(cursed?'#525a70':'#46606b',xx+2,yy+6,28,23);
+    rect('#8da4a1',xx+2,yy+4,28,9);
+    rect('#c3cebb',xx+5,yy+5,14,3);
+    rect('#344653',xx+24,yy+14,3,12);
+    rect('#283b46',xx+5,yy+27,21,4);
+    if(grain%2)rect('#4d8b77',xx+3,yy+17,4,8);
    }
   }
  }
- // Wall torchlight and stone ornaments: dungeon art only, no implication
- // that the actual real-world venue has these structures.
+ // Torchlight, cracked masonry, and floor inlay belong only to the
+ // fictional dungeon, never to a real business building.
  for(const cx of [3,8,13]){
-  const bx=cx*T;
-  rect('#2e484b',bx+7,7,18,6);
-  rect('#8b6554',bx+11,3,10,12);
-  rect('#e9a554',bx+14,1,6,9);
-  rect('#f7dc7f',bx+16,1,3,5);
-  rect('#65594b',bx+10,(H-1)*T+4,14,8);
-  rect('#9b9070',bx+12,(H-1)*T+2,10,3);
+  const bx=cx*T,flicker=Math.round(Math.sin(now/127+cx)*2);
+  const glow=ctx.createRadialGradient(bx+16,12,2,bx+16,12,52);
+  glow.addColorStop(0,'rgba(255,191,86,.24)');
+  glow.addColorStop(1,'rgba(255,191,86,0)');
+  ctx.fillStyle=glow;ctx.fillRect(bx-36,0,104,72);
+  rect('#243a40',bx+6,7,20,7);
+  rect('#765341',bx+10,2,12,14);
+  rect('#b57b4c',bx+13,0,6,10);
+  rect('#e99440',bx+12,1+flicker,9,11);
+  rect('#ffe3a0',bx+15,1+flicker,4,6);
+  rect('#4c5050',bx+9,(H-1)*T+4,15,8);
+  rect('#aaa087',bx+12,(H-1)*T+2,10,3);
  }
- // Shallow engraved floor diamonds add scale without obstruction.
  for(const [gx,gy] of [[5,3],[9,9],[13,3],[5,9]]){
   if(s.walls.has(gx+','+gy))continue;
   const px=gx*T+12,py=gy*T+12;
-  rect('#817966',px,py,8,2);rect('#dbbe8f',px+2,py+2,5,2);
-  rect('#817966',px+2,py+4,5,2);
+  rect('#574e54',px+2,py-2,4,2);
+  rect('#bdb39c',px,py,9,2);rect('#584f51',px+2,py+2,6,2);
+  rect('#bdb39c',px+4,py+4,3,2);
  }
  const dx=15*T,dy=6*T;
- rect(s.roomClear?'#b8eab8':'#42565a',dx+5,dy+5,23,27);
- rect(s.roomClear?'#8ce8bc':'#2c3a43',dx+9,dy+8,16,21);
- if(s.roomClear)rect('#f2f7bc',dx+15,dy+10,6,16);
- rect('#24404b',T+5,6*T+4,20,28);rect('#ae76ba',T+10,6*T+8,10,19);
+ const pulse=Math.round(2+Math.sin(now/180)*2);
+ rect('#233943',dx+2,dy+1,28,31);
+ rect(s.roomClear?'#80d5bb':'#74827f',dx+4,dy+2,24,4);
+ rect(s.roomClear?'#b7ffcf':'#4e6469',dx+7,dy+6,18,25);
+ rect(s.roomClear?'#50b8a8':'#223641',dx+10,dy+9,12,20);
+ if(s.roomClear){
+  rect('#e8ffca',dx+14,dy+8+pulse,4,13);
+  rect('#98f2de',dx+8,dy+12,2,10);
+ }
+ rect('#172d3b',T+3,6*T+4,25,28);
+ rect('#a777bb',T+7,6*T+8,17,21);
+ rect('#d8b6ea',T+11,6*T+11,6,16);
  for(const e of s.enemies){
   const x=e.x*T,y=e.y*T;
-  rect('#233a38',x+4,y+25,25,6);
+  const bob=Math.round(Math.sin(now/170+e.x)*1.5),flash=now<(e.hitUntil||0);
+  rect('#20313696',x+3,y+27,27,5);
   if(e.boss){
-   rect('#3f294e',x+5,y+2,22,27);rect('#b46ac4',x+6,y+5,20,18);
-   rect('#f4ce8e',x+10,y+14,4,5);rect('#f4ce8e',x+21,y+14,4,5);
+   rect('#302b45',x+2,y+2+bob,29,28);
+   rect(flash?'#ffe7d2':'#8d4e99',x+4,y+8+bob,25,19);
+   rect('#493454',x+9,y+3+bob,15,9);
+   rect('#d4b0dd',x+6,y+9+bob,20,4);
+   rect('#f2db9f',x+1,y+5+bob,6,9);rect('#f2db9f',x+26,y+5+bob,6,9);
+   rect('#291e3a',x+9,y+17+bob,5,5);rect('#291e3a',x+21,y+17+bob,5,5);
+   rect('#f9cc7c',x+11,y+18+bob,2,2);rect('#f9cc7c',x+23,y+18+bob,2,2);
   }else if(e.kind){
-   rect('#405a62',x+6,y+3,22,26);rect('#bba678',x+8,y+8,18,14);
+   rect('#273d4a',x+7,y+3+bob,20,28);
+   rect(flash?'#ffe7d2':'#a89b8b',x+7,y+9+bob,20,16);
+   rect('#d3c1a0',x+10,y+9+bob,14,5);
+   rect('#324955',x+5,y+20+bob,5,9);rect('#324955',x+24,y+20+bob,5,9);
+   rect('#302b3d',x+11,y+17+bob,4,3);rect('#302b3d',x+20,y+17+bob,4,3);
   }else{
-   rect('#398366',x+5,y+12,23,16);rect('#75c89c',x+7,y+13,19,11);
-   rect('#213e3a',x+13,y+21,2,2);rect('#213e3a',x+21,y+21,2,2);
+   rect('#286c60',x+4,y+20+bob,25,9);
+   rect(flash?'#ffe7d2':'#69b899',x+5,y+13+bob,24,14);
+   rect('#a3dbad',x+8,y+14+bob,15,4);
+   rect('#275c54',x+9,y+22+bob,4,3);rect('#275c54',x+23,y+22+bob,4,3);
+   rect('#e0dca5',x+13,y+24+bob,3,2);
   }
-  rect('#442f40',x+4,y-7,24,4);rect('#ed9a78',x+4,y-7,24*e.hp/e.maxHP,4);
+  rect('#302c3b',x+3,y-8,26,5);
+  rect('#e5a579',x+4,y-7,24*Math.max(0,e.hp)/e.maxHP,3);
  }
  const x=s.player.x*T,y=s.player.y*T;
- rect('#263e3b80',x+4,y+26,25,4);
- if(atlas?.complete&&atlas.naturalWidth>=192){
+ const walking=now-(s.lastStep||0)<260;
+ const stride=walking?Math.round(Math.sin(now/72)*2):0;
+ rect('#263e3b80',x+4,y+27,25,4);
+ // Brief visible invulnerability feedback rather than invisible damage.
+ const visible=now>=(s.hurtUntil||0)||Math.floor(now/65)%2===0;
+ if(visible&&atlas?.complete&&atlas.naturalWidth>=192){
   const facing={down:0,up:1,left:2,right:3}[s.face];
-  ctx.drawImage(atlas,facing*48,0,48,66,x-5,y-21,42,55);
- }else{
-  rect('#f4c28e',x+9,y-1,14,13);rect('#875c78',x+7,y+12,20,16);
+  ctx.drawImage(atlas,facing*48,0,48,66,x-5,y-21+stride,42,55);
+ }else if(visible){
+  rect('#f4c28e',x+9,y-1+stride,14,13);
+  rect('#875c78',x+7,y+12+stride,20,16);
   rect('#40373c',x+8,y+26,6,5);rect('#40373c',x+19,y+26,6,5);
  }
  if(now<s.attackUntil){
-  const v=DIR[s.face];rect('#c9eef0',x+11+v[0]*21,y+5+v[1]*20,11,16);
+  const [vx,vy]=DIR[s.face];
+  const sx=x+14+vx*20,sy=y+14+vy*18;
+  rect('#5887a0',sx-6,sy-8,14,21);
+  rect('#efffff',sx-3,sy-10,6,21);
+  rect('#b7e6e5',sx+4,sy-4,4,12);
+  rect('#ffefba',sx-7,sy+7,19,3);
+ }
+ for(const fx of s.sparks){
+  if(fx.until<=now)continue;
+  const f=Math.max(0,(fx.until-now)/240),px=fx.x*T+16,py=fx.y*T+15;
+  rect('#fff1b2',px-9*f,py-8*f,5,5);
+  rect('#b9edeb',px+6*f,py-5*f,4,6);
+  rect('#ffd4a5',px-1,py+8*f,3,5);
+ }
+ s.sparks=s.sparks.filter(f=>f.until>now);
+ if(now<(s.hurtUntil||0)){
+  ctx.fillStyle='rgba(235,79,83,0.12)';ctx.fillRect(0,0,X,Y);
  }
  if(s.completed||s.defeated){
   rect('#101b31ea',24,138,X-48,134);ctx.strokeStyle='#e0c686';ctx.lineWidth=4;
@@ -121,7 +189,7 @@ function step(dir){
  const s=state;if(!s||s.completed||s.defeated||!DIR[dir])return false;
  s.face=dir;const [dx,dy]=DIR[dir],x=s.player.x+dx,y=s.player.y+dy;
  if(blocked(x,y)||s.enemies.some(e=>e.x===x&&e.y===y))return false;
- s.player=loc(x,y);
+ s.player=loc(x,y);s.lastStep=performance.now();
  if(s.roomClear&&x===15&&y===6){
   if(s.room===s.rooms){s.completed=true;announce('CLEARED · Local prototype rewards only');$('lwDResult').hidden=false;
    $('lwDResult').textContent='VICTORY · '+s.gold+' local test gold · '+s.kills+' enemies';}
@@ -136,33 +204,53 @@ function attack(){
  const [dx,dy]=DIR[s.face],front=loc(s.player.x+dx,s.player.y+dy);
  let hit=false;
  for(const e of [...s.enemies])if(dist(e,front)<=1){
-  hit=true;e.hp-=2;
+  hit=true;e.hp-=2;e.hitUntil=now+145;e.stunnedUntil=now+210;
+  s.sparks.push({x:e.x,y:e.y,until:now+240});
   if(e.hp<=0){s.enemies.splice(s.enemies.indexOf(e),1);s.gold+=e.boss?40:4;s.kills++}
  }
  if(!s.enemies.length&&!s.roomClear){s.roomClear=true;announce('ROOM CLEARED — take the glowing exit →')}
  else if(hit)announce('SWORD HIT!');
  return hit;
 }
+// Find a short legal route to an adjacent strike tile; never stand inside
+// the player, another enemy, a wall, or the exit. Small rooms bound the BFS.
+function chase(enemy){
+ const s=state,seen=new Set([enemy.x+','+enemy.y]);
+ const queue=[{x:enemy.x,y:enemy.y,first:null}];
+ const occupied=(x,y)=>blocked(x,y)||(x===15&&y===6)||
+  (x===s.player.x&&y===s.player.y)||
+  s.enemies.some(other=>other!==enemy&&other.x===x&&other.y===y);
+ for(let n=0;n<queue.length;n++){
+  const p=queue[n];
+  if(dist(p,s.player)===1){
+   if(p.first){enemy.x=p.first.x;enemy.y=p.first.y}
+   return;
+  }
+  const ordered=Object.values(DIR).sort((a,b)=>
+   dist(loc(p.x+a[0],p.y+a[1]),s.player)-
+   dist(loc(p.x+b[0],p.y+b[1]),s.player));
+  for(const [dx,dy] of ordered){
+   const x=p.x+dx,y=p.y+dy,key=x+','+y;
+   if(seen.has(key)||occupied(x,y))continue;
+   seen.add(key);queue.push({x,y,first:p.first||loc(x,y)});
+  }
+ }
+}
 function tick(){
  const s=state;if(!s||s.completed||s.defeated)return;
  const now=performance.now();
  for(const e of s.enemies){
-  if(dist(e,s.player)<=1){
+  if(now<(e.stunnedUntil||0))continue;
+  if(dist(e,s.player)===1){
    if(now>=e.lastAttack&&now>=s.invulnUntil){
     s.hp=Math.max(0,s.hp-(e.boss?3:s.kind==='challenge'?2:1));
-    s.invulnUntil=now+390;e.lastAttack=now+720;
+    s.invulnUntil=now+650;s.hurtUntil=now+400;
+    e.lastAttack=now+(e.boss?930:820);
     if(!s.hp){s.defeated=true;announce('DEFEATED — retry or return to world')}
+    else announce('HIT! Dodge away, then counterattack');
    }
-  }else if(now-e.lastMove> (s.kind==='challenge'?390:560)){
-   e.lastMove=now;
-   const dx=Math.sign(s.player.x-e.x),dy=Math.sign(s.player.y-e.y);
-   for(const [vx,vy] of [[dx,0],[0,dy]]){
-    const x=e.x+vx,y=e.y+vy;
-    if((vx||vy)&&!blocked(x,y)&&!(x===15&&y===6)&&
-      !s.enemies.some(other=>other!==e&&other.x===x&&other.y===y)){
-     e.x=x;e.y=y;break;
-    }
-   }
+  }else if(now-e.lastMove>(s.kind==='challenge'?390:560)){
+   e.lastMove=now;chase(e);
   }
  }
  if(held&&now-heldAt>130){step(held);heldAt=now}
@@ -242,7 +330,8 @@ function start({venue,warrior}={}){
   warrior:warrior||'Training Warrior',kind,room:1,rooms:kind==='challenge'?14:10,
   hp:kind==='challenge'?14:18,maxHP:kind==='challenge'?14:18,player:loc(2,6),
   walls:new Set(),enemies:[],face:'right',gold:0,kills:0,nextAttack:0,
-  attackUntil:0,invulnUntil:0,completed:false,defeated:false,roomClear:false,message:''};
+  attackUntil:0,invulnUntil:0,hurtUntil:0,lastStep:0,sparks:[],
+  completed:false,defeated:false,roomClear:false,message:''};
  root.hidden=false;document.body.classList.add('in-dungeon');$('lwDResult').hidden=true;
  makeRoom();timer=setInterval(tick,170);raf=requestAnimationFrame(render);return true;
 }
@@ -254,7 +343,8 @@ function snapshot(){
  if(!state)return {active:false};
  return {active:!root.hidden,room:state.room,rooms:state.rooms,hp:state.hp,maxHP:state.maxHP,
   enemies:state.enemies.length,cleared:state.roomClear,completed:state.completed,
-  defeated:state.defeated,kind:state.kind,player:{...state.player},gold:state.gold};
+  defeated:state.defeated,kind:state.kind,player:{...state.player},face:state.face,
+  gold:state.gold,kills:state.kills,bossHP:state.enemies.find(e=>e.boss)?.hp??null};
 }
 function debugClearRoom(){
  if(!state||!(new URLSearchParams(location.search).has('dev')||window.LibationDeveloper?.enabled()))return false;
@@ -270,5 +360,17 @@ function debugCombatEncounter(){
  announce('DEV COMBAT CHECK: use ATTACK to defeat adjacent enemy');
  return true;
 }
-window.LibationDungeon=Object.freeze({start,stop,snapshot,move:step,attack,debugClearRoom,debugCombatEncounter});
+// Boss combat fixture uses the actual final-room guardian health/damage;
+// it only repositions the encounter in explicit developer sessions.
+function debugBossEncounter(){
+ if(!state||!(new URLSearchParams(location.search).has('dev')||window.LibationDeveloper?.enabled()))return false;
+ const s=state;s.room=s.rooms;makeRoom();s.player=loc(2,6);s.face='right';
+ s.enemies=[{x:3,y:6,hp:s.kind==='challenge'?17:12,
+  maxHP:s.kind==='challenge'?17:12,boss:true,kind:0,
+  lastMove:performance.now(),lastAttack:performance.now()+900}];
+ s.nextAttack=0;s.invulnUntil=performance.now()+850;
+ announce('DEV BOSS CHECK: defeat the real guardian with sword attacks');
+ return true;
+}
+window.LibationDungeon=Object.freeze({start,stop,snapshot,move:step,attack,debugClearRoom,debugCombatEncounter,debugBossEncounter});
 })();
