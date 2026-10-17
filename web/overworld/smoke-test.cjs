@@ -305,6 +305,21 @@ const fs=require('fs');
  if(Math.abs(resetAvatar.spriteHeight-baseAvatar.spriteHeight)>3||
     Math.abs(resetAvatar.shadowWidth-baseAvatar.shadowWidth)>3)
   throw Error('Character size failed to restore after zooming in: '+JSON.stringify({baseAvatar,resetAvatar}));
+ await page.waitForFunction(()=>window.LibationPaintedAvatar?.ready()===true,null,{timeout:12000});
+ const illustration=await page.evaluate(async()=>{
+  const atlas=new Image();atlas.src='./avatar_jrpg_strip.avif';await atlas.decode();
+  const spr=document.querySelector('#gpsMarker .sprite');
+  return {atlas:[atlas.naturalWidth,atlas.naturalHeight],
+   rendered:[spr?.naturalWidth,spr?.naturalHeight],
+   style:spr?getComputedStyle(spr).imageRendering:'missing',
+   source:window.LibationPaintedAvatar?.source};
+ });
+ console.log('APPROVED JRPG ANIMATED ART:',JSON.stringify(illustration));
+ if(illustration.atlas[0]!==640||illustration.atlas[1]!==140||
+  illustration.rendered[0]!==80||illustration.rendered[1]!==140||
+  illustration.style==='pixelated'||illustration.source!=='approved-illustration')
+  throw Error('Approved high-resolution avatar art did not render: '+JSON.stringify(illustration));
+ await page.screenshot({path:'/tmp/libation-approved-avatar.png',fullPage:false});
  const polishedAvatar=await page.evaluate(()=>{
   const module=window.LibationJRPGAvatar;
   const image=document.querySelector('#gpsMarker img.sprite');
