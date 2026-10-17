@@ -361,9 +361,11 @@ body.game-geography-ready #map canvas.maplibregl-canvas,
 body:not(.game-geography-ready) #map canvas.maplibregl-canvas {
  opacity:1!important;visibility:visible!important
 }
-#gameWorld,#gameOverworldArt,#illustratedBackdrop,#offlineCanvas,#worldScenery{
+#gameWorld,#gameOverworldArt,#illustratedBackdrop,#offlineCanvas{
  display:none!important;opacity:0!important;pointer-events:none!important
 }
+body.live-map #worldScenery{display:block!important;opacity:1!important;pointer-events:none!important}
+body:not(.live-map) #worldScenery{display:none!important}
 #map .maplibregl-marker,#map #gpsMarker{opacity:1!important;visibility:visible!important}
 #map .maplibregl-canvas-container{overflow:hidden}
 #mapStats{max-width:160px}
@@ -1310,6 +1312,7 @@ async function startLive(){
      $('#demoMarkers').style.display='none';
      updateStatus('MAP<br>ONLINE',true);
      styleOverworld();addGeographicBuildingDepth();addGeographicTerrainTextures();addGeographicLandmarkArt();updateWorldTimeTheme();
+     initScenery();rebuildScenery();
      if(worldTimeRefreshTimer)clearInterval(worldTimeRefreshTimer);
      worldTimeRefreshTimer=setInterval(()=>{if(mapLoaded&&provider==='osm')updateWorldTimeTheme()},60000);document.body.classList.remove('offline-scenic','game-geography-ready');document.body.classList.add('live-map','go-perspective','stable-map');
      // Avoid creating hundreds of DOM/world objects on every viewport change.
@@ -1320,8 +1323,8 @@ async function startLive(){
     });
    map.on('moveend',()=>{lastPosition=position();updateZoom()});
    // Tile POIs are checked only after the movement has settled.
-   map.on('idle',()=>{if(gpsTransitionFrame===null)integrateMapTileVenues()});
-   map.on('move',()=>{updateGpsOverlay();syncAdventureCameraState();refreshCameraRelativeFacing()});map.on('zoom',()=>{updateZoom();updateGeographicAvatarScale()});
+   map.on('idle',()=>{if(gpsTransitionFrame===null)integrateMapTileVenues();rebuildScenery()});
+   map.on('move',()=>{updateGpsOverlay();syncAdventureCameraState();refreshCameraRelativeFacing();drawScenery()});map.on('zoom',()=>{updateZoom();updateGeographicAvatarScale()});
    // Retry a second geographic map source if the vector style cannot load.
    // We never use fictional scene art to impersonate real GPS/map geography.
    let rasterFallbackAttempted=false;
@@ -1441,54 +1444,68 @@ function localHash(a,b){
 }
 function rebuildScenery(){
  if(!mapLoaded||provider!=='osm'||!map?.isStyleLoaded())return;
- initScenery();
- const b=map.getBounds(),sw=b.getSouthWest(),ne=b.getNorthEast();
- const mid=(sw.lat+ne.lat)*.5;
- const stepLat=0.00028,stepLon=stepLat/Math.max(.35,Math.cos(mid*Math.PI/180));
- const area=[Math.floor(sw.lat/stepLat),Math.ceil(ne.lat/stepLat),
-             Math.floor(sw.lng/stepLon),Math.ceil(ne.lng/stepLon)].join(':');
+ initScenery();if(!sceneryCanvas)return;
+ const b=map.getBounds(),sw=b.getSouthWest(),ne=b.getNorthEast(),mid=(sw.lat+ne.lat)/2;
+ // Deterministic small cells, with only land-safe points projected onto the map.
+ const dy=.000105,dx=dy/Math.max(.35,Math.cos(mid*Math.PI/180));
+ const area=[Math.floor(sw.lat/dy),Math.ceil(ne.lat/dy),
+  Math.floor(sw.lng/dx),Math.ceil(ne.lng/dx)].join(':');
  if(lastSceneryArea===area&&sceneryPoints.length)return;
  lastSceneryArea=area;
- const items=[];
- const n0=Math.floor(sw.lat/stepLat)-1,n1=Math.ceil(ne.lat/stepLat)+1;
- const e0=Math.floor(sw.lng/stepLon)-1,e1=Math.ceil(ne.lng/stepLon)+1;
- for(let ni=n0;ni<=n1;ni++)for(let ei=e0;ei<=e1;ei++){
-  const seed=localHash(ni,ei);
-  if(seed<.25)continue;
-  const lat=(ni+.18+localHash(ei,ni)*.65)*stepLat;
-  const lon=(ei+.18+localHash(ni+7,ei-17)*.65)*stepLon;
-  const p=map.project([lon,lat]);
-  if(p.x<-35||p.y<-35||p.x>map.getCanvas().clientWidth+35||p.y>map.getCanvas().clientHeight+35)continue;
-  if(currentGeolocation&&geoMeters(currentGeolocation,[lon,lat])<17)continue;
-  let layers=[];
-  try{layers=map.queryRenderedFeatures([p.x,p.y])||[]}catch(_){}
-  const ids=layers.map(f=>(f.layer?.id||'').toLowerCase());
-  if(ids.some(id=>/(water|lake|river|wetland|sea|ocean|road|highway|bridge|tunnel|path|street|motorway|primary|secondary)/.test(id)))continue;
-  const building=ids.some(id=>/(building|house|structure)/.test(id));
-  const forest=ids.some(id=>/(forest|wood|park|vegetation|tree|natural)/.test(id));
-  const urban=ids.some(id=>/(residential|urban|commercial|industrial|landuse)/.test(id));
-  const kind=building?(seed>.38?'house':'flowers'):forest?(seed>.47?'tree':'bush'):urban?(seed>.82?'tree':seed>.5?'bush':'grass'):(seed>.85?'rock':seed>.6?'bush':seed>.43?'flowers':'grass');
-  items.push({lon,lat,kind,variant:Math.floor(localHash(ni+30,ei+19)*3)});
-  if(items.length>=170)break;
+ const items=[],width=map.getCanvas().clientWidth,height=map.getCanvas().clientHeight;
+ const minY=Math.floor(sw.lat/dy)-1,maxY=Math.ceil(ne.lat/dy)+1;
+ const minX=Math.floor(sw.lng/dx)-1,maxX=Math.ceil(ne.lng/dx)+1;
+ let attempts=0;
+ outer:for(let iy=minY;iy<=maxY;iy++)for(let ix=minX;ix<=maxX;ix++){
+  const seed=localHash(iy,ix);
+  if(seed<.40)continue;
+  const lat=(iy+.15+localHash(ix,iy)*.70)*dy;
+  const lon=(ix+.15+localHash(iy+7,ix-17)*.70)*dx;
+  const v=map.project([lon,lat]);
+  if(v.x<-40||v.y<-55||v.x>width+40||v.y>height+55)continue;
+  if(currentGeolocation&&geoMeters(currentGeolocation,[lon,lat])<15)continue;
+  if(++attempts>480)break outer;
+  let features=[];
+  try{features=map.queryRenderedFeatures([v.x,v.y])||[]}catch(_){}
+  const tags=features.flatMap(f=>[String(f.layer?.id||'').toLowerCase(),
+   String(f.properties?.class||'').toLowerCase()]);
+  // No decorative sprites on mapped streets, sidewalks, structures or water.
+  if(tags.some(k=>/(water|lake|river|wetland|sea|ocean|road|highway|bridge|tunnel|path|street|motorway|primary|secondary|building|house|structure|parking|railway)/.test(k)))continue;
+  const forest=tags.some(k=>/(forest|wood|park|vegetation|tree|natural|meadow|grass)/.test(k));
+  const urban=tags.some(k=>/(residential|urban|commercial|industrial|landuse)/.test(k));
+  const kind=forest?(seed>.66?'tree':seed>.49?'bush':seed>.44?'flowers':'grass'):
+   urban?(seed>.91?'tree':seed>.72?'bush':seed>.61?'flowers':'grass'):
+   seed>.94?'tree':seed>.77?'bush':seed>.69?'rock':seed>.55?'flowers':'grass';
+  items.push({lon,lat,kind,variant:Math.floor(localHash(iy+30,ix+19)*3)});
+  if(items.length>=220)break outer;
  }
  sceneryPoints=items;
+ const host=$('#map');
+ host.dataset.natureDecor=String(items.length);
+ host.dataset.natureTrees=String(items.filter(v=>v.kind==='tree').length);
+ host.dataset.natureTypes=String(new Set(items.map(v=>v.kind)).size);
  drawScenery();
 }
 function drawScenery(){
- if(!sceneryCanvas||!sceneryCtx||!map||provider!=='osm')return;
- if(sceneryDrawQueued)return;
+ if(!sceneryCanvas||!sceneryCtx||!map||provider!=='osm'||sceneryDrawQueued)return;
  sceneryDrawQueued=true;
  requestAnimationFrame(()=>{
   sceneryDrawQueued=false;
+  if(!sceneryCtx||!map||provider!=='osm')return;
   const ctx=sceneryCtx,w=sceneryCanvas.clientWidth,h=sceneryCanvas.clientHeight;
   ctx.clearRect(0,0,w,h);
+  // Sort by screen depth, preserving real map projections.
+  const visible=[];
   for(const item of sceneryPoints){
    const v=map.project([item.lon,item.lat]);
-   if(v.x<-35||v.y<-45||v.x>w+35||v.y>h+45)continue;
-   const img=sceneryImages[item.kind+item.variant];
-   if(!img)continue;
-   const ww=item.kind==='tree'?44:item.kind==='house'?46:item.kind==='bush'?31:item.kind==='rock'?24:26;
-   const hh=item.kind==='tree'?57:item.kind==='house'?58:item.kind==='bush'?37:item.kind==='rock'?28:33;
+   if(v.x<-45||v.y<-60||v.x>w+45||v.y>h+45)continue;
+   visible.push({item,v});
+  }
+  visible.sort((a,b)=>a.v.y-b.v.y);
+  for(const {v,item} of visible){
+   const img=sceneryImages[item.kind+item.variant];if(!img)continue;
+   const ww=item.kind==='tree'?44:item.kind==='bush'?31:item.kind==='rock'?24:26;
+   const hh=item.kind==='tree'?57:item.kind==='bush'?37:item.kind==='rock'?28:33;
    ctx.drawImage(img,Math.round(v.x-ww/2),Math.round(v.y-hh),ww,hh);
   }
  });
