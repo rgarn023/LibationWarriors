@@ -369,9 +369,13 @@ function step(dir){
  s.face=dir;const [dx,dy]=DIR[dir],x=s.player.x+dx,y=s.player.y+dy;
  if(blocked(x,y)||s.enemies.some(e=>e.x===x&&e.y===y))return false;
  s.player=loc(x,y);s.lastStep=performance.now();
- const destination=s.current.edges[dir],door=DOOR[dir];
- if(s.roomClear&&destination!==undefined&&x===door.x&&y===door.y){
-  s.nodeIndex=destination;makeRoom(OPP[dir]);return true;
+ // A doorway responds to the tile reached, regardless of whether the
+ // player approached its threshold from the side or straight on.
+ if(s.roomClear)for(const side of ORDER){
+  const destination=s.current.edges[side],door=DOOR[side];
+  if(destination!==undefined&&x===door.x&&y===door.y){
+   s.nodeIndex=destination;makeRoom(OPP[side]);return true;
+  }
  }
  if(s.roomClear&&s.current.type==='boss'&&x===8&&y===6){
   s.completed=true;announce('GUARDIAN SEAL CLAIMED · local prototype rewards only');
