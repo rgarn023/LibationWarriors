@@ -287,7 +287,7 @@ function identity(v){
 function pose(g,who,dir,action,frame){
  const woman=who.gender==='female',walking=action==='walk',attacking=action==='attack';
  const walk=walking?[0,3,0,-3][frame]:0;
- const bodyShift=action==='hurt'?2:action==='idle'&&frame%2?1:0;
+ const bodyShift=action==='hurt'?(frame%2?0:3):action==='idle'&&frame%2?1:0;
  const swing=attacking?[0,5,11,4][frame]:0;
  const coat=woman?'#245b98':'#91333c',coatLight=woman?'#64b7de':'#c95e4d';
  const dark=woman?'#193b64':'#2d2637',hair=woman?'#f0c36d':'#362737';
