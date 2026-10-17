@@ -201,17 +201,17 @@ const fs=require('fs');
   roofCount:Number(el.dataset.buildingLayers)
  }));
  console.log('REAL-FOOTPRINT ROOF ART:',JSON.stringify(buildingsPresentation));
- if(buildingsPresentation.appearance!=='subtle-outlined-footprints'||
+ if(buildingsPresentation.appearance!=='dark-defined-footprints'||
   buildingsPresentation.depth!=='flat-outlines'||
   buildingsPresentation.blocks!=='removed'||
   buildingsPresentation.houseIcons!=='yes'||buildingsPresentation.roofCount<2)
   throw Error('Buildings still render as filled roofs or tall blocks: '+JSON.stringify(buildingsPresentation));
  const mappedPaint=await page.evaluate(()=>window.LibationWorldDiagnostics.buildingPaint());
- console.log('SUBTLE BUILDING FOOTPRINT RENDER:',JSON.stringify(mappedPaint));
- if(!mappedPaint.footprint||mappedPaint.fillOpacity>.25||
-    !mappedPaint.border||mappedPaint.strokeOpacity<.65||
+ console.log('DARKER REAL BUILDING FOOTPRINT RENDER:',JSON.stringify(mappedPaint));
+ if(!mappedPaint.footprint||mappedPaint.fillOpacity<.60||mappedPaint.fillOpacity>.75||
+    !mappedPaint.border||mappedPaint.strokeOpacity<.90||
     mappedPaint.roofOrSolidLayers.length||mappedPaint.texture!=='subtle')
-  throw Error('Building polygons are too heavy or still contain old roof art: '+JSON.stringify(mappedPaint));
+  throw Error('Building footprint contrast incorrect or old roof art returned: '+JSON.stringify(mappedPaint));
  const buildings=await page.locator('#map').evaluate(el=>({
   status:el.dataset.geographicBuildings,
   layers:Number(el.dataset.buildingLayers),
@@ -453,6 +453,17 @@ const fs=require('fs');
  await page.locator('#closeDrawer').click();
  const initially=await page.evaluate(()=>window.LibationDeveloper.enabled());
  if(!initially)throw Error('Settings failed to enable developer portals');
+ // Claim two distinctly styled demo warriors using real user-facing buttons,
+ // never inject ownership into the account or gameplay internals.
+ for(const upc of ['712340000033','712340000032']){
+  await page.locator('[data-panel="summon"]').click();
+  await page.locator('#upcInput').fill(upc);
+  await page.locator('#claimDemo').click();
+  await page.locator('#demoFinish').click();
+  if(!await page.locator('#drawerContent').getByText('UPC '+upc).isVisible())
+   throw Error('Demo warrior not visible in collection: '+upc);
+ }
+ await page.locator('#closeDrawer').click();
  await page.locator('#devAddRupture').click();
  await page.locator('#devAddWormhole').click();
  await page.waitForTimeout(250);
@@ -466,8 +477,42 @@ const fs=require('fs');
  // Select a real clickable portal marker, not an internal test-only function.
  await page.locator('.dev-select-portal[data-kind="challenge"]').click();
  await page.locator('#enterVenue').click();
+ const choices=page.locator('#lwWarriorChoices [data-warrior-index]');
+ if(await choices.count()!==2)throw Error('Dungeon staging cannot select both claimed warriors');
+ const portraits=await page.locator('#lwWarriorChoices .lwWarriorSpritePreview').evaluateAll(imgs=>
+  imgs.map(i=>i.src));
+ if(portraits.length!==2||portraits[0]===portraits[1])
+  throw Error('Male and female warrior sprites are not distinct');
+ const frames=await page.evaluate(()=>{
+  const d=window.LibationDungeon,w={id:'abc',gender:'female',faction:'Pirate'};
+  const actions=['idle','walk','attack','hurt','defeat'],unique={};
+  for(const action of actions){
+   const a=d.previewWarrior(w,'down',action,0),b=d.previewWarrior(w,'down',action,1);
+   unique[action]=a!==b;
+  }
+  unique.directions=new Set(['up','down','left','right'].map(dir=>
+   d.previewWarrior(w,dir,'idle',0))).size===4;
+  return unique;
+ });
+ if(!frames.walk||!frames.attack||!frames.hurt||!frames.directions)
+  throw Error('Dungeon warrior directional frames are not genuinely animated: '+JSON.stringify(frames));
+ await choices.nth(1).click();
+ if(await choices.nth(1).getAttribute('aria-pressed')!=='true')
+  throw Error('Second warrior selection not active');
+ await page.screenshot({path:'/tmp/libation-warrior-selection.png',fullPage:false});
  await page.locator('#readyButton').click();
  await page.waitForFunction(()=>window.LibationDungeon?.snapshot().active===true);
+ const selectedHero=await page.evaluate(()=>window.LibationDungeon.snapshot().warrior);
+ if(selectedHero?.name!=='Moonblade'||selectedHero.gender!=='female')
+  throw Error('Dungeon failed to use selected warrior: '+JSON.stringify(selectedHero));
+ const buttonText=await page.locator('#lwDAttack').evaluate(btn=>({
+  visibleText:btn.textContent.trim(),labelCount:btn.querySelectorAll('.lwDAttackLabel').length,
+  label:btn.querySelector('.lwDAttackLabel')?.textContent,
+  shadow:getComputedStyle(btn.querySelector('.lwDAttackLabel')).textShadow
+ }));
+ if(buttonText.label!=='ATTACK'||buttonText.labelCount!==1||buttonText.shadow!=='none')
+  throw Error('Attack button has doubled / ghosted label: '+JSON.stringify(buttonText));
+ console.log('SELECTED WARRIOR + ANIMATION FRAMES:',JSON.stringify({selectedHero,frames,buttonText}));
  // Graph property tests: generated world is connected, spatially unique,
  // reciprocal and different across many seeds and both dungeon difficulties.
  const layouts=await page.evaluate(()=>{
