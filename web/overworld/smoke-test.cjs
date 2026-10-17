@@ -556,13 +556,14 @@ const fs=require('fs');
   throw Error('Actual boss combat did not yield proper defeat: '+JSON.stringify(defeated));
  await page.screenshot({path:'/tmp/libation-dungeon-defeat.png',fullPage:false});
  await page.locator('#lwDRetry').click();
- const restored=await page.evaluate(()=>window.LibationDungeon.snapshot());
- if(!restored.active||restored.defeated||restored.hp!==restored.maxHP||restored.room!==1)
-  throw Error('Retry failed to restore playable dungeon: '+JSON.stringify(restored));
+ const afterDefeatRetry=await page.evaluate(()=>window.LibationDungeon.snapshot());
+ if(!afterDefeatRetry.active||afterDefeatRetry.defeated||
+    afterDefeatRetry.hp!==afterDefeatRetry.maxHP||afterDefeatRetry.room!==1)
+  throw Error('Retry failed to restore playable dungeon: '+JSON.stringify(afterDefeatRetry));
  await page.locator('#lwDReturn').click();
  if((await page.evaluate(()=>window.LibationDungeon.snapshot())).active)
   throw Error('Return failed to exit dungeon after defeat/retry');
- console.log('REAL BOSS DEFEAT AND RETRY:',JSON.stringify({defeated,restored}));
+ console.log('REAL BOSS DEFEAT AND RETRY:',JSON.stringify({defeated,afterDefeatRetry}));
  await page.locator('#devPortalClear').click();
  if((await page.locator('.pixel-marker.demo.maplibregl-marker').count())!==0)
   throw Error('Developer portals were not cleared');

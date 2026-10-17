@@ -50,6 +50,7 @@ jobs:
           node --check /tmp/libation-overworld-check.js
           node --check web/overworld/game-world.js
           node --check web/overworld/dungeon.js
+          node --check web/overworld/smoke-test.cjs
           test -s web/overworld/dungeon.js
           test -s web/overworld/game-world.js
       - name: Browser smoke test of GPS game canvas
