@@ -275,51 +275,138 @@ function drawEnemy(e,now){
  rect('#2e2e3f',x+2,y-11,28,5);
  rect('#eea27e',x+4,y-10,24*Math.max(0,e.hp)/e.maxHP,3);
 }
-function drawHero(now){
- const s=state,x=s.player.x*T,y=s.player.y*T;
- const walking=now-s.lastStep<220,step=walking?Math.round(Math.sin(now/75)*2):0;
- const hit=now<s.hurtUntil;if(hit&&Math.floor(now/70)%2===1)return;
- const blue=seed(s.warrior)%3,cloak=['#573f78','#366278','#657249'][blue];
- const tunic=['#468a83','#537ab2','#b07a57'][blue];
- const py=y-13+step;
- rect('#1b2b31aa',x+3,y+28,27,5);
- // A fully original four-facing 16-bit adventurer: mantle, layered armor,
- // hair, face, gloves, greaves and a visible sword hand.
- rect('#252c43',x+8,py+25,7,19);rect('#252c43',x+20,py+25,7,19);
- rect('#d1b88e',x+7,py+38,9,5);rect('#d1b88e',x+19,py+38,9,5);
- rect(cloak,x+3,py+13,29,22);
- rect('#d6b26a',x+6,py+16,24,4);
- rect(tunic,x+9,py+17,19,20);
- rect('#e2bf86',x+12,py+29,14,4);
- rect('#d9b18d',x+4,py+22,6,9);rect('#d9b18d',x+29,py+22,6,9);
- rect('#9dbabb',x+3,py+16,9,10);rect('#9dbabb',x+25,py+16,9,10);
- rect('#425569',x+9,py+33,19,3);
- if(s.face==='up'){
-  rect('#49394a',x+11,py+1,18,17);
-  rect('#796276',x+13,py+3,14,13);
-  rect('#e4c992',x+13,py+14,12,4);
- }else if(s.face==='left'||s.face==='right'){
-  const facingRight=s.face==='right';
-  rect('#eab997',x+10,py+3,17,16);
-  rect('#59415b',x+9,py+1,18,8);
-  rect('#392e41',x+(facingRight?22:11),py+10,3,3);
-  rect('#caa47f',x+(facingRight?25:9),py+14,3,3);
+// Selection and gameplay share the exact same four-direction, five-state atlas.
+const HERO_W=48,HERO_H=64,ACTIONS=['idle','walk','attack','hurt','defeat'];
+const heroCache=new Map();
+function identity(v){
+ return v&&typeof v==='object'?
+  {id:String(v.id||v.code||'training'),name:String(v.name||'Warrior'),
+   faction:String(v.faction||'Pirate'),gender:v.gender==='female'?'female':'male'}:
+  {id:'training',name:String(v||'Training Warrior'),faction:'Pirate',gender:'male'};
+}
+function pose(g,who,dir,action,frame){
+ const woman=who.gender==='female',walking=action==='walk',attacking=action==='attack';
+ const walk=walking?[0,3,0,-3][frame]:0;
+ const bodyShift=action==='hurt'?2:action==='idle'&&frame%2?1:0;
+ const swing=attacking?[0,5,11,4][frame]:0;
+ const coat=woman?'#245b98':'#91333c',coatLight=woman?'#64b7de':'#c95e4d';
+ const dark=woman?'#193b64':'#2d2637',hair=woman?'#f0c36d':'#362737';
+ const gold='#ddba73',skin=woman?'#f1bf94':'#d6a077';
+ const p=(c,x,y,w,h)=>{g.fillStyle=c;g.fillRect(x,y,w,h)};
+ g.save();
+ if(dir==='left'){g.translate(48,0);g.scale(-1,1)}
+ if(action==='defeat'){g.translate(-4,43);g.rotate(-Math.PI/2);g.translate(4,-43)}
+ p('#18313877',7,57,35,4);
+ // Two separate boots animate out of phase on actual walking frames.
+ for(let i=0;i<2;i++){
+  const x=i?28:14,dy=bodyShift+(i?walk:-walk);
+  p('#242b42',x,40+dy,8,15);p('#6f7480',x+2,43+dy,4,7);
+  p('#262334',x-2,54+dy,13,5);p(gold,x-2,55+dy,12,2);
+ }
+ // Distinctive red pirate captain or blue-gold magic corsair silhouette.
+ p('#1b263b',8,24+bodyShift,31,27);
+ p(dark,8,28+bodyShift,33,21);
+ p(coat,12,27+bodyShift,25,21);
+ p(coatLight,15,30+bodyShift,18,12);
+ p(gold,15,39+bodyShift,18,3);p('#2b3040',21,41+bodyShift,8,5);
+ if(woman){
+  p('#133e66',8,25+bodyShift,6,26);p('#215c9a',35,25+bodyShift,6,26);
+  p('#f3ce7a',9,45+bodyShift,3,4);
  }else{
-  rect('#eab997',x+10,py+4,18,16);
-  rect('#59415b',x+9,py+1,20,10);
-  rect('#b48564',x+13,py+10,13,3);
-  rect('#332d41',x+13,py+12,3,3);rect('#332d41',x+23,py+12,3,3);
+  p('#b34746',8,41+bodyShift,6,9);p('#b34746',35,40+bodyShift,5,10);
+  p('#edd28f',10,31+bodyShift,5,5);
  }
- rect('#f4d79c',x+17,py+21,5,7);
- if(now<s.attackUntil){
-  const [dx,dy]=DIR[s.face],phase=(s.attackUntil-now)/205;
-  const sx=x+18+dx*24,sy=y+7+dy*20;
-  rect('#e6faff',sx-8,sy-7,15,5);
-  rect('#f8fcff',sx-4,sy-12,6,21);
-  rect('#84ccd7',sx+4,sy-5,5,17);
-  rect('#fff0b6',sx-10,sy+9,21,4);
-  rect('#c9e8e3',sx-15+phase*4,sy-14,6,5);
+ const handY=attacking?Math.max(0,swing-2):0;
+ p('#253144',7,29+bodyShift,9,14);p(gold,8,29+bodyShift,9,4);
+ p(skin,9,40+bodyShift,7,6);
+ p('#263548',32,28+bodyShift-handY,10,15);
+ p(gold,32,29+bodyShift-handY,9,4);
+ p(skin,34,40+bodyShift-handY,7,6);
+ // True direction-specific faces, hair and headgear.
+ p(hair,14,7+bodyShift,24,22);
+ if(dir==='up'){
+  p('#7e5e58',17,13+bodyShift,20,15);
+  p(hair,16,10+bodyShift,21,8);
+ }else{
+  p(skin,16,13+bodyShift,21,16);
+  if(dir==='down'){
+   p('#22263a',21,23+bodyShift,3,3);
+   p('#22263a',31,23+bodyShift,3,3);
+   p('#a77862',26,26+bodyShift,4,2);
+  }else{
+   p('#283042',32,21+bodyShift,3,3);
+   p('#ba8b73',36,24+bodyShift,2,2);
+  }
  }
+ if(woman){
+  p(hair,12,16+bodyShift,6,20);p(hair,36,16+bodyShift,5,18);
+  p('#215d97',13,8+bodyShift,27,8);
+  p('#4c99be',16,4+bodyShift,19,8);
+  p('#13395c',7,13+bodyShift,36,6);p(gold,10,14+bodyShift,30,2);
+  p('#fff0b5',24,8+bodyShift,5,5);p('#f1e0a0',34,0+bodyShift,3,9);
+ }else{
+  p('#101c2c',9,5+bodyShift,30,10);
+  p('#262839',5,12+bodyShift,38,7);
+  p(gold,8,12+bodyShift,33,3);
+  p('#152032',13,2+bodyShift,24,7);
+  p('#f1dfbb',24,9+bodyShift,5,4);
+ }
+ if(attacking){
+  const arc=[11,4,-3,0][frame],y=17+bodyShift-handY;
+  p('#a2d7e0',39+arc,y-11,4,26);
+  p('#f5ffff',40+arc,y-12,3,22);
+  p(gold,34+arc,y+12,12,4);
+  p('#d6faf2',34+arc,y-16,5,6);
+ }else if(woman){
+  p('#816040',40,17+bodyShift,3,29);
+  p('#5bb6df',35,8+bodyShift,12,11);
+  p('#fff6c3',39,11+bodyShift,5,5);
+ }else{
+  p('#abbccf',40,21+bodyShift,4,24);
+  p('#f0f5e8',40,20+bodyShift,2,18);
+  p(gold,35,42+bodyShift,12,4);
+ }
+ if(action==='hurt'){p('#ffe3cd99',14,16,21,13);p('#f5887a',8,23,5,8)}
+ g.restore();
+}
+function heroAtlas(v){
+ const who=identity(v),key=who.id+':'+who.gender+':'+who.faction;
+ if(heroCache.has(key))return heroCache.get(key);
+ const atlas=document.createElement('canvas');
+ atlas.width=48*4*ACTIONS.length;atlas.height=64*4;
+ const g=atlas.getContext('2d');g.imageSmoothingEnabled=false;
+ for(let dir=0;dir<4;dir++)for(let a=0;a<ACTIONS.length;a++)for(let f=0;f<4;f++){
+  g.save();g.translate((a*4+f)*48,dir*64);
+  pose(g,who,ORDER[dir],ACTIONS[a],f);g.restore();
+ }
+ if(heroCache.size>16)heroCache.clear();
+ heroCache.set(key,atlas);return atlas;
+}
+function previewWarrior(v,dir='down',action='idle',frame=0){
+ const atlas=heroAtlas(v),c=document.createElement('canvas');
+ c.width=48;c.height=64;const g=c.getContext('2d');
+ g.imageSmoothingEnabled=false;
+ const a=Math.max(0,ACTIONS.indexOf(action)),f=Math.max(0,Math.min(3,frame|0));
+ const row=Math.max(0,ORDER.indexOf(dir));
+ g.drawImage(atlas,(a*4+f)*48,row*64,48,64,0,0,48,64);
+ return c.toDataURL('image/png');
+}
+function heroAnimation(now){
+ const s=state;if(!s)return 'idle';
+ if(s.defeated)return 'defeat';
+ if(now<s.hurtUntil)return 'hurt';
+ if(now<s.attackUntil)return 'attack';
+ if(now<s.walkUntil)return 'walk';
+ return 'idle';
+}
+function drawHero(now){
+ const s=state,x=s.player.x*T,y=s.player.y*T,action=heroAnimation(now);
+ const frame=action==='walk'?s.walkFrame%4:
+  action==='attack'?Math.max(0,Math.min(3,Math.floor((205-(s.attackUntil-now))/55))):
+  action==='hurt'?Math.floor(now/85)%4:action==='defeat'?3:Math.floor(now/550)%2;
+ const sheet=heroAtlas(s.warrior);
+ ctx.drawImage(sheet,(ACTIONS.indexOf(action)*4+frame)*48,ORDER.indexOf(s.face)*64,
+  48,64,x-8,y-31,48,64);
 }
 function drawMap(){
  const map=$('lwDMap');if(!map||!state)return;
@@ -368,7 +455,7 @@ function step(dir){
  const s=state;if(!s||s.completed||s.defeated||!DIR[dir])return false;
  s.face=dir;const [dx,dy]=DIR[dir],x=s.player.x+dx,y=s.player.y+dy;
  if(blocked(x,y)||s.enemies.some(e=>e.x===x&&e.y===y))return false;
- s.player=loc(x,y);s.lastStep=performance.now();
+ s.player=loc(x,y);s.lastStep=performance.now();s.walkUntil=s.lastStep+230;s.walkFrame=(s.walkFrame+1)%4;
  // A doorway responds to the tile reached, regardless of whether the
  // player approached its threshold from the side or straight on.
  if(s.roomClear)for(const side of ORDER){
@@ -475,7 +562,7 @@ function initialize(){
   '<button data-dmove="left" class="left" aria-label="Move left">◀</button>'+
   '<button data-dmove="down" class="down" aria-label="Move down">▼</button>'+
   '<button data-dmove="right" class="right" aria-label="Move right">▶</button></div>'+
-  '<button id="lwDAttack" aria-label="Attack">⚔<small>ATTACK</small></button></div>'+
+  '<button id="lwDAttack" aria-label="Attack" title="Attack"><span class="lwDAttackIcon" aria-hidden="true">⚔</span><span class="lwDAttackLabel">ATTACK</span></button></div>'+
   '<div id="lwDResult" hidden></div>'+
   '<footer><button id="lwDRetry">NEW LAYOUT</button><button id="lwDReturn">RETURN TO WORLD</button></footer>';
  const css=document.createElement('style');css.textContent=
@@ -506,9 +593,13 @@ function initialize(){
  '.lwDPad button{font-size:22px!important;padding:3px!important}'+
  '.lwDPad .up{grid-column:2;grid-row:1}.lwDPad .left{grid-column:1;grid-row:2}'+
  '.lwDPad .down{grid-column:2;grid-row:3}.lwDPad .right{grid-column:3;grid-row:2}'+
- '#lwDAttack{width:88px;height:88px;border-radius:50%!important;background:#79536b!important;font-size:32px}'+
- '#lwDAttack small{display:block;font-size:10px}'+
- '#lwDungeonStage footer{margin-top:auto}#lwDungeonStage footer button{flex:1;min-height:42px}'+
+ '#lwDAttack{width:88px;height:88px;border-radius:50%!important;background:#79536b!important;'+
+ 'display:flex;flex-direction:column;justify-content:center;align-items:center;gap:2px;'+
+ 'padding:5px!important;line-height:1!important;letter-spacing:0;text-shadow:none!important;white-space:nowrap}'+
+ '#lwDAttack .lwDAttackIcon{display:block;font:normal 30px/1 sans-serif;text-shadow:none!important}'+
+ '#lwDAttack .lwDAttackLabel{display:block;font:700 11px/1.1 monospace;text-shadow:none!important}'+
+ '#lwDungeonStage footer{margin-top:auto}#lwDungeonStage footer button{flex:1;min-height:42px;'+
+ 'font-size:11px!important;line-height:1.2;letter-spacing:0;text-shadow:none!important}'+
  '#lwDResult{color:#baffce;text-align:center;padding:5px}'+
  '@media(max-height:690px){.lwDControls{min-height:108px}.lwDPad{transform:scale(.83)}'+
  '#lwDAttack{width:73px;height:73px}.lwDInfo{min-height:48px}#lwDMap{height:44px}}';
@@ -542,11 +633,11 @@ function start({venue,warrior}={}){
  const kind=venue.type,rooms=kind==='challenge'?14:10;
  const runSeed=String(venue.id||venue.name)+':'+Date.now()+':'+Math.random();
  state={venue:{id:String(venue.id||venue.name),name:String(venue.name||'Rift'),type:kind},
-  warrior:warrior||'Training Warrior',kind,rooms,plan:generateLayout(runSeed,rooms),
+  warrior:identity(warrior),kind,rooms,plan:generateLayout(runSeed,rooms),
   nodeIndex:0,visited:new Set(),hp:kind==='challenge'?14:18,
   maxHP:kind==='challenge'?14:18,player:loc(2,6),walls:new Set(),props:[],
   enemies:[],face:'right',gold:0,kills:0,nextAttack:0,
-  attackUntil:0,invulnUntil:0,hurtUntil:0,lastStep:0,sparks:[],
+  attackUntil:0,invulnUntil:0,hurtUntil:0,lastStep:0,walkUntil:0,walkFrame:0,sparks:[],
   completed:false,defeated:false,roomClear:false,message:''};
  root.hidden=false;document.body.classList.add('in-dungeon');$('lwDResult').hidden=true;
  makeRoom();timer=setInterval(tick,100);
@@ -563,7 +654,7 @@ function snapshot(){
  return {active:!root.hidden,room:s.visited.size,rooms:s.rooms,
   hp:s.hp,maxHP:s.maxHP,enemies:s.enemies.length,cleared:s.roomClear,
   completed:s.completed,defeated:s.defeated,kind:s.kind,
-  player:{...s.player},face:s.face,gold:s.gold,kills:s.kills,
+  player:{...s.player},face:s.face,warrior:{...s.warrior},animation:heroAnimation(performance.now()),gold:s.gold,kills:s.kills,
   bossHP:s.enemies.find(e=>e.boss)?.hp??null,
   node:s.nodeIndex,roomType:s.current.type,template:s.current.template,
   exits:{...s.current.edges},layoutSeed:s.plan.seed,visited:[...s.visited],
@@ -604,5 +695,5 @@ function debugBossEncounter(){
  return true;
 }
 window.LibationDungeon=Object.freeze({start,stop,snapshot,move:step,attack,
- inspectLayout,debugClearRoom,debugCombatEncounter,debugBossEncounter});
+ previewWarrior,inspectLayout,debugClearRoom,debugCombatEncounter,debugBossEncounter});
 })();
