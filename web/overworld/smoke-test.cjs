@@ -603,9 +603,11 @@ const fs=require('fs');
   if(d.snapshot().node!==plan.boss)throw Error('Boss room cannot be reached');
   d.debugClearRoom();
   // Walk back out of the altar and then into the center seal.
-  const bossSnap=d.snapshot();
   let guard=0;
-  while(d.snapshot().player.x<8&&guard++<14)d.move('right');
+  while(!d.snapshot().completed&&guard++<20){
+   const p=d.snapshot().player;
+   d.move(p.x<8?'right':p.x>8?'left':p.y<6?'down':'up');
+  }
   const won=d.snapshot();
   if(!won.completed)throw Error('Boss seal cannot complete traversal');
   return {rooms:plan.count,explored:traversed.size,boss:plan.boss,
@@ -636,14 +638,15 @@ const fs=require('fs');
   throw Error('Boss does not cause legitimate defeat: '+JSON.stringify(defeated));
  await page.screenshot({path:'/tmp/libation-dungeon-defeat.png',fullPage:false});
  await page.locator('#lwDRetry').click();
- const restored=await page.evaluate(()=>window.LibationDungeon.snapshot());
- if(!restored.active||restored.defeated||restored.hp!==restored.maxHP||restored.node!==0)
-  throw Error('Restart does not reset health/layout: '+JSON.stringify(restored));
+ const afterDungeonRestart=await page.evaluate(()=>window.LibationDungeon.snapshot());
+ if(!afterDungeonRestart.active||afterDungeonRestart.defeated||
+    afterDungeonRestart.hp!==afterDungeonRestart.maxHP||afterDungeonRestart.node!==0)
+  throw Error('Restart does not reset health/layout: '+JSON.stringify(afterDungeonRestart));
  await page.locator('#lwDReturn').click();
  await page.locator('#devPortalClear').click();
  if((await page.locator('.pixel-marker.demo.maplibregl-marker').count())!==0)
   throw Error('Developer portals not cleared');
- console.log('PLAYABLE PROCEDURAL DUNGEON TEST:',JSON.stringify({layouts,first,positionBefore,positionAfter,progress,rupture,defeated,restored}));
+ console.log('PLAYABLE PROCEDURAL DUNGEON TEST:',JSON.stringify({layouts,first,positionBefore,positionAfter,progress,rupture,defeated,afterDungeonRestart}));
  console.log('V15 STABLE GPS WORLD AUDIT:',JSON.stringify(inspect),
   'BROWSER ERRORS:',JSON.stringify(errors.slice(0,8)));
  if(inspect.mapOpacity<.99||inspect.baseOpacity<.99||
