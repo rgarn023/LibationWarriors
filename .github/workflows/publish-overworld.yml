@@ -74,6 +74,7 @@ jobs:
             /tmp/libation-dungeon-boss.png
             /tmp/libation-dungeon-boss-cleared.png
             /tmp/libation-dungeon-victory.png
+            /tmp/libation-dungeon-defeat.png
             /tmp/libation-world-touch-turn.png
             /tmp/libation-world-walking.png
             /tmp/libation-world-zoomed-in.png

@@ -542,6 +542,27 @@ const fs=require('fs');
  if(rupture.kind!=='rupture'||rupture.rooms!==10||rupture.maxHP!==18)
   throw Error('Regular rupture failed to start: '+JSON.stringify(rupture));
  await page.locator('#lwDExit').click();
+ // Defeat is a real playable outcome: the final boss must be able to
+ // reduce HP to zero, show the defeat overlay, and allow a clean restart.
+ await page.locator('.dev-select-portal[data-kind="challenge"]').click();
+ await page.locator('#enterVenue').click();
+ await page.locator('#readyButton').click();
+ if(!await page.evaluate(()=>window.LibationDungeon.debugBossEncounter()))
+  throw Error('Cannot initialize full-strength defeat scenario');
+ await page.waitForFunction(()=>window.LibationDungeon.snapshot().defeated===true,
+  null,{timeout:15000});
+ const defeated=await page.evaluate(()=>window.LibationDungeon.snapshot());
+ if(defeated.hp!==0||!defeated.active||defeated.completed)
+  throw Error('Actual boss combat did not yield proper defeat: '+JSON.stringify(defeated));
+ await page.screenshot({path:'/tmp/libation-dungeon-defeat.png',fullPage:false});
+ await page.locator('#lwDRetry').click();
+ const restored=await page.evaluate(()=>window.LibationDungeon.snapshot());
+ if(!restored.active||restored.defeated||restored.hp!==restored.maxHP||restored.room!==1)
+  throw Error('Retry failed to restore playable dungeon: '+JSON.stringify(restored));
+ await page.locator('#lwDReturn').click();
+ if((await page.evaluate(()=>window.LibationDungeon.snapshot())).active)
+  throw Error('Return failed to exit dungeon after defeat/retry');
+ console.log('REAL BOSS DEFEAT AND RETRY:',JSON.stringify({defeated,restored}));
  await page.locator('#devPortalClear').click();
  if((await page.locator('.pixel-marker.demo.maplibregl-marker').count())!==0)
   throw Error('Developer portals were not cleared');
