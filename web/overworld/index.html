@@ -394,6 +394,8 @@ const LOCAL_ZOOM=18.25,MIN_LOCAL_ZOOM=17.55,MAX_LOCAL_ZOOM=18.65,LOCAL_RADIUS_ME
 const presets={"Chesapeake, VA":[-76.273,36.768],"Virginia Beach, VA":[-75.976,36.852],"New York, NY":[-73.985,40.748],"Boston, MA":[-71.06,42.356],"Tokyo, Japan":[139.701,35.658]};
 let provider='offline', map=null,gm=null,gmMarkers=[],markers=[],venues=[],demoVenues=[],selectedVenue=null,lastPosition=centerStart.slice(),currentFilter='all',mapLoading=false,mapLoaded=false,fetchSerial=0,fetchController=null,venueTimer=null,searchCity='Your nearby overworld',activePanel='map',avatarKey='712340000032',claimed=new Set(),shadowPath=null,openedAt=Date.now(),countdownHandle=null,loadingHint='',currentGeolocation=null,gpsWatchId=null,gpsAccuracy=null,gpsMarker=null,gpsAccuracyCircle=null,offlineZoom=13,liveMapFailure=false,locationAccess='not-requested',venueCache=new Map(),lastVenueKey='',lastVenueLoadAt=0;
 let toastTimer=null,venueCountMode='idle',followPlayer=true;
+let selectedDungeonWarriorCode=null; // Session-local visual choice, never an acquisition.
+
 const developerPortals=[];
 let developerMode=new URLSearchParams(location.search).has('dev');
 try{developerMode=developerMode||sessionStorage.getItem('lw-dev-mode')==='on'}catch(_){}
@@ -2093,20 +2095,20 @@ function addGeographicBuildingDepth(){
   try{
    const label=all.find(layer=>layer.type==='symbol')?.id;
    if(!map.getLayer(footprint))map.addLayer(copy(l,footprint,'fill',{
-    'fill-color':'#82b6b5','fill-opacity':0.20
+    'fill-color':'#42545c','fill-opacity':0.69
    }),label);
    if(map.hasImage('lw-building-minor-hatch')&&!map.getLayer(hatch))
     map.addLayer(copy(l,hatch,'fill',{
-     'fill-pattern':'lw-building-minor-hatch','fill-opacity':0.32
+     'fill-pattern':'lw-building-minor-hatch','fill-opacity':0.20
     }),label);
    if(!map.getLayer(outline))map.addLayer(copy(l,outline,'line',{
-    'line-color':'#71979d','line-opacity':0.82,
-    'line-width':['interpolate',['linear'],['zoom'],16,0.6,18,1.15,19,1.7]
+    'line-color':'#243740','line-opacity':0.97,
+    'line-width':['interpolate',['linear'],['zoom'],16,0.95,18,1.65,19,2.1]
    }),label);
    installed.push(footprint);paintLayers.push([footprint,outline]);
   }catch(err){console.warn('Mapped building outlines unavailable for',l.id,err)}
  }
- host.dataset.buildingPresentation=installed.length?'subtle-outlined-footprints':'unavailable';
+ host.dataset.buildingPresentation=installed.length?'dark-defined-footprints':'unavailable';
  host.dataset.geographicDepth=installed.length?'flat-outlines':'unavailable';
  host.dataset.geographicBuildings=installed.length?'footprints-visible':'unavailable';
  host.dataset.buildingLayers=String(installed.length);
@@ -2454,18 +2456,46 @@ function renderPanel(k){const body=$('#drawerContent');clearInterval(countdownHa
   '<button class="secondary full" id="saveVenue">⌖ Center on this location</button>';
   $('#enterVenue').onclick=()=>setPanel('lobby');$('#saveVenue').onclick=()=>{moveTo(v.lon,v.lat,15);closeDrawer()};
  }else if(k==='lobby'){
-  const v=selectedVenue;
-  body.innerHTML=heading('SOLO DUNGEON','PORTAL STAGING','Playable local prototype. Dungeon rooms are fictional, not the real business interior.')+
+  const v=selectedVenue,codes=[...claimed];
+  if(!codes.includes(selectedDungeonWarriorCode))selectedDungeonWarriorCode=codes[0]||null;
+  const selectable=codes.length?codes.map(code=>({...baseWarrior(code),code})):
+   [{name:'Training Warrior',gender:'male',faction:'Pirate',id:'training',code:null}];
+  body.innerHTML=heading('SOLO DUNGEON','CHOOSE YOUR WARRIOR',
+   'The character shown in the sprite preview is the one who actually enters the dungeon.')+
    '<div class="box"><strong>'+escapeHTML(v?.name||'Unknown Portal')+'</strong>'+
    '<p class="dsub">'+(v?.type==='challenge'?'WORMHOLE · 14 harder rooms':'RUPTURE · 10 rooms')+
-   ' · touch D-pad movement · sword attacks · boss and victory.</p>'+
-   '<p class="note">No multiplayer or account-backed rewards yet. No real gold, XP, or ownership changes.</p></div>'+
-   '<button id="readyButton" class="primary">⚔ ENTER PLAYABLE DUNGEON</button>'+
+   ' · real touch combat · procedurally connected chambers.</p></div>'+
+   '<div id="lwWarriorChoices" role="group" aria-label="Select dungeon warrior">'+
+   selectable.map((warrior,i)=>'<button type="button" class="lwWarriorChoice'+
+    (warrior.code===selectedDungeonWarriorCode?' is-selected':'')+
+    '" data-warrior-index="'+i+'" aria-pressed="'+(warrior.code===selectedDungeonWarriorCode)+'">'+
+    '<img class="lwWarriorPortrait" src="'+(warrior.gender==='female'?sprites.heroF:sprites.heroM)+'" alt="Warrior reference portrait">'+
+    '<img class="lwWarriorSpritePreview" src="'+window.LibationDungeon.previewWarrior(warrior,'down','idle',0)+'" alt="Actual dungeon sprite">'+
+    '<span><strong>'+escapeHTML(warrior.name)+'</strong><small>'+escapeHTML(warrior.gender+' · '+warrior.faction)+'</small>'+
+    '<small>Same sprite appears inside dungeon</small></span></button>').join('')+
+   '</div><p class="note">Demo warriors and treasure are local-only; no accounts or rewards are updated.</p>'+
+   '<button id="readyButton" class="primary">ENTER DUNGEON</button>'+
    '<button id="cancelDungeonLobby" class="secondary full">RETURN TO WORLD</button>';
+  const css=document.getElementById('lwWarriorSelectCSS')||document.createElement('style');
+  css.id='lwWarriorSelectCSS';
+  css.textContent='#lwWarriorChoices{display:grid;gap:7px;max-height:35vh;overflow:auto;margin-top:8px}'+
+   '.lwWarriorChoice{width:100%;display:flex;gap:8px;align-items:center;text-align:left;'+
+   'background:#132b3a;color:#f7e4c3;border:2px solid #556d78;padding:6px;min-height:78px}'+
+   '.lwWarriorChoice.is-selected{border-color:#f0c17b;background:#314b5a}'+
+   '.lwWarriorPortrait{width:43px;height:62px;object-fit:contain;image-rendering:pixelated}'+
+   '.lwWarriorSpritePreview{width:43px;height:59px;object-fit:contain;image-rendering:pixelated}'+
+   '.lwWarriorChoice span{display:grid;gap:3px}.lwWarriorChoice small{font:10px monospace;color:#c4d4d0}';
+  document.head.appendChild(css);
+  body.querySelectorAll('[data-warrior-index]').forEach(button=>button.onclick=()=>{
+   selectedDungeonWarriorCode=selectable[Number(button.dataset.warriorIndex)].code;
+   body.querySelectorAll('[data-warrior-index]').forEach(el=>{
+    const value=selectable[Number(el.dataset.warriorIndex)].code===selectedDungeonWarriorCode;
+    el.classList.toggle('is-selected',value);el.setAttribute('aria-pressed',String(value));
+   });
+  });
   $('#readyButton').onclick=()=>{
    if(!selectedVenue)return;
-   const warriorCode=claimed.size?[...claimed][0]:null;
-   const warrior=warriorCode?baseWarrior(warriorCode).name:'Training Warrior';
+   const warrior=selectable.find(w=>w.code===selectedDungeonWarriorCode)||selectable[0];
    const selected=selectedVenue;closeDrawer();
    if(!window.LibationDungeon?.start({venue:selected,warrior}))toast('Dungeon scene failed to start');
   };
