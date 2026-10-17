@@ -317,8 +317,16 @@ const fs=require('fs');
    getComputedStyle(document.querySelector('#worldScenery')).display!=='none'
  }));
  console.log('ACTUAL MOBILE NATURE / AVATAR ANIMATION:',JSON.stringify({natureReport,animationSpec}));
- if(!natureReport.visible||natureReport.count<8||natureReport.types<2)
-  throw Error('Geographic nature layer not populated and visible: '+JSON.stringify(natureReport));
+ if(!natureReport.visible||natureReport.count<8||natureReport.count>160||natureReport.types<3)
+  throw Error('Nature density or biome diversity invalid: '+JSON.stringify(natureReport));
+ const navLayout=await page.locator('#footnav .navbtn').evaluateAll(buttons=>{
+  const bounds=buttons.map(b=>b.getBoundingClientRect());
+  return {count:buttons.length,noOverlap:bounds.every((b,i)=>!i||b.left>=bounds[i-1].right-1),
+   widths:bounds.map(b=>Math.round(b.width)),viewport:window.innerWidth};
+ });
+ if(navLayout.count!==5||!navLayout.noOverlap)
+  throw Error('Android bottom navigation buttons overlap: '+JSON.stringify(navLayout));
+ console.log('ANDROID NAV BUTTON LAYOUT:',JSON.stringify(navLayout));
  await page.screenshot({path:'/tmp/libation-nature-avatar-new.png',fullPage:false});
  console.log('GEOGRAPHIC AVATAR ZOOM SCALING:',JSON.stringify({baseAvatar,smallAvatar,resetAvatar}));
  await page.screenshot({path:'/tmp/libation-world-zoomed-in.png',fullPage:false});
