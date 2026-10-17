@@ -53,9 +53,18 @@ function render(frame,dir,config={}){
   ctx.closePath();
  },fill,outline,width);
  const ellipse=(x,y,rx,ry,fill,outline,width=1)=>shape(ctx=>ctx.ellipse(x,y,rx,ry,0,0,Math.PI*2),fill,outline,width);
- const curve=(p,fill,stroke,width)=>{
+ const curve=(points,fill,stroke,width)=>{
+  // Smooth closed painterly shapes, tolerant of variable waypoint counts.
+  // The points describe a silhouette, not pixel-aligned square blocks.
   shape(ctx=>{
-   ctx.moveTo(p[0],p[1]);for(let i=2;i<p.length;i+=6)ctx.bezierCurveTo(...p.slice(i,i+6));
+   const p=[];for(let i=0;i+1<points.length;i+=2)p.push([points[i],points[i+1]]);
+   if(p.length<3)return;
+   let prev=p[p.length-1],first=p[0];
+   ctx.moveTo((prev[0]+first[0])/2,(prev[1]+first[1])/2);
+   for(let i=0;i<p.length;i++){
+    const a=p[i],next=p[(i+1)%p.length];
+    ctx.quadraticCurveTo(a[0],a[1],(a[0]+next[0])/2,(a[1]+next[1])/2);
+   }
    ctx.closePath();
   },fill,stroke,width);
  };
