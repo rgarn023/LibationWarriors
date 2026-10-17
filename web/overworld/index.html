@@ -371,6 +371,15 @@ body:not(.live-map) #worldScenery{display:none!important}
 #mapStats{max-width:160px}
 #gameHint{display:none!important}
 body.live-map #map .maplibregl-ctrl-attrib{display:block!important}
+@media(max-width:530px){
+ #footnav{grid-template-columns:repeat(5,minmax(0,1fr))!important;gap:5px!important;
+  width:min(100%,420px);padding:4px 5px calc(env(safe-area-inset-bottom) + 4px)!important}
+ #footnav .navbtn{width:100%!important;height:58px!important;min-height:0!important;
+  max-width:66px!important;min-width:0!important;border-radius:13px!important;
+  aspect-ratio:auto!important;margin:0 auto!important;padding:4px 0!important;
+  line-height:1.05!important;font-size:7px!important;letter-spacing:-.35px!important}
+ #footnav .navbtn .em{font-size:20px!important}
+}
 
 </style>
 </head>
@@ -1408,6 +1417,18 @@ function buildScenerySprite(kind=0,variant=0){
   for(const [x,y] of [[3,28],[13,24],[22,30]]){
    p('#4b8453',x+3,y,2,9);p('#608f4c',x,y+4,8,3);p('#a4c474',x+3,y+2,2,3);
   }
+ }else if(kind==='log'){
+  p('#27453e',2,33,29,5);p('#564738',4,28,27,9);
+  p('#826241',7,27,22,6);p('#b28e54',7,28,16,2);
+  p('#4a382d',24,30,6,7);p('#c69d6e',25,30,4,4);
+  p('#5f9659',11,26,6,3);p('#679d5d',17,30,4,2);
+ }else if(kind==='mushroom'){
+  for(const [x,y] of [[8,27],[21,31]]){
+   p('#ded2ab',x+4,y,4,10);p('#f1e9c5',x+5,y,2,8);
+   p('#5b4354',x,y-4,14,6);
+   p(variant%2?'#b26761':'#a480bc',x+1,y-5,12,5);
+   p('#ffdbb1',x+5,y-4,3,2);p('#d8cfa0',x-1,y+8,15,2);
+  }
  }
  return c;
 }
@@ -1423,7 +1444,7 @@ function initScenery(){
  host.appendChild(sceneryCanvas);
  sceneryCtx=sceneryCanvas.getContext('2d',{alpha:true});
  sceneryCtx.imageSmoothingEnabled=false;
- for(const k of ['tree','bush','rock','flowers','grass','house']){
+ for(const k of ['tree','bush','rock','flowers','grass','log','mushroom','house']){
   for(let v=0;v<3;v++)sceneryImages[k+v]=buildScenerySprite(k,v);
  }
  resizeScenery();
@@ -1458,7 +1479,7 @@ function rebuildScenery(){
  let attempts=0;
  outer:for(let iy=minY;iy<=maxY;iy++)for(let ix=minX;ix<=maxX;ix++){
   const seed=localHash(iy,ix);
-  if(seed<.40)continue;
+  if(seed<.49)continue;
   const lat=(iy+.15+localHash(ix,iy)*.70)*dy;
   const lon=(ix+.15+localHash(iy+7,ix-17)*.70)*dx;
   const v=map.project([lon,lat]);
@@ -1473,11 +1494,14 @@ function rebuildScenery(){
   if(tags.some(k=>/(water|lake|river|wetland|sea|ocean|road|highway|bridge|tunnel|path|street|motorway|primary|secondary|building|house|structure|parking|railway)/.test(k)))continue;
   const forest=tags.some(k=>/(forest|wood|park|vegetation|tree|natural|meadow|grass)/.test(k));
   const urban=tags.some(k=>/(residential|urban|commercial|industrial|landuse)/.test(k));
-  const kind=forest?(seed>.66?'tree':seed>.49?'bush':seed>.44?'flowers':'grass'):
-   urban?(seed>.91?'tree':seed>.72?'bush':seed>.61?'flowers':'grass'):
-   seed>.94?'tree':seed>.77?'bush':seed>.69?'rock':seed>.55?'flowers':'grass';
+  const grove=localHash(Math.floor(iy/3),Math.floor(ix/3))>.46;
+  const kind=forest?(grove&&seed>.75?'tree':seed>.69?'bush':seed>.63?'mushroom':
+    seed>.57?'flowers':seed>.52?'log':'grass'):
+   urban?(seed>.93?'tree':seed>.82?'bush':seed>.76?'flowers':seed>.64?'rock':'grass'):
+   seed>.97?'tree':seed>.89?'bush':seed>.80?'rock':seed>.72?'log':
+   seed>.65?'flowers':'grass';
   items.push({lon,lat,kind,variant:Math.floor(localHash(iy+30,ix+19)*3)});
-  if(items.length>=220)break outer;
+  if(items.length>=156)break outer;
  }
  sceneryPoints=items;
  const host=$('#map');
@@ -1504,8 +1528,10 @@ function drawScenery(){
   visible.sort((a,b)=>a.v.y-b.v.y);
   for(const {v,item} of visible){
    const img=sceneryImages[item.kind+item.variant];if(!img)continue;
-   const ww=item.kind==='tree'?44:item.kind==='bush'?31:item.kind==='rock'?24:26;
-   const hh=item.kind==='tree'?57:item.kind==='bush'?37:item.kind==='rock'?28:33;
+   const ww=item.kind==='tree'?44:item.kind==='bush'?31:item.kind==='rock'?24:
+    item.kind==='log'?28:26;
+   const hh=item.kind==='tree'?57:item.kind==='bush'?37:item.kind==='rock'?28:
+    item.kind==='log'?20:30;
    ctx.drawImage(img,Math.round(v.x-ww/2),Math.round(v.y-hh),ww,hh);
   }
  });
