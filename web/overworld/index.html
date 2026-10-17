@@ -335,7 +335,9 @@ body:not(.live-map) #online{letter-spacing:.4px}
 
 /* Local close-up camera and minimal touch guidance. */
 #map{touch-action:none}
-#map #gpsMarker .sprite{bottom:2px!important}
+#map #gpsMarker .sprite{bottom:2px!important;image-rendering:auto!important;
+ filter:drop-shadow(1px 3px 3px #173b39af)!important}
+#avatarPreview{image-rendering:auto!important}
 /* The map owns the world-position transform. Scale only this child rig around
    the GPS foot anchor; its shadow and adventurer stay grounded together. */
 #map #gpsMarker .avatar-rig{position:absolute;inset:0;width:100%;height:100%;
@@ -394,6 +396,7 @@ body.live-map #map .maplibregl-ctrl-attrib{display:block!important}
 <div id="caption">16-BIT MAP STYLE · LIVE OSM GEOGRAPHY WHEN ONLINE · GAMEPLAY SIMULATED</div>
 <nav id="footnav" aria-label="Main game panels"><button class="navbtn active" data-panel="map" aria-label="map" title="map"><span class="em">🗺️</span>WORLD</button><button class="navbtn" data-panel="summon" aria-label="summon" title="summon"><span class="em">💠</span>SUMMON</button><button class="navbtn" data-panel="collection" aria-label="Warriors" title="Warriors"><span class="em">⚔️</span>WARRIORS</button><button class="navbtn" data-panel="paths" aria-label="Shadows" title="Shadows"><span class="em">👾</span>SHADOWS</button><button class="navbtn" data-panel="settings" aria-label="settings" title="settings"><span class="em">⚙️</span>OPTIONS</button></nav>
 <div id="drawerWrap"><div id="shade" aria-hidden="true"></div><aside id="drawer" role="dialog" aria-label="Game panel"><div class="grab"></div><button class="close" id="closeDrawer" aria-label="Close">✕</button><main id="drawerContent"></main></aside></div>
+<script src="./jrpg-avatar.js"></script>
 <script src="./game-world.js"></script>
 <script src="./dungeon.js"></script>
 <script>
@@ -424,7 +427,7 @@ try{
   const v=Number(saved[k]);if(Number.isInteger(v)&&v>=0&&v<5)avatarConfig[k]=v
  }
 }catch(_){}
-function saveAvatar(){avatarFrameCache.clear();try{localStorage.setItem(AVATAR_KEY,JSON.stringify(avatarConfig))}catch(_){}}
+function saveAvatar(){avatarFrameCache.clear();window.LibationJRPGAvatar?.clearCache();try{localStorage.setItem(AVATAR_KEY,JSON.stringify(avatarConfig))}catch(_){}}
 
 function toast(s){const e=$('#toast');e.textContent=s;e.classList.add('toast-visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>e.classList.remove('toast-visible'),4200)}
 function escapeHTML(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
@@ -456,7 +459,8 @@ function makeCustomAvatarSprite(frame=16,facing=avatarFacing){
  const key=[facing,phase,avatarConfig.skin,avatarConfig.hair,avatarConfig.outfit,
   avatarConfig.hairStyle,avatarConfig.body].join(':');
  if(avatarFrameCache.has(key))return avatarFrameCache.get(key);
- const sprite=fallbackCustomAvatarSprite(phase,facing);
+ const sprite=window.LibationJRPGAvatar?.render(phase,facing,avatarConfig)||
+  fallbackCustomAvatarSprite(phase,facing);
  if(avatarFrameCache.size>95)avatarFrameCache.clear();
  avatarFrameCache.set(key,sprite);return sprite;
 }
@@ -616,8 +620,8 @@ function avatarOption(id,heading,labels,selected){
 }
 function renderAvatarEditor(){
  const body=$('#drawerContent');
- body.innerHTML=heading('YOUR EXPLORER','CUSTOM AVATAR','Create your own 16-bit adventurer for the GPS overworld. Scanned warriors remain separate dungeon characters.')+
- '<div class="box" style="display:grid;place-items:center;gap:8px;background:linear-gradient(#263b4b,#17312e)"><img id="avatarPreview" alt="Your custom overworld avatar" style="width:128px;height:176px;object-fit:contain;image-rendering:pixelated" src="'+makeCustomAvatarSprite(0,'down')+'"><strong class="pixfont">YOUR OVERWORLD AVATAR</strong></div>'+
+ body.innerHTML=heading('YOUR EXPLORER','CUSTOM AVATAR','Customize your high-detail JRPG adventurer for the GPS overworld. Scanned warriors remain separate dungeon characters.')+
+ '<div class="box" style="display:grid;place-items:center;gap:8px;background:linear-gradient(#263b4b,#17312e)"><img id="avatarPreview" alt="Your custom overworld avatar" style="width:128px;height:176px;object-fit:contain;image-rendering:auto" src="'+makeCustomAvatarSprite(0,'down')+'"><strong class="pixfont">YOUR OVERWORLD AVATAR</strong></div>'+
  avatarOption('avatarSkin','SKIN TONE',['Light','Warm','Tan','Brown','Deep'],avatarConfig.skin)+
  avatarOption('avatarHair','HAIR COLOR',['Black','Brown','Copper','Blonde','Purple'],avatarConfig.hair)+
  avatarOption('avatarHairStyle','HAIRSTYLE',['Short','Long','Wavy','Spiky','Braided'],avatarConfig.hairStyle)+

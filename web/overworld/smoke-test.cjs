@@ -305,6 +305,25 @@ const fs=require('fs');
  if(Math.abs(resetAvatar.spriteHeight-baseAvatar.spriteHeight)>3||
     Math.abs(resetAvatar.shadowWidth-baseAvatar.shadowWidth)>3)
   throw Error('Character size failed to restore after zooming in: '+JSON.stringify({baseAvatar,resetAvatar}));
+ const polishedAvatar=await page.evaluate(()=>{
+  const module=window.LibationJRPGAvatar;
+  const image=document.querySelector('#gpsMarker img.sprite');
+  return {exists:!!module,style:module?.style,resolution:module?.resolution,
+    directions:module?.directions,gaitFrames:module?.gaitFrames,
+    decoded:image?.naturalWidth,decodedHeight:image?.naturalHeight,
+    cssRendering:image?getComputedStyle(image).imageRendering:'missing',
+    facingUnique:module?new Set(['up','right','down','left'].map(dir=>
+      module.render(16,dir,{hair:1,skin:1,outfit:0,hairStyle:0,body:1}))).size:0,
+    customizationChanges:module?module.render(16,'up',{hair:1,skin:1,outfit:0,hairStyle:0,body:1})!==
+      module.render(16,'up',{hair:4,skin:1,outfit:2,hairStyle:0,body:1}):false};
+ });
+ console.log('POLISHED JRPG AVATAR RENDERER:',JSON.stringify(polishedAvatar));
+ if(!polishedAvatar.exists||polishedAvatar.style!=='smooth-jrpg'||
+   polishedAvatar.resolution[0]<200||polishedAvatar.resolution[1]<300||
+   polishedAvatar.facingUnique!==4||!polishedAvatar.customizationChanges||
+   polishedAvatar.cssRendering==='pixelated')
+  throw Error('High-detail, anti-aliased customizable sprite regression: '+JSON.stringify(polishedAvatar));
+ await page.screenshot({path:'/tmp/libation-jrpg-avatar.png',fullPage:false});
  const animationSpec=await page.evaluate(()=>window.LibationAvatarAnimation?.status());
  if(!animationSpec||animationSpec.targetFps<55||animationSpec.strideFrames<12||animationSpec.avatarWidth<64)
   throw Error('High-frame customizable avatar animation missing: '+JSON.stringify(animationSpec));
