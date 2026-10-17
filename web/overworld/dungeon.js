@@ -451,7 +451,9 @@ function tick(){
    }
   }else{
    if(e.windup)e.windup=0;
-   if(now-e.lastMove>(s.kind==='challenge'?430:550)){
+   const pace=e.kind==='bat'?310:e.kind==='sentinel'?710:
+    e.kind==='skeleton'?450:e.kind==='guardian'?520:630;
+   if(now-e.lastMove>pace*(s.kind==='challenge'?.88:1)){
     e.lastMove=now;chase(e);
    }
   }
@@ -479,7 +481,7 @@ function initialize(){
  const css=document.createElement('style');css.textContent=
  '#lwDungeonStage[hidden],#lwDResult[hidden]{display:none!important}'+
  '#lwDungeonStage{position:fixed;inset:0;z-index:1001;display:flex;flex-direction:column;'+
- 'align-items:center;justify-content:space-between;box-sizing:border-box;overflow:auto;'+
+ 'align-items:center;justify-content:flex-start;gap:6px;box-sizing:border-box;overflow:auto;'+
  'padding:calc(env(safe-area-inset-top) + 5px) 9px calc(env(safe-area-inset-bottom) + 5px);'+
  'background:radial-gradient(circle at 50% 35%,#304451,#071622 80%);'+
  'color:#f0ddb5;font:12px monospace;touch-action:none}'+
@@ -495,18 +497,18 @@ function initialize(){
  'background:#132438ce;border:1px solid #516a73;padding:3px 6px;min-height:64px}'+
  '#lwDMap{height:57px;width:110px;image-rendering:pixelated;border:1px solid #7d8b7f}'+
  '#lwDRoomInfo{font-size:11px;line-height:1.4;color:#ead6a8}'+
- '.lwDView{width:min(100%,700px);flex:1;min-height:0;display:flex;align-items:center}'+
+ '.lwDView{width:min(100%,700px);flex:none;min-height:0;display:flex;align-items:center;margin:5px 0}'+
  '#lwDCanvas{display:block;width:100%;max-height:52vh;aspect-ratio:17 / 13;object-fit:contain;'+
  'image-rendering:pixelated;border:3px solid #cfb680;background:#1c293a}'+
  '#lwDMessage{text-align:center;min-height:20px;margin:4px;font-size:11px;color:#e8d397}'+
- '.lwDControls{width:min(100%,530px);min-height:140px;display:flex;justify-content:space-around;align-items:center}'+
+ '.lwDControls{width:min(100%,530px);min-height:132px;display:flex;justify-content:space-around;align-items:center}'+
  '.lwDPad{display:grid;grid-template-columns:repeat(3,48px);grid-template-rows:repeat(3,42px)}'+
  '.lwDPad button{font-size:22px!important;padding:3px!important}'+
  '.lwDPad .up{grid-column:2;grid-row:1}.lwDPad .left{grid-column:1;grid-row:2}'+
  '.lwDPad .down{grid-column:2;grid-row:3}.lwDPad .right{grid-column:3;grid-row:2}'+
  '#lwDAttack{width:88px;height:88px;border-radius:50%!important;background:#79536b!important;font-size:32px}'+
  '#lwDAttack small{display:block;font-size:10px}'+
- '#lwDungeonStage footer button{flex:1;min-height:42px}'+
+ '#lwDungeonStage footer{margin-top:auto}#lwDungeonStage footer button{flex:1;min-height:42px}'+
  '#lwDResult{color:#baffce;text-align:center;padding:5px}'+
  '@media(max-height:690px){.lwDControls{min-height:108px}.lwDPad{transform:scale(.83)}'+
  '#lwDAttack{width:73px;height:73px}.lwDInfo{min-height:48px}#lwDMap{height:44px}}';
