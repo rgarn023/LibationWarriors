@@ -139,6 +139,7 @@ function makeRoom(entry='left'){
  else if(n.type==='shrine')announce('SHRINE · you recover health · doors unlocked');
  else if(s.roomClear)announce('ENTRANCE · explore through any open doorway');
  else announce('Clear this chamber to unlock its doors');
+ drawMap();
 }
 function rect(c,x,y,w,h){ctx.fillStyle=c;ctx.fillRect(Math.round(x),Math.round(y),Math.round(w),Math.round(h))}
 function drawFloor(now){

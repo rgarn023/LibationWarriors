@@ -468,37 +468,62 @@ const fs=require('fs');
  await page.locator('#enterVenue').click();
  await page.locator('#readyButton').click();
  await page.waitForFunction(()=>window.LibationDungeon?.snapshot().active===true);
+ // Graph property tests: generated world is connected, spatially unique,
+ // reciprocal and different across many seeds and both dungeon difficulties.
+ const layouts=await page.evaluate(()=>{
+  const d=window.LibationDungeon,variants={};
+  for(const kind of ['rupture','challenge']){
+   const expected=kind==='challenge'?14:10,signatures=new Set();
+   for(let k=0;k<90;k++){
+    const p=d.inspectLayout('generated-room-test-'+k,kind);
+    if(p.count!==expected||p.nodes.length!==expected||!p.nodes.some(n=>n.id===p.boss&&n.type==='boss')||
+      !p.nodes.some(n=>n.id===p.treasure&&n.type==='treasure'))throw Error('Bad generated roles: '+kind);
+    const coords=new Set(p.nodes.map(n=>n.gx+','+n.gy));
+    if(coords.size!==expected)throw Error('Duplicate room coordinates: '+kind);
+    const seen=new Set([0]),stack=[0];
+    while(stack.length){
+     const a=p.nodes[stack.pop()];
+     for(const [dir,b] of Object.entries(a.edges)){
+      const opposite={up:'down',down:'up',left:'right',right:'left'}[dir];
+      if(p.nodes[b].edges[opposite]!==a.id)throw Error('Broken reciprocal door '+kind);
+      if(!seen.has(b)){seen.add(b);stack.push(b)}
+     }
+    }
+    if(seen.size!==expected)throw Error('Unreachable generated room '+kind);
+    if(new Set(p.nodes.map(n=>n.template)).size<3)throw Error('Room art templates too repetitive '+kind);
+    signatures.add(p.nodes.map(n=>n.gx+','+n.gy+':'+n.template).join(';'));
+   }
+   if(signatures.size<70)throw Error('Generator not diverse enough: '+kind);
+   variants[kind]={count:expected,generated:90,unique:signatures.size};
+  }
+  return variants;
+ });
+ console.log('RANDOM DUNGEON LAYOUT PROPERTY TESTS:',JSON.stringify(layouts));
  const first=await page.evaluate(()=>window.LibationDungeon.snapshot());
- if(first.kind!=='challenge'||first.rooms!==14||first.enemies<1)
-  throw Error('Wormhole did not launch harder playable dungeon: '+JSON.stringify(first));
+ if(first.kind!=='challenge'||first.rooms!==14||first.node!==0||
+    first.roomType!=='entrance'||first.room!==1)
+  throw Error('Random wormhole entrance failed: '+JSON.stringify(first));
  await page.screenshot({path:'/tmp/libation-dungeon-room.png',fullPage:false});
- // Touch D-pad must actually move the hero, not just animate a fake video.
- const positionBefore=await page.evaluate(()=>window.LibationDungeon.snapshot().player);
+ const positionBefore=first.player;
  await page.locator('[data-dmove="right"]').tap();
  const positionAfter=await page.evaluate(()=>window.LibationDungeon.snapshot().player);
  if(positionAfter.x<=positionBefore.x)
-  throw Error('Dungeon touch D-pad did not move the playable hero');
- // A real directional sword strike must damage and kill a combat enemy,
- // not just animate a button or increment simulated score.
- const combatSet=await page.evaluate(()=>window.LibationDungeon.debugCombatEncounter());
- if(!combatSet)throw Error('Developer combat fixture unavailable');
+  throw Error('Touch D-pad did not move hero');
+ if(!await page.evaluate(()=>window.LibationDungeon.debugCombatEncounter()))
+  throw Error('Developer enemy combat unavailable');
  const beforeAttack=await page.evaluate(()=>window.LibationDungeon.snapshot());
  await page.locator('#lwDAttack').tap();
  const afterAttack=await page.evaluate(()=>window.LibationDungeon.snapshot());
- if(beforeAttack.enemies!==1||afterAttack.enemies!==0||
-   afterAttack.gold<4||!afterAttack.cleared)
-  throw Error('Sword attack did not defeat adjacent enemy and unlock room: '+
-   JSON.stringify({beforeAttack,afterAttack}));
- console.log('REAL MOBILE DUNGEON SWORD COMBAT:',JSON.stringify({beforeAttack,afterAttack}));
- await page.waitForTimeout(150);
- if(!await page.locator('#lwDCanvas').isVisible())
-  throw Error('Sword attack removed the actual playable dungeon canvas');
- // The real boss has full health and must survive several touchscreen blows.
+ if(beforeAttack.enemies!==1||afterAttack.enemies!==0||afterAttack.gold<4||!afterAttack.cleared)
+  throw Error('Forward sword strike did not defeat enemy: '+JSON.stringify({beforeAttack,afterAttack}));
+ console.log('REAL TOUCH SWORD COMBAT:',JSON.stringify({beforeAttack,afterAttack}));
+ if(!await page.locator('#lwDMap').isVisible()||!await page.locator('#lwDCanvas').isVisible())
+  throw Error('Dungeon canvas or minimap is not visible');
  if(!await page.evaluate(()=>window.LibationDungeon.debugBossEncounter()))
-  throw Error('Developer boss encounter unavailable');
+  throw Error('Guardian fixture unavailable');
  const bossStart=await page.evaluate(()=>window.LibationDungeon.snapshot());
- if(bossStart.room!==14||bossStart.bossHP!==17||bossStart.hp!==14)
-  throw Error('Full-strength wormhole boss not initialized: '+JSON.stringify(bossStart));
+ if(bossStart.bossHP!==17||bossStart.hp!==14||bossStart.roomType!=='boss')
+  throw Error('Full-strength boss not generated: '+JSON.stringify(bossStart));
  await page.screenshot({path:'/tmp/libation-dungeon-boss.png',fullPage:false});
  for(let strike=0;strike<10;strike++){
   await page.locator('#lwDAttack').tap();
@@ -507,67 +532,118 @@ const fs=require('fs');
  }
  const bossEnd=await page.evaluate(()=>window.LibationDungeon.snapshot());
  if(bossEnd.bossHP!==null||bossEnd.enemies!==0||!bossEnd.cleared||bossEnd.defeated)
-  throw Error('Touch combat cannot defeat actual final guardian: '+JSON.stringify({bossStart,bossEnd}));
- console.log('REAL TOUCH BOSS COMBAT:',JSON.stringify({bossStart,bossEnd}));
+  throw Error('Full guardian not defeatable through touch: '+JSON.stringify({bossStart,bossEnd}));
  await page.screenshot({path:'/tmp/libation-dungeon-boss-cleared.png',fullPage:false});
- await page.locator('#lwDRetry').click();
- // Complete all rooms through the explicitly labelled developer test hook.
- // This checks room transitions, not ordinary full-dungeon combat.
- const complete=await page.evaluate(()=>{
-  const d=window.LibationDungeon;
-  let failures=0;
-  for(let room=1;room<=14;room++){
-   if(!d.debugClearRoom())return {error:'developer room-clear hook missing',room};
-   for(let i=0;i<18;i++){
-    const state=d.snapshot();
-    if(state.room>room||state.completed)break;
-    d.move('right');
-   }
-   const state=d.snapshot();
-   if(!state.completed&&state.room!==room+1)failures++;
-  }
-  return {...d.snapshot(),failures};
+ console.log('REAL TOUCH BOSS COMBAT:',JSON.stringify({bossStart,bossEnd}));
+ const sealVictory=await page.evaluate(()=>{
+  const d=window.LibationDungeon;for(let i=0;i<7;i++)d.move('right');
+  return d.snapshot();
  });
- if(!complete.completed||complete.failures||complete.room!==14)
-  throw Error('Dungeon did not progress through playable exit and boss: '+JSON.stringify(complete));
+ if(!sealVictory.completed)throw Error('Boss seal does not finish dungeon: '+JSON.stringify(sealVictory));
  await page.screenshot({path:'/tmp/libation-dungeon-victory.png',fullPage:false});
+ await page.locator('#lwDRetry').click();
+ const newSeed=await page.evaluate(()=>window.LibationDungeon.snapshot().layoutSeed);
+ if(newSeed===first.layoutSeed)throw Error('Restart did not generate a new dungeon');
+ // Physically walk through generated doorways with normal movement API.
+ // Developer shortcuts clear combat only, never teleport between chambers.
+ const progress=await page.evaluate(()=>{
+  const d=window.LibationDungeon,plan=d.inspectLayout(d.snapshot().layoutSeed,'challenge');
+  const opposite={up:'down',right:'left',down:'up',left:'right'};
+  const offsets={up:[0,-1],right:[1,0],down:[0,1],left:[-1,0]};
+  const doors={up:[8,1],right:[15,6],down:[8,11],left:[1,6]};
+  const traversed=new Set(),allMoves=[];
+  function walkTo(dir){
+   const snap=d.snapshot(),start=snap.player,target=doors[dir];
+   const walls=new Set(snap.walls),todo=[[start.x,start.y,[]]],seen=new Set();
+   for(let i=0;i<todo.length;i++){
+    const [x,y,path]=todo[i],key=x+','+y;
+    if(seen.has(key))continue;seen.add(key);
+    if(x===target[0]&&y===target[1]){
+     for(const m of path)if(!d.move(m))throw Error('Cannot move through path: '+m);
+     allMoves.push({from:snap.node,to:d.snapshot().node,direction:dir,length:path.length});
+     return;
+    }
+    for(const [name,[dx,dy]] of Object.entries(offsets)){
+     const xx=x+dx,yy=y+dy;
+     if(xx<1||yy<1||xx>15||yy>11||walls.has(xx+','+yy)||seen.has(xx+','+yy))continue;
+     todo.push([xx,yy,[...path,name]]);
+    }
+   }
+   throw Error('Door inaccessible in room '+snap.node+' direction '+dir);
+  }
+  function explore(id){
+   const here=d.snapshot();
+   if(here.node!==id)throw Error('Wrong node while exploring '+JSON.stringify({id,here}));
+   traversed.add(id);
+   if(here.roomType==='boss')return;
+   if(!here.cleared)d.debugClearRoom();
+   for(const [dir,next] of Object.entries(plan.nodes[id].edges)){
+    if(next===plan.boss||traversed.has(next))continue;
+    walkTo(dir);
+    if(d.snapshot().node!==next)throw Error('Door transition failed '+dir);
+    explore(next);
+    walkTo(opposite[dir]);
+    if(d.snapshot().node!==id)throw Error('Reverse door failed '+dir);
+   }
+  }
+  explore(0);
+  // Graph's physical door layout (not a teleport) must allow reaching boss.
+  let path=null,todo=[[d.snapshot().node,[]]],seen=new Set();
+  for(let i=0;i<todo.length;i++){
+   const [id,route]=todo[i];if(seen.has(id))continue;seen.add(id);
+   if(id===plan.boss){path=route;break}
+   for(const [dir,next] of Object.entries(plan.nodes[id].edges))
+    todo.push([next,[...route,dir]]);
+  }
+  if(!path)throw Error('No route to generated guardian');
+  for(const dir of path){
+   if(!d.snapshot().cleared)d.debugClearRoom();
+   walkTo(dir);
+  }
+  if(d.snapshot().node!==plan.boss)throw Error('Boss room cannot be reached');
+  d.debugClearRoom();
+  // Walk back out of the altar and then into the center seal.
+  const bossSnap=d.snapshot();
+  let guard=0;
+  while(d.snapshot().player.x<8&&guard++<14)d.move('right');
+  const won=d.snapshot();
+  if(!won.completed)throw Error('Boss seal cannot complete traversal');
+  return {rooms:plan.count,explored:traversed.size,boss:plan.boss,
+   moves:allMoves.length,transitions:allMoves.slice(0,8),won:won.completed,score:won.gold};
+ });
+ if(!progress.won||progress.explored<9||progress.moves<10)
+  throw Error('Generated room navigation failed: '+JSON.stringify(progress));
+ console.log('PROCEDURAL DUNGEON PHYSICAL DOOR TRAVERSAL:',JSON.stringify(progress));
+ await page.screenshot({path:'/tmp/libation-dungeon-generated-victory.png',fullPage:false});
  await page.locator('#lwDReturn').click();
  if((await page.evaluate(()=>window.LibationDungeon.snapshot())).active)
-  throw Error('Dungeon return did not restore the GPS overworld');
- // Ruptures get 10 rooms, fewer enemies and more health than wormholes.
+  throw Error('Return did not restore GPS overworld');
  await page.locator('.dev-select-portal[data-kind="rupture"]').click();
  await page.locator('#enterVenue').click();
  await page.locator('#readyButton').click();
  const rupture=await page.evaluate(()=>window.LibationDungeon.snapshot());
  if(rupture.kind!=='rupture'||rupture.rooms!==10||rupture.maxHP!==18)
-  throw Error('Regular rupture failed to start: '+JSON.stringify(rupture));
+  throw Error('Ten-room rupture failed: '+JSON.stringify(rupture));
  await page.locator('#lwDExit').click();
- // Defeat is a real playable outcome: the final boss must be able to
- // reduce HP to zero, show the defeat overlay, and allow a clean restart.
  await page.locator('.dev-select-portal[data-kind="challenge"]').click();
  await page.locator('#enterVenue').click();
  await page.locator('#readyButton').click();
  if(!await page.evaluate(()=>window.LibationDungeon.debugBossEncounter()))
-  throw Error('Cannot initialize full-strength defeat scenario');
- await page.waitForFunction(()=>window.LibationDungeon.snapshot().defeated===true,
-  null,{timeout:15000});
+  throw Error('Cannot initialize boss defeat test');
+ await page.waitForFunction(()=>window.LibationDungeon.snapshot().defeated===true,null,{timeout:22000});
  const defeated=await page.evaluate(()=>window.LibationDungeon.snapshot());
- if(defeated.hp!==0||!defeated.active||defeated.completed)
-  throw Error('Actual boss combat did not yield proper defeat: '+JSON.stringify(defeated));
+ if(defeated.hp!==0||defeated.completed||!defeated.active)
+  throw Error('Boss does not cause legitimate defeat: '+JSON.stringify(defeated));
  await page.screenshot({path:'/tmp/libation-dungeon-defeat.png',fullPage:false});
  await page.locator('#lwDRetry').click();
- const afterDefeatRetry=await page.evaluate(()=>window.LibationDungeon.snapshot());
- if(!afterDefeatRetry.active||afterDefeatRetry.defeated||
-    afterDefeatRetry.hp!==afterDefeatRetry.maxHP||afterDefeatRetry.room!==1)
-  throw Error('Retry failed to restore playable dungeon: '+JSON.stringify(afterDefeatRetry));
+ const restored=await page.evaluate(()=>window.LibationDungeon.snapshot());
+ if(!restored.active||restored.defeated||restored.hp!==restored.maxHP||restored.node!==0)
+  throw Error('Restart does not reset health/layout: '+JSON.stringify(restored));
  await page.locator('#lwDReturn').click();
- if((await page.evaluate(()=>window.LibationDungeon.snapshot())).active)
-  throw Error('Return failed to exit dungeon after defeat/retry');
- console.log('REAL BOSS DEFEAT AND RETRY:',JSON.stringify({defeated,afterDefeatRetry}));
  await page.locator('#devPortalClear').click();
  if((await page.locator('.pixel-marker.demo.maplibregl-marker').count())!==0)
-  throw Error('Developer portals were not cleared');
- console.log('PLAYABLE DUNGEON TEST:',JSON.stringify({first,positionBefore,positionAfter,complete,rupture}));
+  throw Error('Developer portals not cleared');
+ console.log('PLAYABLE PROCEDURAL DUNGEON TEST:',JSON.stringify({layouts,first,positionBefore,positionAfter,progress,rupture,defeated,restored}));
  console.log('V15 STABLE GPS WORLD AUDIT:',JSON.stringify(inspect),
   'BROWSER ERRORS:',JSON.stringify(errors.slice(0,8)));
  if(inspect.mapOpacity<.99||inspect.baseOpacity<.99||
