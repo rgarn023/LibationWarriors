@@ -458,7 +458,8 @@ const fs=require('fs');
  await page.waitForTimeout(250);
  const placed=await page.evaluate(()=>window.LibationDeveloper.portals());
  const nowCount=await page.locator('.pixel-marker.maplibregl-marker').count();
- if(placed.length!==2||nowCount!==4||placed[0].type!=='rupture'||placed[1].type!=='challenge')
+ if(placed.length!==2||nowCount!==4||placed[0].type!=='rupture'||placed[1].type!=='challenge'||
+    !(await page.locator('#devPortalCount').textContent()).includes('FICTIONAL GPS TEST PORTALS · 2'))
   throw Error('Developer portals did not appear as separate GPS markers: '+JSON.stringify({placed,nowCount}));
  console.log('DEV GPS TEST PORTALS:',JSON.stringify(placed));
  await page.screenshot({path:'/tmp/libation-dev-portals.png',fullPage:false});
@@ -496,7 +497,7 @@ const fs=require('fs');
  if(!await page.evaluate(()=>window.LibationDungeon.debugBossEncounter()))
   throw Error('Developer boss encounter unavailable');
  const bossStart=await page.evaluate(()=>window.LibationDungeon.snapshot());
- if(bossStart.room!==14||bossStart.bossHP!==17)
+ if(bossStart.room!==14||bossStart.bossHP!==17||bossStart.hp!==14)
   throw Error('Full-strength wormhole boss not initialized: '+JSON.stringify(bossStart));
  await page.screenshot({path:'/tmp/libation-dungeon-boss.png',fullPage:false});
  for(let strike=0;strike<10;strike++){

@@ -138,6 +138,10 @@ function render(now){
    rect('#275c54',x+9,y+22+bob,4,3);rect('#275c54',x+23,y+22+bob,4,3);
    rect('#e0dca5',x+13,y+24+bob,3,2);
   }
+  if(e.boss&&dist(e,s.player)===1&&now>=e.lastAttack-350){
+   rect('#e8b45b',x+2,y+27,29,3);
+   rect('#f7df97',x+4,y+25,25,2);
+  }
   rect('#302c3b',x+3,y-8,26,5);
   rect('#e5a579',x+4,y-7,24*Math.max(0,e.hp)/e.maxHP,3);
  }
@@ -245,7 +249,8 @@ function tick(){
    if(now>=e.lastAttack&&now>=s.invulnUntil){
     s.hp=Math.max(0,s.hp-(e.boss?3:s.kind==='challenge'?2:1));
     s.invulnUntil=now+650;s.hurtUntil=now+400;
-    e.lastAttack=now+(e.boss?930:820);
+    // Slow, clearly readable boss swings give touch players a fair dodge window.
+    e.lastAttack=now+(e.boss?1350:900);
     if(!s.hp){s.defeated=true;announce('DEFEATED — retry or return to world')}
     else announce('HIT! Dodge away, then counterattack');
    }
@@ -367,8 +372,11 @@ function debugBossEncounter(){
  const s=state;s.room=s.rooms;makeRoom();s.player=loc(2,6);s.face='right';
  s.enemies=[{x:3,y:6,hp:s.kind==='challenge'?17:12,
   maxHP:s.kind==='challenge'?17:12,boss:true,kind:0,
-  lastMove:performance.now(),lastAttack:performance.now()+900}];
- s.nextAttack=0;s.invulnUntil=performance.now()+850;
+  lastMove:performance.now(),lastAttack:performance.now()+1000}];
+ // This fixture represents arriving at the final room with full health.
+ // Boss durability and outgoing damage remain identical to normal gameplay.
+ s.hp=s.maxHP;s.hurtUntil=0;s.nextAttack=0;
+ s.invulnUntil=performance.now()+800;
  announce('DEV BOSS CHECK: defeat the real guardian with sword attacks');
  return true;
 }

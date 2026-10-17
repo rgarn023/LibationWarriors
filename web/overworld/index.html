@@ -2397,27 +2397,32 @@ function spawnDeveloperPortal(type){
 function clearDeveloperPortals(){developerPortals.length=0;refreshDeveloperPortalList();renderMarkers()}
 function refreshDeveloperPortalList(){
  const list=$('#devPortalList');if(!list)return;
+ const label=$('#devPortalCount');
+ if(label)label.textContent='FICTIONAL GPS TEST PORTALS · '+developerPortals.length;
  list.innerHTML='';
  for(const venue of developerPortals){
   const b=document.createElement('button');b.type='button';b.className='dev-select-portal';
-  b.textContent='ENTER '+venue.name.toUpperCase();b.dataset.kind=venue.type;
+  b.textContent='SELECT '+venue.name.toUpperCase();b.dataset.kind=venue.type;
+  b.setAttribute('aria-label','Select fictional test '+(venue.type==='challenge'?'wormhole':'rupture'));
   b.onclick=()=>chooseVenue(venue);list.appendChild(b);
  }
 }
 function initDeveloperTools(){
  const bar=document.createElement('div');bar.id='devPortalTools';bar.hidden=!developerMode;
- bar.innerHTML='<b>LOCAL TEST PORTALS</b><button id="devAddRupture">+ RUPTURE</button>'+
+ bar.innerHTML='<b id="devPortalCount">FICTIONAL GPS TEST PORTALS · 0</b><button id="devAddRupture">+ RUPTURE</button>'+
   '<button id="devAddWormhole">+ WORMHOLE</button><button id="devPortalClear">CLEAR</button>'+ 
   '<div id="devPortalList" aria-label="Select a developer portal"></div>';
  const css=document.createElement('style');
  css.textContent='#devPortalTools[hidden]{display:none!important}#devPortalTools{position:fixed;z-index:12;'+
-  'right:8px;bottom:calc(env(safe-area-inset-bottom) + 99px);max-width:260px;display:flex;'+
-  'flex-wrap:wrap;gap:5px;padding:7px;background:#1a3046e9;border:2px solid #dcbf88;color:#f8e2b4}'+
-  '#devPortalTools b{flex-basis:100%;font:700 10px monospace}'+
-  '#devPortalList{width:100%;display:flex;flex-direction:column;gap:4px}'+
+  'right:8px;bottom:calc(env(safe-area-inset-bottom) + 99px);width:min(88vw,300px);'+
+  'max-height:min(45vh,370px);box-sizing:border-box;overflow-y:auto;display:flex;'+
+  'flex-wrap:wrap;gap:7px;padding:10px;background:#1a3046f2;border:2px solid #dcbf88;color:#f8e2b4}'+
+  '#devPortalTools b{flex-basis:100%;font:700 11px monospace}'+
+  '#devPortalList{width:100%;display:flex;flex-direction:column;gap:6px}'+
   '#devPortalList:empty{display:none}'+
-  '#devPortalTools button{font:700 9px monospace;padding:8px 4px;background:#31495d;'+
+  '#devPortalTools button{font:700 11px monospace;min-height:41px;padding:9px 7px;background:#31495d;'+
   'color:#fbe6b9;border:1px solid #d5b98e;touch-action:manipulation}'+
+  '#devPortalList button{width:100%;text-align:left}'+
   '#map .pixel-marker.demo{filter:drop-shadow(0 0 5px #e6a7ec);outline:2px dashed #f0ba80}';
  document.head.appendChild(css);document.body.appendChild(bar);
  $('#devAddRupture').onclick=()=>spawnDeveloperPortal('rupture');
