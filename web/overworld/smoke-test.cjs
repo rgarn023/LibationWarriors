@@ -305,6 +305,21 @@ const fs=require('fs');
  if(Math.abs(resetAvatar.spriteHeight-baseAvatar.spriteHeight)>3||
     Math.abs(resetAvatar.shadowWidth-baseAvatar.shadowWidth)>3)
   throw Error('Character size failed to restore after zooming in: '+JSON.stringify({baseAvatar,resetAvatar}));
+ const animationSpec=await page.evaluate(()=>window.LibationAvatarAnimation?.status());
+ if(!animationSpec||animationSpec.targetFps<55||animationSpec.strideFrames<12||animationSpec.avatarWidth<64)
+  throw Error('High-frame customizable avatar animation missing: '+JSON.stringify(animationSpec));
+ await page.waitForFunction(()=>Number(document.querySelector('#map')?.dataset.natureDecor||0)>0,
+  null,{timeout:7000});
+ const natureReport=await page.locator('#map').evaluate(el=>({
+  count:Number(el.dataset.natureDecor||0),trees:Number(el.dataset.natureTrees||0),
+  types:Number(el.dataset.natureTypes||0),
+  visible:!!document.querySelector('#worldScenery')&&
+   getComputedStyle(document.querySelector('#worldScenery')).display!=='none'
+ }));
+ console.log('ACTUAL MOBILE NATURE / AVATAR ANIMATION:',JSON.stringify({natureReport,animationSpec}));
+ if(!natureReport.visible||natureReport.count<8||natureReport.types<2)
+  throw Error('Geographic nature layer not populated and visible: '+JSON.stringify(natureReport));
+ await page.screenshot({path:'/tmp/libation-nature-avatar-new.png',fullPage:false});
  console.log('GEOGRAPHIC AVATAR ZOOM SCALING:',JSON.stringify({baseAvatar,smallAvatar,resetAvatar}));
  await page.screenshot({path:'/tmp/libation-world-zoomed-in.png',fullPage:false});
  console.log('LOCAL ZOOM CONTROLS:',JSON.stringify({initialCamera,zoomedOut,restored}));
