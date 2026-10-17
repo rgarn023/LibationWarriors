@@ -173,6 +173,63 @@ function drawFloor(now){
    }
   }
  }
+ // Seven hand-dressed chamber identities built over the procedural tile grid.
+ // Decorations never change collision and never imply real venue interiors.
+ const style=n.template;
+ if(style==='gallery'||style==='crypt'){
+  for(let tx=3;tx<=13;tx++){
+   for(const ty of (style==='crypt'?[4,8]:[5,6,7])){
+    const x=tx*T,y=ty*T;
+    if(s.walls.has(tx+','+ty))continue;
+    rect(style==='gallery'?'#67536b':'#514856',x+3,y+3,26,26);
+    rect(style==='gallery'?'#b58b70':'#978080',x+4,y+4,24,2);
+    rect('#a89b87',x+4,y+26,24,2);
+    if(tx%3===0){
+     rect('#d6b488',x+13,y+11,7,7);rect('#3e4758',x+15,y+13,3,3);
+    }
+   }
+  }
+ }
+ if(style==='sanctum'||style==='vault'){
+  // Bronze temple seal: the guardian room visibly differs from combat halls.
+  for(let k=0;k<3;k++){
+   ctx.strokeStyle=k===1?'#d4b77c':'#6e6e73';
+   ctx.lineWidth=3;ctx.strokeRect(6*T+12+k*9,4*T+13+k*8,4*T+6-k*18,4*T+4-k*16);
+  }
+  for(const [gx,gy] of [[6,4],[10,4],[6,8],[10,8]]){
+   const x=gx*T,y=gy*T;
+   rect('#5b4b58',x+11,y+6,15,22);rect('#d1aa67',x+12,y+7,13,3);
+   rect('#f7dba1',x+18,y+12,3,8);
+  }
+ }
+ if(style==='ruins'){
+  for(const [gx,gy] of [[3,4],[13,4],[4,9],[12,9]]){
+   const x=gx*T,y=gy*T;
+   if(s.walls.has(gx+','+gy))continue;
+   rect('#4c7167',x+3,y+13,22,4);
+   rect('#75977a',x+10,y+6,3,18);
+   rect('#3a5e57',x+19,y+19,6,5);
+  }
+ }
+ if(style==='arcade'||style==='pillars'){
+  for(const [gx,gy] of [[4,4],[12,4],[4,8],[12,8]]){
+   const x=gx*T,y=gy*T;
+   rect('#31404b',x-9,y-6,47,8);
+   rect('#a5a794',x-7,y-8,43,4);
+   rect('#6d8080',x-5,y+2,6,16);rect('#6d8080',x+31,y+2,6,16);
+   rect('#d6bd8d',x-5,y+17,43,3);
+  }
+ }
+ // Room-specific wall banners, braziers and foreground architecture.
+ for(const tile of [2,14]){
+  const x=tile*T,y=2*T;
+  rect('#232c3b',x+4,y+2,24,27);
+  rect(style==='sanctum'?'#774b78':style==='crypt'?'#5a506f':'#3c6470',
+   x+7,y+2,18,22);
+  rect('#d6aa72',x+10,y+3,12,3);
+  rect('#e6d7aa',x+14,y+10,4,9);
+  rect('#242f3c',x+12,y+21,8,6);
+ }
  // Distinct themed, carefully framed masonry and scenic set-pieces.
  for(const prop of s.props){
   const x=prop.x*T,y=prop.y*T;
