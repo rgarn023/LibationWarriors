@@ -455,8 +455,9 @@ const fs=require('fs');
  if(!initially)throw Error('Settings failed to enable developer portals');
  // Claim two distinctly styled demo warriors using real user-facing buttons,
  // never inject ownership into the account or gameplay internals.
- for(const upc of ['712340000033','712340000032']){
-  await page.locator('[data-panel="summon"]').click();
+ for(const [index,upc] of ['712340000033','712340000032'].entries()){
+  if(index===0)await page.locator('[data-panel="summon"]').click();
+  else await page.locator('#collectionSummon').click();
   await page.locator('#upcInput').fill(upc);
   await page.locator('#claimDemo').click();
   await page.locator('#demoFinish').click();
