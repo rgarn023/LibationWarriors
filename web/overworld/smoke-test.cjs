@@ -622,11 +622,21 @@ const fs=require('fs');
    if(!d.debugEnemyEncounter(kind))throw Error('Enemy fixture missing '+kind);
    if(d.snapshot().enemyTypes[0]!==kind)throw Error('Wrong enemy type '+kind);
   }
-  d.debugClearRoom(); // clear the visual fixture before touch-movement verification
+  // Preserve a real in-game illustration fixture for mobile screenshots.
+  if(!d.debugEnemyGallery())throw Error('Detailed enemy gallery fixture missing');
   return {render:s.artStyle,archetypes:kinds,wormhole:s.kind};
  });
  console.log('PAINTED DUNGEON RENDERER & FIFTEEN ENEMIES:',JSON.stringify(artQA));
  await page.screenshot({path:'/tmp/libation-dungeon-new-enemies.png',fullPage:false});
+ const themeScreens=['cellar','flooded','fracture'];
+ for(const template of themeScreens){
+  if(!await page.evaluate(name=>window.LibationDungeon.debugThemePreview(name),template))
+   throw Error('Cannot display environment theme '+template);
+  if((await page.evaluate(()=>window.LibationDungeon.snapshot())).template!==template)
+   throw Error('Theme display does not match '+template);
+  await page.screenshot({path:'/tmp/libation-dungeon-theme-'+template+'.png',fullPage:false});
+ }
+ await page.evaluate(()=>window.LibationDungeon.debugThemePreview('cellar'));
  const first=await page.evaluate(()=>window.LibationDungeon.snapshot());
  if(first.kind!=='challenge'||first.rooms!==14||first.node!==0||
     first.roomType!=='entrance'||first.room!==1)

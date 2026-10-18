@@ -926,6 +926,26 @@ function debugEnemyEncounter(kind){
  s.nextAttack=0;announce('DEV ENEMY CHECK: '+kind.toUpperCase());
  return true;
 }
+// Visual QA fixtures are strictly developer-only, session-local and never
+// write scanned warrior ownership, GPS coordinates or account-backed rewards.
+function debugEnemyGallery(){
+ if(!state||!devAllowed())return false;
+ const s=state,now=performance.now();
+ const specs=[['archer',5,3],['brute',9,3],['wisp',13,3],['spider',5,9],
+  ['mage',9,9],['acolyte',13,9],['leech',4,6],['shaman',12,6]];
+ s.enemies=specs.map(([kind,x,y],i)=>({kind,x,y,hp:ENEMY_HP[kind],
+  maxHP:ENEMY_HP[kind],variant:i%3,boss:false,awake:true,blocking:false,
+  lastMove:now,nextSwing:now+600000,shieldUntil:0,windup:0,
+  hitUntil:0,stunnedUntil:now+600000,phase:1}));
+ s.warnings=[];s.projectiles=[];s.roomClear=false;s.current.cleared=false;
+ announce('DEV ART GALLERY · eight original enemy archetypes');return true;
+}
+function debugThemePreview(template){
+ if(!state||!devAllowed()||!THEMES.includes(template))return false;
+ const s=state;s.current.template=template;makeRoom();
+ if(s.current.type!=='boss')debugClearRoom();
+ announce('DEV ART PREVIEW · '+template.toUpperCase());return true;
+}
 function debugBossEncounter(){
  if(!state||!devAllowed())return false;
  const s=state;s.nodeIndex=s.plan.boss;makeRoom();
@@ -942,5 +962,5 @@ function debugBossEncounter(){
 }
 window.LibationDungeon=Object.freeze({start,stop,snapshot,move:step,attack,dodge,
  previewWarrior,inspectLayout,debugClearRoom,debugCombatEncounter,
- debugEnemyEncounter,debugBossEncounter});
+ debugEnemyEncounter,debugEnemyGallery,debugThemePreview,debugBossEncounter});
 })();
