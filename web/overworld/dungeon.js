@@ -12,7 +12,9 @@ const DOOR={up:{x:8,y:1},right:{x:15,y:6},
  down:{x:8,y:11},left:{x:1,y:6}};
 const ENTRY={up:{x:8,y:2},right:{x:14,y:6},
  down:{x:8,y:10},left:{x:2,y:6}};
-const THEMES=['pillars','crypt','gallery','arcade','sanctum','ruins','vault'];
+const THEMES=['pillars','crypt','gallery','arcade','sanctum','ruins','vault','cellar','flooded','fracture'];
+const ENEMIES=['slime','skeleton','bat','sentinel','specter','thornbound','mimic','archer','brute','wisp','spider','mage','acolyte','leech','shaman'];
+const ENEMY_HP={slime:3,skeleton:5,bat:3,sentinel:7,specter:4,thornbound:5,mimic:5,archer:4,brute:10,wisp:4,spider:4,mage:6,acolyte:9,leech:5,shaman:6};
 let state=null,root=null,canvas=null,ctx=null,raf=0,timer=0,held=null,heldAt=0;
 function seed(value){let h=2166136261;for(const c of String(value))h=Math.imul(h^c.charCodeAt(0),16777619)>>>0;return h||1}
 function rng(value){let n=seed(value);return()=>{n=(Math.imul(n,1664525)+1013904223)>>>0;return n/4294967296}}
@@ -67,7 +69,7 @@ function generateLayout(value,count){
   else if(n.id===treasure)n.type='treasure';
   else if(n.id===shrine)n.type='shrine';
   n.depth=depth[n.id];
-  n.template=n.type==='boss'?'sanctum':randomItem(r,THEMES);
+  n.template=n.type==='boss'?'sanctum':n.id===1?'cellar':n.id===2?'flooded':n.id===3?'fracture':randomItem(r,THEMES);
   n.cleared=false;n.collected=false;
  }
  return {seed:String(value),count,boss,treasure,shrine,nodes};
@@ -103,6 +105,12 @@ function makeRoom(entry='left'){
   for(let i=0;i<12;i++){const x=3+Math.floor(r()*11),y=3+Math.floor(r()*7);wall(x,y)}
  }else if(n.template==='vault'){
   for(const x of [4,5,11,12])for(const y of [4,8])pillar(x,y);
+ }else if(n.template==='cellar'){
+  for(const x of [3,4,12,13])for(const y of [3,9])wall(x,y);
+ }else if(n.template==='flooded'){
+  for(const x of [4,12])for(const y of [3,4,9,10])pillar(x,y);
+ }else if(n.template==='fracture'){
+  for(const x of [4,12])for(const y of [3,9])pillar(x,y);
  }
  // Carved passages guarantee unobstructed travel among every connected door.
  // Decoration may vary, but a room must never be unsolvable by construction.
@@ -127,15 +135,14 @@ function makeRoom(entry='left'){
   for(let i=0;i<amount&&spots.length;i++){
    const k=Math.floor(r()*spots.length),pos=spots.splice(k,1)[0];
    const roster=s.kind==='challenge'?
-    ['specter','sentinel','thornbound','skeleton','mimic','bat','slime']:
-    ['slime','skeleton','bat','thornbound','sentinel','mimic','specter'];
-   const kind=boss?'guardian':randomItem(r,roster);
-   const hp=boss?(s.kind==='challenge'?17:12):
-    kind==='sentinel'?7:kind==='skeleton'?5:
-    kind==='thornbound'?5:kind==='mimic'?5:kind==='specter'?4:3;
+    ['specter','sentinel','mimic','brute','wisp','spider','mage','acolyte','leech','shaman','archer']:
+    ['slime','skeleton','bat','thornbound','mimic','archer','brute','spider','acolyte','leech','shaman'];
+   const available=roster.filter(k=>n.depth>1||!['brute','acolyte','shaman','mage'].includes(k));
+   const kind=boss?'guardian':randomItem(r,available);
+   const hp=boss?(s.kind==='challenge'?17:12):(ENEMY_HP[kind]||3);
    s.enemies.push({...pos,kind,boss,hp,maxHP:hp,awake:kind!=='mimic',
-    lastMove:performance.now(),nextSwing:performance.now()+1100,
-    windup:0,hitUntil:0,stunnedUntil:0,blocking:false,phase:1});
+    variant:Math.floor(r()*3),lastMove:performance.now(),nextSwing:performance.now()+1100,
+    windup:0,hitUntil:0,stunnedUntil:0,blocking:false,shieldUntil:0,phase:1});
    for(let j=spots.length-1;j>=0;j--)if(dist(spots[j],pos)<3)spots.splice(j,1);
   }
  }
@@ -556,8 +563,9 @@ function attack(){
   const side=Math.abs((e.x-s.player.x)*dy-(e.y-s.player.y)*dx);
   if(forward!==1||side>1)continue;
   hit=true;
-  const parried=e.kind==='skeleton'&&e.blocking&&e.hp>2;
-  e.hp-=parried?1:2;
+  const parried=['skeleton','acolyte'].includes(e.kind)&&e.blocking&&e.hp>2;
+  const shielded=e.kind==='mage'&&now<e.shieldUntil;
+  e.hp-=shielded?0:parried?1:2;
   e.blocking=false;e.awake=true;
   e.hitUntil=now+200;e.stunnedUntil=now+(e.boss?230:320);
   e.windup=0;s.sparks.push({x:e.x,y:e.y,until:now+270});
@@ -597,11 +605,77 @@ function chase(enemy){
   }
  }
 }
+function dodge(){
+ const s=state,now=performance.now();
+ if(!s||s.completed||s.defeated||now<s.nextDodge)return false;
+ const [dx,dy]=DIR[s.face];let moved=false;
+ for(let i=0;i<2;i++){
+  const x=s.player.x+dx,y=s.player.y+dy;
+  if(blocked(x,y)||s.enemies.some(e=>e.x===x&&e.y===y))break;
+  s.player=loc(x,y);moved=true;
+ }
+ if(!moved)return false;
+ s.nextDodge=now+1150;s.invulnUntil=Math.max(s.invulnUntil,now+430);
+ s.walkUntil=now+190;s.walkFrame=(s.walkFrame+1)%4;
+ announce('DODGE · brief invulnerability');return true;
+}
 function hurtPlayer(s,damage,now){
  s.hp=Math.max(0,s.hp-damage);
  s.invulnUntil=now+780;s.hurtUntil=now+440;
  announce(s.hp?'HIT · dodge and counterattack':'DEFEATED · retry or return to world');
  if(!s.hp)s.defeated=true;
+}
+
+function specialEnemyAI(e,s,now,distance){
+ if(e.kind==='skeleton'||e.kind==='acolyte')
+  e.blocking=distance===1&&now>=e.nextSwing-460;
+ if(e.chargeAt&&now>=e.chargeAt){e.chargeAt=0;chase(e);chase(e)}
+ if(now<e.nextSwing||distance>8||distance<2)return false;
+ const aim=()=>{
+  const x=s.player.x-e.x,y=s.player.y-e.y;
+  return Math.abs(x)>=Math.abs(y)?[Math.sign(x),0]:[0,Math.sign(y)];
+ };
+ const shot=(vx,vy,kind,delay=220)=>{
+  s.projectiles.push({x:e.x,y:e.y,dx:vx,dy:vy,kind,
+   nextMove:now+delay,started:now,lifetime:1550});
+ };
+ const warning=(kind,duration,radius=.65)=>{
+  s.warnings.push({x:s.player.x,y:s.player.y,kind,radius,
+   started:now,until:now+duration});
+ };
+ if(e.kind==='archer'){
+  const [dx,dy]=aim();shot(dx,dy,'arrow');e.nextSwing=now+1400;return true;
+ }
+ if(e.kind==='wisp'){
+  const [dx,dy]=aim();shot(dx,dy,'spark',260);
+  shot(dy,dx,'spark',330);e.nextSwing=now+1900;return true;
+ }
+ if(e.kind==='spider'&&distance<=5){
+  warning('web',690);e.nextSwing=now+1650;return true;
+ }
+ if(e.kind==='mage'&&distance<=6){
+  e.shieldUntil=now+730;warning('rune',840,1);
+  e.nextSwing=now+2000;return true;
+ }
+ if(e.kind==='shaman'&&distance<=6){
+  warning('spore',870,1.1);
+  if(s.enemies.length<5){
+   const empty=ORDER.map(k=>DIR[k]).map(([dx,dy])=>loc(e.x+dx,e.y+dy))
+    .find(p=>!blocked(p.x,p.y)&&dist(p,s.player)>0&&
+      !s.enemies.some(t=>t.x===p.x&&t.y===p.y));
+   if(empty)s.enemies.push({...empty,kind:'slime',boss:false,hp:2,maxHP:2,variant:2,
+    awake:true,blocking:false,phase:1,lastMove:now,nextSwing:now+1200,
+    windup:0,hitUntil:0,stunnedUntil:0});
+  }
+  e.nextSwing=now+2450;return true;
+ }
+ if(e.kind==='leech'&&distance<=4){
+  warning('leech',560);e.nextSwing=now+1700;return true;
+ }
+ if(e.kind==='brute'&&distance<=5&&(e.x===s.player.x||e.y===s.player.y)){
+  warning('charge',580);e.chargeAt=now+580;e.nextSwing=now+1900;return true;
+ }
+ return false;
 }
 function tick(){
  const s=state;if(!s||s.completed||s.defeated)return;
@@ -657,7 +731,7 @@ function tick(){
     started:now,until:now+720});
    e.nextSwing=now+1700;continue;
   }
-  if(e.kind==='skeleton')e.blocking=distance===1&&now>=e.nextSwing-450;
+  if(specialEnemyAI(e,s,now,distance))continue;
   if(distance===1){
    if(e.windup&&now>=e.windup){
     e.windup=0;e.nextSwing=now+(e.boss?1200:950);
@@ -669,10 +743,9 @@ function tick(){
    }
   }else{
    if(e.windup)e.windup=0;
-   const pace=e.kind==='bat'?330:e.kind==='sentinel'?580:
-    e.kind==='skeleton'?520:e.kind==='guardian'?560:
-    e.kind==='specter'?790:e.kind==='thornbound'?680:
-    e.kind==='mimic'?610:470;
+   const pace={bat:330,sentinel:580,skeleton:520,guardian:560,specter:790,
+    thornbound:680,mimic:610,archer:790,brute:720,wisp:510,spider:360,
+    mage:950,acolyte:670,leech:410,shaman:990}[e.kind]||470;
    if(now-e.lastMove>pace*(s.kind==='challenge'?.88:1)){
     e.lastMove=now;
     // Ancient sentinels charge along a clear lane; specters slip through
@@ -707,7 +780,8 @@ function initialize(){
   '<button data-dmove="left" class="left" aria-label="Move left">◀</button>'+
   '<button data-dmove="down" class="down" aria-label="Move down">▼</button>'+
   '<button data-dmove="right" class="right" aria-label="Move right">▶</button></div>'+
-  '<button id="lwDAttack" aria-label="Attack" title="Attack"><span class="lwDAttackIcon" aria-hidden="true">⚔</span><span class="lwDAttackLabel">ATTACK</span></button></div>'+
+  '<div class="lwDActionButtons"><button id="lwDDodge" aria-label="Dodge forward">↪<small>DODGE</small></button>'+
+  '<button id="lwDAttack" aria-label="Attack" title="Attack"><span class="lwDAttackIcon" aria-hidden="true">⚔</span><span class="lwDAttackLabel">ATTACK</span></button></div></div>'+
   '<div id="lwDResult" hidden></div>'+
   '<footer><button id="lwDRetry">NEW LAYOUT</button><button id="lwDReturn">RETURN TO WORLD</button></footer>';
  const css=document.createElement('style');css.textContent=
@@ -735,6 +809,10 @@ function initialize(){
  'box-shadow:0 8px 22px #040c14ad,0 0 22px #9679ba44}'+
  '#lwDMessage{text-align:center;min-height:20px;margin:4px;font-size:11px;color:#e8d397}'+
  '.lwDControls{width:min(100%,530px);min-height:132px;display:flex;justify-content:space-around;align-items:center}'+
+ '.lwDActionButtons{display:flex;align-items:center;gap:8px}'+
+ '#lwDDodge{width:65px;height:65px;border-radius:50%!important;background:#3d6a67!important;'+
+ 'font-size:24px!important;display:grid;place-items:center;align-content:center;padding:4px!important}'+
+ '#lwDDodge small{font-size:9px;display:block}'+
  '.lwDPad{display:grid;grid-template-columns:repeat(3,48px);grid-template-rows:repeat(3,42px)}'+
  '.lwDPad button{font-size:22px!important;padding:3px!important}'+
  '.lwDPad .up{grid-column:2;grid-row:1}.lwDPad .left{grid-column:1;grid-row:2}'+
@@ -761,6 +839,7 @@ function initialize(){
    b.addEventListener(type,()=>{if(held===dir)held=null});
  }
  $('lwDAttack').addEventListener('pointerdown',e=>{e.preventDefault();attack()});
+ $('lwDDodge').addEventListener('pointerdown',e=>{e.preventDefault();dodge()});
  $('lwDExit').onclick=stop;$('lwDReturn').onclick=stop;
  $('lwDRetry').onclick=()=>{if(state)start({venue:state.venue,warrior:state.warrior})};
  window.addEventListener('keydown',e=>{
@@ -768,6 +847,7 @@ function initialize(){
   const dir={arrowup:'up',w:'up',arrowdown:'down',s:'down',
    arrowleft:'left',a:'left',arrowright:'right',d:'right'}[e.key.toLowerCase()];
   if(dir){e.preventDefault();step(dir)}
+  else if(e.key==='Shift'){e.preventDefault();dodge()}
   else if(e.key===' '||e.key==='Enter'){e.preventDefault();attack()}
   else if(e.key==='Escape'){e.preventDefault();stop()}
  },{passive:false});
@@ -782,7 +862,7 @@ function start({venue,warrior}={}){
   warrior:identity(warrior),kind,rooms,plan:generateLayout(runSeed,rooms),
   nodeIndex:0,visited:new Set(),hp:kind==='challenge'?14:18,
   maxHP:kind==='challenge'?14:18,player:loc(2,6),walls:new Set(),props:[],
-  enemies:[],projectiles:[],warnings:[],face:'right',gold:0,kills:0,nextAttack:0,
+  enemies:[],projectiles:[],warnings:[],face:'right',gold:0,kills:0,nextAttack:0,nextDodge:0,
   attackUntil:0,invulnUntil:0,hurtUntil:0,lastStep:0,walkUntil:0,walkFrame:0,sparks:[],
   completed:false,defeated:false,roomClear:false,message:''};
  root.hidden=false;document.body.classList.add('in-dungeon');$('lwDResult').hidden=true;
@@ -805,6 +885,7 @@ function snapshot(){
   node:s.nodeIndex,roomType:s.current.type,template:s.current.template,
   enemyTypes:s.enemies.map(e=>e.kind),projectiles:s.projectiles.length,
   warnings:s.warnings.length,bossPhase:s.enemies.find(e=>e.boss)?.phase??null,
+  dodgeReady:performance.now()>=s.nextDodge,enemyVariants:s.enemies.map(e=>e.variant||0),
   artStyle:window.LibationDungeonArt?'painted-2.5d':'legacy-pixel',
   exits:{...s.current.edges},layoutSeed:s.plan.seed,visited:[...s.visited],
   // These are only local fictional dungeon geometry, never user location.
@@ -835,8 +916,9 @@ function debugEnemyEncounter(kind){
  const allowed=window.LibationDungeonArt?.enemyTypes||['slime','skeleton','bat','sentinel'];
  if(!allowed.includes(kind))return false;
  const s=state,[dx,dy]=DIR[s.face],x=s.player.x+dx,y=s.player.y+dy,now=performance.now();
- s.enemies=[{x,y,hp:kind==='sentinel'?7:5,maxHP:kind==='sentinel'?7:5,
-  kind,boss:false,lastMove:now,nextSwing:now+850,
+ const hp=ENEMY_HP[kind]||5;
+ s.enemies=[{x,y,hp,maxHP:hp,
+  kind,boss:false,lastMove:now,nextSwing:now+850,variant:1,shieldUntil:0,
   windup:0,hitUntil:0,stunnedUntil:0,awake:kind!=='mimic',blocking:false,phase:1}];
  s.projectiles=[];s.warnings=[];s.roomClear=false;s.current.cleared=false;
  s.nextAttack=0;announce('DEV ENEMY CHECK: '+kind.toUpperCase());
@@ -856,7 +938,7 @@ function debugBossEncounter(){
  announce('DEV BOSS CHECK: fight a full-health guardian');
  return true;
 }
-window.LibationDungeon=Object.freeze({start,stop,snapshot,move:step,attack,
+window.LibationDungeon=Object.freeze({start,stop,snapshot,move:step,attack,dodge,
  previewWarrior,inspectLayout,debugClearRoom,debugCombatEncounter,
  debugEnemyEncounter,debugBossEncounter});
 })();
