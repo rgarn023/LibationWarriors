@@ -3,15 +3,21 @@
    geography are generated or changed by this module. Original pixel artwork. */
 (()=>{
 'use strict';
-const W=17,H=13,T=32,X=W*T,Y=H*T;
+const W=25,H=19,T=32,X=W*T,Y=H*T;
 const $=id=>document.getElementById(id);
 const DIR={up:[0,-1],right:[1,0],down:[0,1],left:[-1,0]};
 const ORDER=['up','right','down','left'];
 const OPP={up:'down',right:'left',down:'up',left:'right'};
-const DOOR={up:{x:8,y:1},right:{x:15,y:6},
- down:{x:8,y:11},left:{x:1,y:6}};
-const ENTRY={up:{x:8,y:2},right:{x:14,y:6},
- down:{x:8,y:10},left:{x:2,y:6}};
+const DOOR={up:{x:12,y:1},right:{x:23,y:9},
+ down:{x:12,y:17},left:{x:1,y:9}};
+const ENTRY={up:{x:12,y:2},right:{x:22,y:9},
+ down:{x:12,y:16},left:{x:2,y:9}};
+const SPAWNS={
+ left:[{x:2,y:9},{x:2,y:8},{x:2,y:10},{x:3,y:9}],
+ right:[{x:22,y:9},{x:22,y:8},{x:22,y:10},{x:21,y:9}],
+ up:[{x:12,y:2},{x:11,y:2},{x:13,y:2},{x:12,y:3}],
+ down:[{x:12,y:16},{x:11,y:16},{x:13,y:16},{x:12,y:15}]
+};
 const THEMES=['pillars','crypt','gallery','arcade','sanctum','ruins','vault','cellar','flooded','fracture'];
 const ENEMIES=['slime','skeleton','bat','sentinel','specter','thornbound','mimic','archer','brute','wisp','spider','mage','acolyte','leech','shaman'];
 const ENEMY_HP={slime:3,skeleton:5,bat:3,sentinel:7,specter:4,thornbound:5,mimic:5,archer:4,brute:10,wisp:4,spider:4,mage:6,acolyte:9,leech:5,shaman:6};
@@ -88,36 +94,39 @@ function updateHUD(){
 }
 function makeRoom(entry='left'){
  const s=state,n=s.current=s.plan.nodes[s.nodeIndex],r=rng(s.plan.seed+':room:'+n.id);
- s.projectiles=[];s.warnings=[];s.player=loc(ENTRY[entry].x,ENTRY[entry].y);
+ s.projectiles=[];s.warnings=[];
+ s.partySpawnSlots=SPAWNS[entry].map(p=>({...p}));
+ s.player=loc(s.partySpawnSlots[0].x,s.partySpawnSlots[0].y);
  s.face=entry==='left'?'right':entry==='right'?'left':entry==='up'?'down':'up';
  s.walls=new Set();s.props=[];s.enemies=[];s.roomClear=!!n.cleared;
- const wall=(x,y)=>{if(x>=2&&x<=14&&y>=2&&y<=10)s.walls.add(x+','+y)};
+ const wall=(x,y)=>{if(x>=2&&x<=22&&y>=2&&y<=16)s.walls.add(x+','+y)};
  const pillar=(x,y)=>{wall(x,y);s.props.push({x,y,kind:'pillar'})};
  if(n.template==='pillars'||n.template==='sanctum'){
-  for(const x of [4,12])for(const y of [3,9])pillar(x,y);
+  for(const x of [5,19])for(const y of [4,14])pillar(x,y);
  }else if(n.template==='crypt'){
-  for(const x of [4,11])for(const y of [3,8]){
+  for(const x of [5,18])for(const y of [4,13]){
    wall(x,y);wall(x+1,y);s.props.push({x,y,kind:'coffin'});
   }
  }else if(n.template==='gallery'){
-  for(let x=3;x<=13;x++){if(x!==8){wall(x,3);wall(x,9)}}
+  for(let x=4;x<=20;x++){if(x<11||x>13){wall(x,4);wall(x,14)}}
  }else if(n.template==='arcade'){
-  for(const x of [5,11])for(const y of [3,4,8,9])wall(x,y);
+  for(const x of [6,18])for(const y of [4,5,13,14])wall(x,y);
  }else if(n.template==='ruins'){
-  for(let i=0;i<12;i++){const x=3+Math.floor(r()*11),y=3+Math.floor(r()*7);wall(x,y)}
+  for(let i=0;i<23;i++){const x=3+Math.floor(r()*19),y=3+Math.floor(r()*13);wall(x,y)}
  }else if(n.template==='vault'){
-  for(const x of [4,5,11,12])for(const y of [4,8])pillar(x,y);
+  for(const x of [5,6,18,19])for(const y of [5,13])pillar(x,y);
  }else if(n.template==='cellar'){
-  for(const x of [3,4,12,13])for(const y of [3,9])wall(x,y);
+  for(const x of [4,5,19,20])for(const y of [4,14])wall(x,y);
  }else if(n.template==='flooded'){
-  for(const x of [4,12])for(const y of [3,4,9,10])pillar(x,y);
+  for(const x of [5,19])for(const y of [4,5,13,14])pillar(x,y);
  }else if(n.template==='fracture'){
-  for(const x of [4,12])for(const y of [3,9])pillar(x,y);
+  for(const x of [5,19])for(const y of [4,14])pillar(x,y);
  }
  // Carved passages guarantee unobstructed travel among every connected door.
  // Decoration may vary, but a room must never be unsolvable by construction.
- for(let x=1;x<=15;x++)for(let y=5;y<=7;y++)s.walls.delete(x+','+y);
- for(let x=7;x<=9;x++)for(let y=1;y<=11;y++)s.walls.delete(x+','+y);
+ for(let x=1;x<=23;x++)for(let y=7;y<=11;y++)s.walls.delete(x+','+y);
+ for(let x=10;x<=14;x++)for(let y=1;y<=17;y++)s.walls.delete(x+','+y);
+ for(const p of s.partySpawnSlots)s.walls.delete(p.x+','+p.y);
  s.props=s.props.filter(p=>s.walls.has(p.x+','+p.y));
  s.visited.add(n.id);
  if(n.type==='treasure'&&!n.collected){
@@ -128,10 +137,12 @@ function makeRoom(entry='left'){
  }
  if(n.type==='treasure'||n.type==='shrine'||n.type==='entrance')s.roomClear=true;
  if(!s.roomClear){
-  const boss=n.type==='boss',amount=boss?1:Math.min(5,(s.kind==='challenge'?3:2)+Math.floor(n.depth/3));
+  const boss=n.type==='boss',amount=boss?1:Math.min(9,(s.kind==='challenge'?5:4)+Math.floor(n.depth/3));
   const spots=[];
-  for(let y=3;y<=9;y++)for(let x=4;x<=13;x++){
-   if(s.walls.has(x+','+y)||dist({x,y},s.player)<4||Math.abs(x-8)<2&&Math.abs(y-6)<2)continue;
+  for(let y=3;y<=15;y++)for(let x=4;x<=21;x++){
+   if(s.walls.has(x+','+y)||dist({x,y},s.player)<5||
+     Math.abs(x-12)<2&&Math.abs(y-9)<2||
+     s.partySpawnSlots.some(p=>dist({x,y},p)<3))continue;
    spots.push({x,y});
   }
   for(let i=0;i<amount&&spots.length;i++){
@@ -506,13 +517,27 @@ function drawMap(){
 function render(now){
  if(!state||root.hidden)return;
  const s=state;ctx.imageSmoothingEnabled=true;
- const art=window.LibationDungeonArt;
- if(art)art.drawRoom(ctx,s,now);else drawFloor(now);
- for(const e of s.enemies){
-  if(art)art.drawEnemy(ctx,e,now,s.kind);else drawEnemy(e,now);
+ const art=window.LibationDungeonArt,snes=window.LibationDungeonSNES;
+ if(snes){
+  snes.drawRoom(ctx,s,now);
+  for(const e of s.enemies)snes.drawEnemy(ctx,e,now,s.kind);
+  snes.drawEffects(ctx,s,now);
+  snes.drawHero(ctx,{...s,animation:heroAnimation(now)},now);
+  if(s.previewParty){
+   // Developer-only four-person scale preview; not connected players.
+   for(let i=1;i<4;i++){
+    const p=s.partySpawnSlots[i];
+    snes.drawHero(ctx,{...s,player:p,
+      warrior:{...s.warrior,gender:i%2?'male':'female'},
+      face:i===1?'down':'right',animation:'idle'},now);
+   }
+  }
+ }else{
+  if(art)art.drawRoom(ctx,s,now);else drawFloor(now);
+  for(const e of s.enemies){if(art)art.drawEnemy(ctx,e,now,s.kind);else drawEnemy(e,now)}
+  if(art)art.drawEffects(ctx,s,now);
+  drawHero(now);
  }
- if(art)art.drawEffects(ctx,s,now);
- drawHero(now);
  for(const fx of s.sparks){
   if(fx.until<=now)continue;
   const f=(fx.until-now)/270,x=fx.x*T+16,y=fx.y*T+15;
@@ -546,7 +571,7 @@ function step(dir){
    s.nodeIndex=destination;makeRoom(OPP[side]);return true;
   }
  }
- if(s.roomClear&&s.current.type==='boss'&&x===8&&y===6){
+ if(s.roomClear&&s.current.type==='boss'&&x===12&&y===9){
   s.completed=true;announce('GUARDIAN SEAL CLAIMED · local prototype rewards only');
   $('lwDResult').hidden=false;
   $('lwDResult').textContent='VICTORY · '+s.gold+' test gold · '+s.kills+' enemies';
@@ -806,8 +831,8 @@ function initialize(){
  '#lwDMap{height:57px;width:110px;image-rendering:pixelated;border:1px solid #7d8b7f}'+
  '#lwDRoomInfo{font-size:11px;line-height:1.4;color:#ead6a8}'+
  '.lwDView{width:min(100%,700px);flex:none;min-height:0;display:flex;align-items:center;margin:5px 0}'+
- '#lwDCanvas{display:block;width:100%;max-height:52vh;aspect-ratio:17 / 13;object-fit:contain;'+
- 'image-rendering:auto;border:3px solid #cfb680;background:#1c293a;border-radius:8px;'+
+ '#lwDCanvas{display:block;width:100%;max-height:58vh;aspect-ratio:25 / 19;object-fit:contain;'+
+ 'image-rendering:pixelated;border:3px solid #cfb680;background:#1c293a;border-radius:8px;'+
  'box-shadow:0 8px 22px #040c14ad,0 0 22px #9679ba44}'+
  '#lwDMessage{text-align:center;min-height:20px;margin:4px;font-size:11px;color:#e8d397}'+
  '.lwDControls{width:min(100%,530px);min-height:132px;display:flex;justify-content:space-around;align-items:center}'+
@@ -863,7 +888,7 @@ function start({venue,warrior}={}){
  state={venue:{id:String(venue.id||venue.name),name:String(venue.name||'Rift'),type:kind},
   warrior:identity(warrior),kind,rooms,plan:generateLayout(runSeed,rooms),
   nodeIndex:0,visited:new Set(),hp:kind==='challenge'?14:18,
-  maxHP:kind==='challenge'?14:18,player:loc(2,6),walls:new Set(),props:[],
+  maxHP:kind==='challenge'?14:18,player:loc(2,9),walls:new Set(),props:[],partySpawnSlots:[],
   enemies:[],projectiles:[],warnings:[],face:'right',gold:0,kills:0,nextAttack:0,nextDodge:0,
   attackUntil:0,invulnUntil:0,hurtUntil:0,lastStep:0,walkUntil:0,walkFrame:0,sparks:[],
   completed:false,defeated:false,roomClear:false,message:''};
@@ -887,8 +912,11 @@ function snapshot(){
   node:s.nodeIndex,roomType:s.current.type,template:s.current.template,
   enemyTypes:s.enemies.map(e=>e.kind),projectiles:s.projectiles.length,
   warnings:s.warnings.length,bossPhase:s.enemies.find(e=>e.boss)?.phase??null,
+  geometry:{width:W,height:H,tile:T,pixelWidth:X,pixelHeight:Y},
+  partyCapacity:4,partySpawnSlots:s.partySpawnSlots.map(p=>({...p})),
+  partyPreview:!!s.previewParty,
   dodgeReady:performance.now()>=s.nextDodge,enemyVariants:s.enemies.map(e=>e.variant||0),
-  artStyle:window.LibationDungeonArt?'painted-2.5d':'legacy-pixel',
+  artStyle:window.LibationDungeonSNES?'snes-16bit':window.LibationDungeonArt?'painted-2.5d':'legacy-pixel',
   exits:{...s.current.edges},layoutSeed:s.plan.seed,visited:[...s.visited],
   // These are only local fictional dungeon geometry, never user location.
   walls:[...s.walls]};
@@ -928,6 +956,12 @@ function debugEnemyEncounter(kind){
 }
 // Visual QA fixtures are strictly developer-only, session-local and never
 // write scanned warrior ownership, GPS coordinates or account-backed rewards.
+function debugPartyPreview(enabled=true){
+ if(!state||!devAllowed())return false;
+ state.previewParty=!!enabled;
+ announce(state.previewParty?'DEV PARTY SCALE · four spawns, single player':
+  'Single-player view');return true;
+}
 function debugEnemyGallery(){
  if(!state||!devAllowed())return false;
  const s=state,now=performance.now();
@@ -949,8 +983,8 @@ function debugThemePreview(template){
 function debugBossEncounter(){
  if(!state||!devAllowed())return false;
  const s=state;s.nodeIndex=s.plan.boss;makeRoom();
- s.player=loc(2,6);s.face='right';
- s.enemies=[{x:3,y:6,hp:s.kind==='challenge'?17:12,
+ s.player=loc(2,9);s.face='right';
+ s.enemies=[{x:3,y:9,hp:s.kind==='challenge'?17:12,
   maxHP:s.kind==='challenge'?17:12,kind:'guardian',boss:true,
   lastMove:performance.now(),nextSwing:performance.now()+850,
   windup:0,hitUntil:0,stunnedUntil:0,phase:1,awake:true}];
@@ -962,5 +996,5 @@ function debugBossEncounter(){
 }
 window.LibationDungeon=Object.freeze({start,stop,snapshot,move:step,attack,dodge,
  previewWarrior,inspectLayout,debugClearRoom,debugCombatEncounter,
- debugEnemyEncounter,debugEnemyGallery,debugThemePreview,debugBossEncounter});
+ debugEnemyEncounter,debugEnemyGallery,debugPartyPreview,debugThemePreview,debugBossEncounter});
 })();
