@@ -446,6 +446,8 @@ function heroAtlas(v){
  heroCache.set(key,atlas);return atlas;
 }
 function previewWarrior(v,dir='down',action='idle',frame=0){
+ if(window.LibationDungeonArt?.previewHero)
+  return window.LibationDungeonArt.previewHero(v,dir,action,frame);
  const atlas=heroAtlas(v),c=document.createElement('canvas');
  c.width=48;c.height=64;const g=c.getContext('2d');
  g.imageSmoothingEnabled=false;
@@ -467,6 +469,10 @@ function drawHero(now){
  const frame=action==='walk'?s.walkFrame%4:
   action==='attack'?Math.max(0,Math.min(3,Math.floor((205-(s.attackUntil-now))/55))):
   action==='hurt'?Math.floor(now/85)%4:action==='defeat'?3:Math.floor(now/550)%2;
+ if(window.LibationDungeonArt?.drawHero){
+  window.LibationDungeonArt.drawHero(ctx,s.warrior,s.face,action,frame,x+16,y+16);
+  return;
+ }
  const sheet=heroAtlas(s.warrior);
  ctx.drawImage(sheet,(ACTIONS.indexOf(action)*4+frame)*48,ORDER.indexOf(s.face)*64,
   48,64,x-8,y-31,48,64);

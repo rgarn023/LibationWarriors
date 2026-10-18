@@ -296,7 +296,124 @@ function drawEffects(c,s,time){
  }
  c.restore();
 }
-window.LibationDungeonArt=Object.freeze({drawRoom,drawEnemy,drawEffects,
+
+// A unified illustrated hero: the staging preview and active player use the
+// identical vector animation source. Faction and gender influence appearance,
+// but never mutate the normalized UPC blueprint or a user's collection.
+function hero(c,value,dir,action,frame,x,y){
+ const who=value&&typeof value==='object'?value:{gender:'male',faction:'Pirate',name:'Warrior'};
+ const woman=who.gender==='female',back=dir==='up',side=dir==='left'||dir==='right';
+ const stride=action==='walk'?Math.sin(frame*Math.PI*.5)*5:0;
+ const bounce=action==='walk'?Math.abs(Math.sin(frame*Math.PI*.5))*2:
+  action==='idle'?frame%2:0;
+ const attack=action==='attack',hurt=action==='hurt',defeat=action==='defeat';
+ const primary=woman?'#376ca2':'#853e4b',secondary=woman?'#609ac2':'#b75e4f';
+ const shirt=woman?'#c9d8c9':'#f0d7ad',skin=woman?'#e6ab83':'#d49c7a';
+ const hair=woman?'#ddb66a':'#6a3a32',gold='#e2b579';
+ c.save();c.translate(x,y);
+ if(dir==='left'){c.scale(-1,1)}
+ if(defeat){c.translate(-16,14);c.rotate(-1.13);c.translate(16,-14)}
+ ellipse(c,0,21,19,5,'#13212b8f');
+ c.translate(0,-bounce);
+ // Boots articulate independently; upper body remains balanced over the feet.
+ const boots=[[-10,-stride*.52],[9,stride*.52]];
+ for(const [bx,delta] of boots){
+  poly(c,[[bx-6,1+delta],[bx+5,1+delta],[bx+6,20+delta],
+   [bx+10,23+delta],[bx-9,23+delta],[bx-9,19+delta]],
+   grad(c,bx-6,0,11,24,'#b58b5d','#342d35'),'#352f35',1.8);
+  line(c,bx-3,14+delta,bx+3,14+delta,2,gold);
+ }
+ // Animated fabric cape hangs behind the armor and sways while walking.
+ const flow=action==='walk'?stride*.7:Math.sin(frame*.8)*1.2;
+ poly(c,[[-17,-37],[12,-37],[19,-16],[23+flow,11],
+  [5+flow,14],[-11+flow,9],[-20,-12]],
+  grad(c,-17,-36,34,51,woman?'#1d416e':'#663342',woman?'#5174a3':'#be6a63'),
+  '#222b3c',1.5);
+ poly(c,[[7,-27],[19,-19],[23+flow,8],[9+flow,10]],
+  '#e9d5af','#c8a87b',1.2);
+ line(c,14,-17,19+flow,5,1.5,'#fff1cb');
+ // Torso, sleeves and gloves.
+ poly(c,[[-15,-35],[11,-36],[19,-26],[14,-1],[-13,0],[-18,-24]],
+  grad(c,-15,-35,34,35,secondary,primary),'#333344',2);
+ poly(c,[[-9,-34],[4,-36],[13,-17],[5,-6],[-8,-9]],
+  grad(c,-9,-33,20,30,shirt,primary),gold,1);
+ rounded(c,-12,-5,26,8,3,'#66433b',gold);
+ rounded(c,-4,-6,10,10,3,gold,'#765334');
+ ellipse(c,1,0,2,2,'#fff3cf');
+ const armLift=attack?[0,11,23,8][frame]:0;
+ poly(c,[[-17,-31],[-9,-26],[-15,-11],[-21,-11],[-23,-20]],
+  secondary,'#343849',1.5);
+ ellipse(c,-17,-11,5,6,skin);
+ poly(c,[[12,-31],[20,-28],[24,-17-armLift],
+  [18,-11-armLift],[10,-18]],primary,gold,1.3);
+ ellipse(c,20,-12-armLift,5,6,skin);
+ rounded(c,-19,-11,8,7,2,'#765340');
+ rounded(c,17,-12-armLift,9,7,2,'#765340');
+ // Neck, hair layers and face separated from shoulder silhouette.
+ rounded(c,-5,-40,12,11,4,skin,'#855747');
+ ellipse(c,0,-49,16,18,skin);
+ if(back){
+  ellipse(c,0,-55,17,17,grad(c,-18,-65,30,29,hair,'#392d36'));
+  poly(c,[[-17,-57],[-16,-68],[-6,-65],[-1,-73],[7,-64],
+   [15,-67],[19,-52],[11,-39],[-8,-39]],hair,'#442f32',1.5);
+  poly(c,[[-10,-64],[-7,-71],[-2,-63],[5,-71],[8,-58]],
+   woman?'#f1d48c':'#b2794f');
+ }else{
+  ellipse(c,-2,-57,18,16,grad(c,-12,-69,24,26,hair,'#46313a'));
+  poly(c,[[-20,-60],[-17,-70],[-8,-67],[-3,-77],[5,-70],[13,-72],
+   [17,-64],[16,-54],[-11,-49]],hair,'#51323a',1.4);
+  if(side){
+   ellipse(c,10,-49,2.3,3,'#263342');
+   line(c,14,-45,17,-44,1.6,'#8f534a');
+  }else{
+   ellipse(c,-6,-49,2.2,3,'#28333c');
+   ellipse(c,7,-49,2.2,3,'#28333c');
+   line(c,-2,-41,4,-41,1.6,'#955c53');
+  }
+ }
+ // Distinguishing faction accessories and readable weapon movement.
+ if(woman){
+  poly(c,[[-20,-65],[-14,-73],[7,-75],[19,-63],[18,-55],[-19,-55]],
+   grad(c,-20,-74,36,20,'#3176aa','#18395e'),gold,1.8);
+  ellipse(c,1,-65,4,5,'#c6eaff');
+ }else{
+  poly(c,[[-21,-67],[-13,-74],[17,-73],[24,-64],[10,-60],[-14,-61]],
+   grad(c,-15,-76,34,18,'#414151','#1b2735'),gold,1.6);
+  line(c,-13,-63,18,-63,2,gold);
+ }
+ if(attack){
+  c.save();c.translate(22,-15-armLift);
+  c.rotate([-.4,-1.35,-2.45,-.7][frame]);
+  rounded(c,-2,-33,7,40,3,grad(c,-3,-32,8,40,'#fcffff','#7ba4bc'),'#d6ebf1');
+  rounded(c,-9,6,22,5,2,gold);
+  c.restore();
+  if(frame===2){
+   c.strokeStyle='#b7f3f6c0';c.lineWidth=4;c.beginPath();
+   c.arc(0,-19,39,-2.1,.4);c.stroke();
+  }
+ }else if(woman){
+  line(c,21,-13,24,-53,4,'#795237');
+  ellipse(c,24,-54,7,7,grad(c,21,-59,8,14,'#f5fcff','#6cb7dc'));
+ }else{
+  line(c,22,-10,27,-37,3,'#d2e5e7');line(c,18,-14,28,-14,3,gold);
+ }
+ if(hurt){
+  c.globalAlpha=.25;ellipse(c,0,-34,24,43,'#fff6db');c.globalAlpha=1;
+ }
+ c.restore();
+}
+function previewHero(value,dir='down',action='idle',frame=0){
+ const el=document.createElement('canvas');el.width=96;el.height=112;
+ const c=el.getContext('2d');c.imageSmoothingEnabled=true;
+ c.save();c.translate(48,79);c.scale(1.03,1.03);
+ hero(c,value,dir,action,frame,0,0);c.restore();
+ return el.toDataURL('image/png');
+}
+function drawHero(c,value,dir,action,frame,x,y){
+ c.save();c.translate(x,y);
+ c.scale(.83,.83);hero(c,value,dir,action,frame,0,0);c.restore();
+}
+window.LibationDungeonArt=Object.freeze({drawRoom,drawEnemy,drawEffects,drawHero,previewHero,
  enemyTypes:['slime','skeleton','bat','sentinel','specter','thornbound','mimic'],
  palettes});
 })();
