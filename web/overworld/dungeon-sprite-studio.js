@@ -8,6 +8,29 @@ const TAU=Math.PI*2,actions=['idle','walk','attack','hurt','defeat'];
 const dirs=['down','left','right','up'];
 const ink='#252b3c',gold='#f5d38c',ivory='#f7e7bd';
 const cache=new Map();
+const pirateSheet=new Image();
+let pirateSheetReady=false;
+pirateSheet.decoding='async';
+pirateSheet.onload=()=>{pirateSheetReady=pirateSheet.naturalWidth===1344&&pirateSheet.naturalHeight===984};
+pirateSheet.onerror=()=>{pirateSheetReady=false};
+pirateSheet.src='./assets/pirate-action-atlas.webp';
+const portraitFrames={idle:[2,6],walk:[1,12],attack:[0,8],
+ dodge:[3,8],hurt:[4,4],defeat:[5,6]};
+function sheetPose(who,dir,action,frame){
+ return pirateSheetReady&&who?.gender!=='female'&&
+  String(who?.faction||'Pirate').toLowerCase().includes('pirate')&&
+  (dir==='right'||dir==='left')&&Object.hasOwn(portraitFrames,action);
+}
+function drawSheetFrame(ctx,who,dir,action,frame,x,y,scale=1){
+ const [row,count]=portraitFrames[action];
+ ctx.save();ctx.imageSmoothingEnabled=false;
+ if(dir==='left'){ctx.translate(x,0);ctx.scale(-1,1);x=0}
+ const width=Math.round(104*scale),height=Math.round(148*scale);
+ ctx.drawImage(pirateSheet,(frame%count)*112,row*164,112,164,
+   Math.round(x-width/2),Math.round(y-height+11*scale),width,height);
+ ctx.restore();
+}
+
 function rect(c,x,y,w,h,col){c.fillStyle=col;c.fillRect(Math.round(x),Math.round(y),Math.ceil(w),Math.ceil(h))}
 function poly(c,pts,col,line=ink,width=2){c.beginPath();pts.forEach(([x,y],i)=>i?c.lineTo(x,y):c.moveTo(x,y));c.closePath();c.fillStyle=col;c.fill();if(line){c.strokeStyle=line;c.lineWidth=width;c.lineJoin='round';c.stroke()}}
 function oval(c,x,y,rx,ry,col){c.beginPath();c.ellipse(x,y,rx,ry,0,0,TAU);c.fillStyle=col;c.fill()}
@@ -267,6 +290,18 @@ function beastFrame(e,frame){
 }
 function drawHero(c,s,now){
  const action=s.animation||'idle';
+ if(sheetPose(s.warrior,s.face,action,0)){
+  const t=now<s.hitStopUntil?s.lastImpactAt:now;
+  let frame=0;
+  if(action==='walk')frame=Math.floor(t/68)%12;
+  else if(action==='attack')frame=Math.min(7,Math.max(0,Math.floor((t-s.attackStart)/52)));
+  else if(action==='idle')frame=Math.floor(t/260)%6;
+  else if(action==='hurt')frame=Math.floor(t/95)%4;
+  else if(action==='dodge')frame=Math.floor(t/55)%8;
+  else frame=5;
+  drawSheetFrame(c,s.warrior,s.face,action,frame,s.player.x*32+16,s.player.y*32+16);
+  return;
+ }
  // Pause the contact pose for just 64ms to make every landed strike punchy.
  const t=now<s.hitStopUntil?s.lastImpactAt:now;
  let frame=0;
@@ -282,6 +317,11 @@ function drawHero(c,s,now){
  c.restore();
 }
 function previewHero(who,dir='down',act='idle',frame=0){
+ if(sheetPose(who,dir,act,frame)){
+  const cv=document.createElement('canvas');cv.width=128;cv.height=192;
+  drawSheetFrame(cv.getContext('2d'),who,dir,act,frame,64,170,1.16);
+  return cv.toDataURL('image/png');
+ }
  const img=heroFrame(who,dir,act,frame);
  const cv=document.createElement('canvas');cv.width=128;cv.height=192;
  const c=cv.getContext('2d');c.imageSmoothingEnabled=false;
@@ -305,6 +345,8 @@ function drawEnemy(c,e,now){
  c.restore();
 }
 function drawSlash(c,s,now){
+ // The authored pirate frame already includes its own blade and energy arc.
+ if(sheetPose(s.warrior,s.face,'attack',0))return;
  if(!s.attackStart||now>=s.attackUntil)return;
  const t=now<s.hitStopUntil?s.lastImpactAt:now;
  const p=Math.min(1,(t-s.attackStart)/416);
@@ -330,7 +372,9 @@ function drawSlash(c,s,now){
 }
 window.LibationSpriteStudio=Object.freeze({
  drawHero,drawEnemy,drawSlash,previewHero,
- frameCount:8,artVersion:'mana-inspired-original-sprite-sheet-v1',
+ frameCount:8,walkingFrames:12,attackFrames:8,authoredAnimationRows:6,
+ sheetAvailable:()=>pirateSheetReady,
+ artVersion:'authored-pirate-atlas-plus-mana-fallback-v2',
  archetypes:['slime','skeleton','bat','sentinel','specter','thornbound','mimic',
   'archer','brute','wisp','spider','mage','acolyte','leech','shaman','guardian']
 });
