@@ -1,0 +1,197 @@
+extends Node
+## Run this scene in Godot 4.7.x to validate deterministic foundation behavior.
+
+var failures: Array[String] = []
+var assertions := 0
+
+
+func _ready() -> void:
+	call_deferred("_run")
+
+
+func _run() -> void:
+	_test_barcode_identity()
+	_test_warrior_identity()
+	_test_gender_and_base_design()
+	_test_dungeons()
+	_test_direction_math()
+	_test_combat_timing()
+	_test_rupture_lobby()
+	_test_corrupted_paths()
+	if failures.is_empty():
+		print("[FoundationTests] PASS — %d assertions" % assertions)
+		get_tree().quit(0)
+	else:
+		for failure in failures:
+			push_error("[FoundationTests] " + failure)
+		print("[FoundationTests] FAIL — %d failures / %d assertions" % [failures.size(), assertions])
+		get_tree().quit(1)
+
+
+func _expect(condition: bool, message: String) -> void:
+	assertions += 1
+	if not condition:
+		failures.append(message)
+
+
+func _test_barcode_identity() -> void:
+	var upc := "012345678905"
+	var ean_alias := "0012345678905"
+	_expect(BarcodeIdentity.canonicalize(upc) == upc, "UPC-A normalization changed a canonical value")
+	_expect(BarcodeIdentity.canonicalize(ean_alias) == upc, "EAN-13 leading-zero alias did not collapse to UPC-A")
+	_expect(BarcodeIdentity.sha256_hex(upc).length() == 64, "SHA-256 identity is not 64 hex chars")
+	_expect(BarcodeIdentity.sha256_hex(upc) == BarcodeIdentity.sha256_hex(" 012-345-678-905 "), "formatting changed barcode hash")
+	_expect(BarcodeIdentity.seed_from_barcode(upc) == BarcodeIdentity.seed_from_barcode(ean_alias), "alias changed deterministic seed")
+	_expect(BarcodeIdentity.canonicalize("not-a-retail-code") == "", "invalid retail text was accepted")
+
+
+func _test_warrior_identity() -> void:
+	var code := "012345678905"
+	var a := WarriorFactory.generate(code, FactionData.Category.RUM)
+	var b := WarriorFactory.generate(code, FactionData.Category.RUM)
+	_expect(a.barcode_hash == b.barcode_hash, "same barcode changed hash")
+	_expect(a.seed_value == b.seed_value, "same barcode changed seed")
+	_expect(a.faction == "pirate" and b.faction == "pirate", "Rum did not map to Pirate")
+	_expect(a.name == b.name, "same barcode changed base name")
+	_expect(a.regular_move == b.regular_move, "same barcode changed regular attack")
+	_expect(a.special_move == b.special_move, "same barcode changed special attack")
+	_expect(a.appearance_signature == b.appearance_signature, "same barcode changed appearance signature")
+	_expect(not a.appearance_signature.is_empty(), "appearance signature was empty")
+	_expect(a.to_blueprint_dict() == b.to_blueprint_dict(), "same barcode/category changed base blueprint")
+
+
+func _test_dungeons() -> void:
+	for difficulty in ["easy", "normal", "hard"]:
+		for level in [1, 10, 30]:
+			for seed in range(1, 31):
+				var actual_seed: int = int(seed) * 7919 + int(level) * 101
+				var dungeon := DungeonGenerator.generate(level, actual_seed, {}, difficulty)
+				var rooms: Array = dungeon.get("rooms", [])
+				_expect(rooms.size() >= 10 and rooms.size() <= 25, "room count outside 10..25")
+				var start_id := int(dungeon.get("start_id", -1))
+				var exit_id := int(dungeon.get("exit_id", -1))
+				_expect(start_id >= 0 and start_id < rooms.size(), "invalid entrance")
+				_expect(exit_id >= 0 and exit_id < rooms.size(), "invalid exit")
+				var reached := _reachable(rooms, start_id)
+				_expect(reached.size() == rooms.size(), "dungeon contains disconnected rooms")
+				_expect(reached.has(exit_id), "exit is unreachable")
+				var coordinates := {}
+				for room in rooms:
+					var key := "%d,%d" % [int(room.get("gx", 0)), int(room.get("gy", 0))]
+					coordinates[key] = true
+				_expect(coordinates.size() == rooms.size(), "two rooms occupy the same grid coordinate")
+
+				var repeat := DungeonGenerator.generate(level, actual_seed, {}, difficulty)
+				_expect(_graph_signature(dungeon) == _graph_signature(repeat), "same dungeon seed changed graph")
+
+
+func _reachable(rooms: Array, start_id: int) -> Dictionary:
+	var seen := {}
+	if start_id < 0 or start_id >= rooms.size():
+		return seen
+	var queue: Array[int] = [start_id]
+	seen[start_id] = true
+	while not queue.is_empty():
+		var cur: int = queue.pop_front()
+		var doors: Dictionary = rooms[cur].get("doors", {})
+		for direction in doors.keys():
+			var next_id := int(doors[direction])
+			if seen.has(next_id):
+				continue
+			seen[next_id] = true
+			queue.append(next_id)
+	return seen
+
+
+func _graph_signature(dungeon: Dictionary) -> String:
+	var parts: Array[String] = []
+	for room in dungeon.get("rooms", []):
+		var doors: Dictionary = room.get("doors", {})
+		var door_parts: Array[String] = []
+		var keys: Array = doors.keys()
+		keys.sort()
+		for key in keys:
+			door_parts.append("%s:%d" % [str(key), int(doors[key])])
+		parts.append("%d@%d,%d[%s]" % [
+			int(room.get("id", -1)),
+			int(room.get("gx", 0)),
+			int(room.get("gy", 0)),
+			",".join(door_parts),
+		])
+	return "|".join(parts)
+
+
+func _test_direction_math() -> void:
+	_expect(WeaponData.cardinal(Vector2(9, 1)) == Vector2.RIGHT, "right-facing cardinal resolution failed")
+	_expect(WeaponData.cardinal(Vector2(-9, 1)) == Vector2.LEFT, "left-facing cardinal resolution failed")
+	_expect(WeaponData.cardinal(Vector2(1, -9)) == Vector2.UP, "up-facing cardinal resolution failed")
+	_expect(WeaponData.cardinal(Vector2(1, 9)) == Vector2.DOWN, "down-facing cardinal resolution failed")
+
+
+func _test_combat_timing() -> void:
+	var active := [3, 4]
+	_expect(not CombatTiming.should_resolve_hit(0, active, false), "wind-up frame resolved damage")
+	_expect(not CombatTiming.should_resolve_hit(2, active, false), "pre-contact frame resolved damage")
+	_expect(CombatTiming.should_resolve_hit(3, active, false), "active contact frame did not resolve damage")
+	_expect(not CombatTiming.should_resolve_hit(4, active, true), "one swing resolved damage more than once")
+	_expect(not CombatTiming.should_resolve_hit(7, active, false), "recovery frame resolved damage")
+	_expect(not CombatTiming.should_resolve_hit(1, [], false, 2), "fallback wind-up frame resolved damage")
+	_expect(CombatTiming.should_resolve_hit(2, [], false, 2), "fallback active frame did not resolve damage")
+
+
+func _test_rupture_lobby() -> void:
+	_expect(RuptureLobbyRules.may_join(0), "empty lobby rejected a join")
+	_expect(RuptureLobbyRules.may_join(3), "three-player lobby rejected fourth player")
+	_expect(not RuptureLobbyRules.may_join(4), "five-player lobby was allowed")
+	_expect(not RuptureLobbyRules.all_ready([]), "empty roster counted as ready")
+	_expect(RuptureLobbyRules.all_ready([{"ready": true}]), "solo ready did not start")
+	_expect(not RuptureLobbyRules.all_ready([{"ready": true}, {"ready": false}]), "mixed readiness started lobby")
+	_expect(RuptureLobbyRules.entry_countdown_seconds([{"ready": true}]) == 10, "ready countdown not ten seconds")
+	_expect(RuptureLobbyRules.entry_countdown_seconds([{"ready": false}]) == 120, "unready lobby not two minutes")
+	_expect(RuptureLobbyRules.encounter_multiplier(4) > RuptureLobbyRules.encounter_multiplier(1), "party size did not raise difficulty")
+
+
+func _test_corrupted_paths() -> void:
+	_expect(CorruptedPathRules.may_create(4, 4), "eligible last path blocked")
+	_expect(not CorruptedPathRules.may_create(5, 0), "sixth user path allowed")
+	_expect(not CorruptedPathRules.may_create(0, 5), "sixth location path allowed")
+	_expect(CorruptedPathRules.ranked_player_indices([4, 13, 7]) == [1, 2, 0], "scores not ranked correctly")
+	_expect(CorruptedPathRules.duration_bonus_tier(12 * 3600 - 1) == 0, "early bonus awarded")
+	_expect(CorruptedPathRules.duration_bonus_tier(12 * 3600) == 12, "12-hour bonus missing")
+	_expect(CorruptedPathRules.duration_bonus_tier(56 * 3600) == 56, "56-hour tier missing")
+	_expect(CorruptedPathRules.duration_bonus_tier(168 * 3600) == 168, "weekly tier missing")
+	_expect(CorruptedPathRules.capped_daily_gold(900, 50, 200, 500, 750) == 450, "daily cap not respected")
+	_expect(CorruptedPathRules.capped_daily_gold(900, 300, 700, 800, 750) == 50, "weekly cap not respected")
+
+
+func _test_gender_and_base_design() -> void:
+	var seen_male := false
+	var seen_female := false
+	for i in range(100):
+		var upc := "%012d" % (100000000000 + i)
+		var a := WarriorFactory.generate(upc, FactionData.Category.GIN)
+		var b := WarriorFactory.generate(upc, FactionData.Category.GIN)
+		_expect(a.gender == b.gender, "one UPC generated different genders")
+		_expect(a.base_archetype == b.base_archetype, "one UPC generated different archetypes")
+		_expect(a.appearance_signature == b.appearance_signature, "one UPC generated different designs")
+		_expect(a.to_blueprint_dict() == b.to_blueprint_dict(), "blueprint differed between players")
+		_expect(a.gender in ["male", "female"], "invalid warrior gender")
+		_expect(a.design_version == 2, "design version missing")
+		var reloaded := Warrior.new(a.to_blueprint_dict())
+		_expect(a.to_blueprint_dict().has("gender"), "serialized blueprint missing gender")
+		_expect(a.to_blueprint_dict().has("base_archetype"), "serialized blueprint missing archetype")
+		_expect(reloaded.gender == a.gender, "blueprint gender lost on restore")
+		_expect(reloaded.appearance_components == a.appearance_components, "blueprint art identity lost on restore")
+		seen_male = seen_male or a.gender == "male"
+		seen_female = seen_female or a.gender == "female"
+	_expect(seen_male and seen_female, "male and female warriors were not both generated")
+	var soda := WarriorFactory.generate("4012345678901", FactionData.Category.NON_ALCOHOLIC)
+	_expect(soda.faction == "nimrod", "nonalcoholic generated a non-Nimrod")
+	# Actual collection art should render for both genders and every faction
+	# without requiring downloaded sprites or user-specific random seeds.
+	for c in FactionData.all_categories():
+		var w := WarriorFactory.generate("DEMO-BASE-%02d" % int(c), int(c))
+		var portrait := WarriorBaseArt.texture_for(w)
+		_expect(portrait != null and portrait.get_width() == 64 and portrait.get_height() == 80,
+			"new base portrait is missing for " + w.faction)
+

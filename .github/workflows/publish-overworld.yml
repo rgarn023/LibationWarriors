@@ -1,0 +1,102 @@
+name: Publish Libation Warriors Overworld
+
+on:
+  push:
+    branches:
+      - cursor/pirate-master-poses-0762
+    paths:
+      - web/overworld/**
+      - .github/workflows/publish-overworld.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: libation-overworld-pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: libation-overworld-preview
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+      - name: Verify prototype files
+        run: test -s web/overworld/index.html
+      - name: Bundle MapLibre locally for reliable mobile loading
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p web/overworld/vendor
+          npm install --prefix /tmp/libation-overworld --no-save --ignore-scripts --no-audit --no-fund maplibre-gl@5.8.0
+          cp /tmp/libation-overworld/node_modules/maplibre-gl/dist/maplibre-gl.js web/overworld/vendor/maplibre-gl.js
+          cp /tmp/libation-overworld/node_modules/maplibre-gl/dist/maplibre-gl.css web/overworld/vendor/maplibre-gl.css
+          test -s web/overworld/vendor/maplibre-gl.js
+          test -s web/overworld/vendor/maplibre-gl.css
+          python - <<'PY'
+          from pathlib import Path
+          page = Path('web/overworld/index.html').read_text()
+          assert './vendor/maplibre-gl.js' in page
+          assert './vendor/maplibre-gl.css' in page
+          script = page.rsplit('<script>', 1)[1].split('</script>', 1)[0]
+          Path('/tmp/libation-overworld-check.js').write_text(script)
+          PY
+          node --check /tmp/libation-overworld-check.js
+          node --check web/overworld/game-world.js
+          node --check web/overworld/dungeon.js
+          node --check web/overworld/smoke-test.cjs
+          test -s web/overworld/dungeon.js
+          test -s web/overworld/game-world.js
+      - name: Browser smoke test of GPS game canvas
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --prefix /tmp/libation-test --ignore-scripts --no-audit --no-fund --no-save playwright-core@1.55.1
+          python3 -m http.server 8123 --bind 127.0.0.1 --directory web/overworld >/tmp/libation-smoke-server.log 2>&1 &
+          server=$!
+          trap 'kill "$server" 2>/dev/null || true' EXIT
+          node web/overworld/smoke-test.cjs
+      - name: Store screenshot of mobile scene
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: libation-world-mobile-smoke
+          path: |
+            /tmp/libation-world-screenshot.png
+            /tmp/libation-world-movement.png
+            /tmp/libation-dev-portals.png
+            /tmp/libation-dungeon-room.png
+            /tmp/libation-warrior-selection.png
+            /tmp/libation-dungeon-boss.png
+            /tmp/libation-dungeon-boss-cleared.png
+            /tmp/libation-dungeon-victory.png
+            /tmp/libation-dungeon-generated-victory.png
+            /tmp/libation-dungeon-defeat.png
+            /tmp/libation-world-touch-turn.png
+            /tmp/libation-world-walking.png
+            /tmp/libation-world-zoomed-in.png
+            /tmp/libation-world-zoomed-out.png
+            /tmp/libation-fantasy-terrain.png
+            /tmp/libation-detailed-overworld.png
+            /tmp/libation-building-forest-sprites.png
+            /tmp/libation-visible-buildings.png
+            /tmp/libation-refined-rooftops.png
+            /tmp/libation-time-day.png
+            /tmp/libation-time-evening.png
+            /tmp/libation-time-night.png
+          if-no-files-found: ignore
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+      - name: Package prototype
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: web/overworld
+      - name: Deploy HTTPS site
+        id: deployment
+        uses: actions/deploy-pages@v4

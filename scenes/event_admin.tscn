@@ -1,0 +1,172 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/event_admin.gd" id="1"]
+
+[node name="EventAdmin" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+script = ExtResource("1")
+
+[node name="BG" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+color = Color(0.07, 0.08, 0.1, 1)
+
+[node name="SafeRoot" type="Control" parent="."]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+
+[node name="Margin" type="MarginContainer" parent="SafeRoot"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 8
+
+[node name="Scroll" type="ScrollContainer" parent="SafeRoot/Margin"]
+layout_mode = 2
+
+[node name="VBox" type="VBoxContainer" parent="SafeRoot/Margin/Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="Title" type="Label" parent="SafeRoot/Margin/Scroll/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.85, 0.62, 0.22, 1)
+theme_override_font_sizes/font_size = 28
+text = "Event Admin (DEV)"
+horizontal_alignment = 1
+
+[node name="StatusLabel" type="Label" parent="SafeRoot/Margin/Scroll/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.75, 0.7, 0.62, 1)
+theme_override_font_sizes/font_size = 13
+autowrap_mode = 3
+
+[node name="EventId" type="LineEdit" parent="SafeRoot/Margin/Scroll/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+placeholder_text = "event_id"
+
+[node name="EventTitle" type="LineEdit" parent="SafeRoot/Margin/Scroll/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+placeholder_text = "Event title"
+
+[node name="EventDesc" type="TextEdit" parent="SafeRoot/Margin/Scroll/VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 70)
+layout_mode = 2
+placeholder_text = "Description"
+
+[node name="StartsAt" type="LineEdit" parent="SafeRoot/Margin/Scroll/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+placeholder_text = "starts_at ISO"
+
+[node name="EndsAt" type="LineEdit" parent="SafeRoot/Margin/Scroll/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+placeholder_text = "ends_at ISO"
+
+[node name="DungeonHeader" type="Label" parent="SafeRoot/Margin/Scroll/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.85, 0.62, 0.22, 1)
+text = "Special dungeon (optional)"
+
+[node name="DungeonName" type="LineEdit" parent="SafeRoot/Margin/Scroll/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+placeholder_text = "Dungeon name"
+
+[node name="DungeonBoss" type="LineEdit" parent="SafeRoot/Margin/Scroll/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+placeholder_text = "Boss name"
+
+[node name="DungeonEnemy" type="LineEdit" parent="SafeRoot/Margin/Scroll/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+placeholder_text = "Enemy label"
+
+[node name="BarcodeHeader" type="Label" parent="SafeRoot/Margin/Scroll/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.85, 0.62, 0.22, 1)
+text = "Special barcode (queue onto event)"
+
+[node name="BarcodeCode" type="LineEdit" parent="SafeRoot/Margin/Scroll/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+placeholder_text = "EVENT-...."
+
+[node name="BarcodeName" type="LineEdit" parent="SafeRoot/Margin/Scroll/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+placeholder_text = "Rare warrior name"
+
+[node name="BarcodeRarity" type="OptionButton" parent="SafeRoot/Margin/Scroll/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="BarcodeCategory" type="OptionButton" parent="SafeRoot/Margin/Scroll/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="BtnAddBarcode" type="Button" parent="SafeRoot/Margin/Scroll/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Queue barcode on event"
+
+[node name="BtnAddEvent" type="Button" parent="SafeRoot/Margin/Scroll/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Save event to draft"
+
+[node name="ListHeader" type="Label" parent="SafeRoot/Margin/Scroll/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.85, 0.62, 0.22, 1)
+text = "Draft events"
+
+[node name="EventList" type="VBoxContainer" parent="SafeRoot/Margin/Scroll/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="BtnExport" type="Button" parent="SafeRoot/Margin/Scroll/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Export JSON (clipboard)"
+
+[node name="BtnPreview" type="Button" parent="SafeRoot/Margin/Scroll/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Preview draft on this device"
+
+[node name="BtnRefresh" type="Button" parent="SafeRoot/Margin/Scroll/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Refresh remote events"
+
+[node name="JsonPreview" type="TextEdit" parent="SafeRoot/Margin/Scroll/VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 180)
+layout_mode = 2
+editable = false
+
+[node name="BtnBack" type="Button" parent="SafeRoot/Margin/Scroll/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Back"

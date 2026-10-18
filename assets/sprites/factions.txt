@@ -1,0 +1,16 @@
+pirate
+militiaman
+bandit
+druid
+barbarian
+paladin
+alchemist
+bard
+red_mage
+white_mage
+black_mage
+brawler
+samurai
+viking
+rogue
+nimrod

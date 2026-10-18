@@ -1,1 +1,79 @@
-# LibationWarriors
+# Libation Warriors
+
+Android-first Godot action RPG/collector where scanning a real beverage barcode reveals a deterministic warrior.
+
+> **Development branch:** \`cursor/pirate-master-poses-0762\`  
+> **Godot:** 4.7.x project (developed against 4.7.1)  
+> **Android package:** \`com.libationwarriors.game\`
+
+## Verified scanning backend and v2 character redesign
+
+- Every UPC has an immutable base blueprint including male/female gender, name, visual components, and base stats. New procedural 64×80 portraits are available for all 16 factions.
+- Production clients no longer insert warrior blueprints or ownership directly. Debug warriors remain local only.
+- Added a fail-closed verified-acquisition Edge Function and server-only location and challenge schema. **Not deployed**: the available Supabase project is inactive and not confirmed for this game, native photo/location integrity adapters and third-party checks are not yet integrated.
+- This APK is a prototype, not a working production verification service or a finished 4-player game.
+
+## October 15 development milestone
+
+See [game vision and implementation status](docs/LIBATION_WARRIORS_GAME_VISION.md) for the locked scan-location, handwritten verification, rupture/wormhole, four-player lobby, corrupted-path and fusion requirements. This debug APK supports developer-only unverified scanning; **public UPC acquisition is blocked until live server verification exists**. The solo dungeon has a 10-second READY countdown. The APK is not a finished online/live-map product.
+
+## Current foundation
+
+The September 28, 2026 foundation pass preserves the existing scanner, collection, dungeon renderer, Android plugin, safe-area code, and Pirate animation work while adding:
+
+- 5-second CG splash framework using the original logo frames
+- Supabase email/password auth + persistent refresh session
+- versioned relational schema/RLS migration
+- local + cloud save synchronization foundation
+- canonical UPC/EAN → SHA-256 → deterministic seed identity
+- global immutable warrior blueprint + per-user progression model
+- database and client duplicate protection
+- modular product lookup with no random unknown-faction fallback
+- deterministic Pirate appearance-component signature
+- extensible attack/equipment override fields
+- responsive original bar/tavern Main Hub
+- primary routes: SCAN / COLLECTION / EXPLORE / BATTLE
+- Explore difficulty selection
+- seeded 10–25 room connected dungeon generation
+- centralized encounter-budget scaling
+- versioned Android export destination under \`build/\`
+- deterministic foundation test scene
+
+## Important setup
+
+The original Charoite Games GIF was not present during this handoff and is **not regenerated**. Re-upload it and follow \`assets/branding/README.md\`.
+
+Supabase client setup is documented in \`docs/SUPABASE_SETUP.md\`. Never commit a service-role/secret key.
+
+## Architecture
+
+See:
+
+- \`docs/ARCHITECTURE.md\`
+- \`docs/CHARACTER_SPRITE_SPEC.md\`
+- \`docs/CHARACTER_ANIMATION_SETUP.md\`
+
+## Tests
+
+Run:
+
+\`scenes/tests/foundation_tests.tscn\`
+
+The test scene validates deterministic barcode identity and repeated dungeon generation/reachability.
+
+## Build output
+
+The Android preset targets:
+
+\`build/LibationWarriors-v001-debug.apk\`
+
+A filename in the export preset is **not** proof that an APK has been built. Report an APK only after an actual export succeeds and the file size/SHA-256 are measured.
+
+## Known unfinished milestone items
+
+- original CG splash frames must be supplied
+- Supabase migration must be applied to the confirmed project
+- true authored UP/DOWN Pirate attack animation is still required
+- true authored UP/DOWN Pirate attack animation is still required
+- enemy attack/HIT/DEFEATED states still need genuine authored multi-frame art
+- emulator and physical Galaxy QA have not yet been performed for this foundation pass
