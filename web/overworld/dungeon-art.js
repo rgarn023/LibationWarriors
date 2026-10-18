@@ -96,7 +96,14 @@ function bossSeal(c,theme,time,cleared,p){
  ellipse(c,x,y,15,10,cleared?p.accent:'#a34e73');
  ellipse(c,x,y,8,5,p.light);
 }
+let roomCache=null,roomCacheKey='',roomCacheUpdated=0;
 function drawRoom(c,s,time){
+ // Repaint animated torches and dust at ~10 Hz; draw the cached background
+ // at full display refresh while movement, hits and projectiles remain live.
+ const key=[s.plan.seed,s.nodeIndex,s.kind,s.current.template,s.roomClear].join(':');
+ if(roomCache&&roomCacheKey===key&&time-roomCacheUpdated<100){
+  c.drawImage(roomCache,0,0);return;
+ }
  const theme=s.kind, p=palettes[theme]||palettes.rupture,n=s.current;
  c.save();c.clearRect(0,0,W,H);c.fillStyle=p.dark;c.fillRect(0,0,W,H);
  // Raised masonry rims, accurate perspective-ish depth and soft center lighting.
@@ -186,6 +193,9 @@ function drawRoom(c,s,time){
   ellipse(c,x,y,rand(q+8)*1.9+.3,rand(q+9)*1.4+.3,p.light);
  }
  c.restore();
+ if(!roomCache){roomCache=document.createElement('canvas');roomCache.width=W;roomCache.height=H}
+ roomCache.getContext('2d').drawImage(c.canvas,0,0);
+ roomCacheKey=key;roomCacheUpdated=time;
 }
 function line(c,x1,y1,x2,y2,width,col){
  c.strokeStyle=col;c.lineWidth=width;c.lineCap='round';c.beginPath();c.moveTo(x1,y1);c.lineTo(x2,y2);c.stroke();

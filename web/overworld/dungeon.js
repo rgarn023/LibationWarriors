@@ -744,7 +744,7 @@ function initialize(){
  'padding:5px!important;line-height:1!important;letter-spacing:0;text-shadow:none!important;white-space:nowrap}'+
  '#lwDAttack .lwDAttackIcon{display:block;font:normal 30px/1 sans-serif;text-shadow:none!important}'+
  '#lwDAttack .lwDAttackLabel{display:block;font:700 11px/1.1 monospace;text-shadow:none!important}'+
- '#lwDungeonStage footer{margin-top:auto}#lwDungeonStage footer button{flex:1;min-height:42px;'+
+ '#lwDungeonStage footer{margin-top:12px;margin-bottom:10px}#lwDungeonStage footer button{flex:1;min-height:42px;'+
  'font-size:11px!important;line-height:1.2;letter-spacing:0;text-shadow:none!important}'+
  '#lwDResult{color:#baffce;text-align:center;padding:5px}'+
  '@media(max-height:690px){.lwDControls{min-height:108px}.lwDPad{transform:scale(.83)}'+
