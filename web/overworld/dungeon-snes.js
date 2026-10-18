@@ -225,7 +225,38 @@ function drawMasonry(c,s,p){
 }
 function drawRug(c,s,p){
  const type=s.current.template;
- if(!['cellar','crypt','gallery','sanctum','vault'].includes(type))return;
+ if(type==='cellar'){
+  // Distinctive hand-laid wine-cellar medallion replaces the empty carpet.
+  const cx=400,cy=311;
+  color(c,cx-139,cy-124,278,248,'#1523354d');
+  c.fillStyle='#6e6058';c.beginPath();c.ellipse(cx,cy,117,105,0,0,TAU);c.fill();
+  c.strokeStyle='#d8b47d';c.lineWidth=7;
+  c.beginPath();c.ellipse(cx,cy,115,102,0,0,TAU);c.stroke();
+  c.strokeStyle='#292d3a';c.lineWidth=10;
+  c.beginPath();c.ellipse(cx,cy,100,88,0,0,TAU);c.stroke();
+  c.strokeStyle='#af8061';c.lineWidth=3;
+  c.beginPath();c.ellipse(cx,cy,83,74,0,0,TAU);c.stroke();
+  for(let i=0;i<12;i++){
+   const theta=i*TAU/12,x=cx+Math.cos(theta)*104,y=cy+Math.sin(theta)*94;
+   color(c,x-5,y-5,10,9,i%2?'#ddc08c':'#493d42');
+  }
+  for(let i=0;i<8;i++){
+   const theta=i*TAU/8,x=cx+Math.cos(theta)*67,y=cy+Math.sin(theta)*57;
+   pixelLine(c,x,y,-Math.cos(theta)*31,-Math.sin(theta)*26,'#bd976a',3);
+  }
+  // Eight-pointed guild compass and inset ruby. No collision geometry.
+  c.fillStyle='#513743';c.beginPath();
+  c.moveTo(cx,cy-49);c.lineTo(cx+28,cy-16);
+  c.lineTo(cx+53,cy);c.lineTo(cx+28,cy+16);
+  c.lineTo(cx,cy+50);c.lineTo(cx-29,cy+16);
+  c.lineTo(cx-53,cy);c.lineTo(cx-29,cy-16);c.closePath();c.fill();
+  c.strokeStyle='#f0d29a';c.lineWidth=4;c.stroke();
+  color(c,cx-12,cy-12,25,24,'#ac6754');
+  color(c,cx-7,cy-7,15,14,'#e4c48c');
+  pixelLine(c,cx-36,cy+35,22,-16,'#edcb89',3);
+  return;
+ }
+ if(!['crypt','gallery','sanctum','vault'].includes(type))return;
  // Worn ceremonial carpet is one uninterrupted area with fringe and trim.
  color(c,314,121,172,365,'#1a25347d');
  color(c,318,119,164,363,p.rug);
@@ -554,9 +585,10 @@ function enemyImage(e,now,theme){
  ctx.translate(64-16*scale,105-16*scale);
  ctx.scale(scale,scale);
  art.drawEnemy(ctx,{...e,x:0,y:0},now,theme);
- const res=document.createElement('canvas');res.width=64;res.height=72;
+ const res=document.createElement('canvas');res.width=88;res.height=100;
  const c=res.getContext('2d');c.imageSmoothingEnabled=true;
- c.drawImage(buffer,0,0,128,144,0,0,64,72);
+ // Retain more of the detailed character art before nearest-neighbor display.
+ c.drawImage(buffer,0,0,128,144,0,0,88,100);
  dynSprites.set(key,res);
  if(dynSprites.size>190)dynSprites.delete(dynSprites.keys().next().value);
  return res;
@@ -578,6 +610,6 @@ function drawEffects(c,s,now){
 }
 window.LibationDungeonSNES=Object.freeze({
  width:GRID_W,height:GRID_H,tile:TILE,canvasWidth:W,canvasHeight:H,
- partyCapacity:4,artVersion:'authored-16bit-v2',drawRoom,drawEnemy,drawHero,drawEffects,previewHero
+ partyCapacity:4,artVersion:'authored-16bit-v3',drawRoom,drawEnemy,drawHero,drawEffects,previewHero
 });
 })();
