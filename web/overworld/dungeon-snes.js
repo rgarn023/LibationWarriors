@@ -200,6 +200,26 @@ function drawRoom(c,s,now){
    color(c,x+29,y,4,14,p.gold);
   }
  }
+ // Warm torch pools, arched shadows, scratches and damaged stone.
+ for(const tx of [2,22])for(const ty of [3,15]){
+  const cx=tx*TILE,cy=ty*TILE;
+  const light=c.createRadialGradient(cx,cy,1,cx,cy,115);
+  light.addColorStop(0,node.template==='fracture'?'#988bea52':'#ffab5c49');
+  light.addColorStop(1,'#00000000');
+  c.fillStyle=light;c.fillRect(cx-115,cy-115,230,230);
+ }
+ for(let i=0;i<30;i++){
+  const v=HASH(node.id*83+i*519);
+  const x=70+HASH(i+node.id*19)*(W-140),y=86+HASH(i*61+node.id*43)*(H-165);
+  if(v>.6){color(c,x,y,8,3,v>.82?p.moss:p.gold);color(c,x+3,y+3,3,3,p.deep)}
+ }
+ if(node.template==='flooded'||node.template==='ruins'){
+  for(const cx of [3,21])for(const cy of [5,13]){
+   color(c,cx*TILE-2,cy*TILE+4,63,24,p.water);
+   color(c,cx*TILE+5,cy*TILE+8,37,2,'#bad9de');
+   color(c,cx*TILE+4,cy*TILE+24,48,3,p.deep);
+  }
+ }
  for(const xx of [4,20])banner(c,xx,1,p);
  for(const x of [2,22])for(const y of [3,15])flame(c,x,y,p,now);
  for(const side of ['up','down','left','right'])if(node.edges[side]!==undefined)
@@ -240,21 +260,23 @@ function drawSprite(c,s,kind,now,player=false){
  let atlas=dynSprites.get(key);
  if(!atlas){
   const buffer=document.createElement('canvas');
-  buffer.width=112;buffer.height=118;const q=buffer.getContext('2d');
+  buffer.width=128;buffer.height=160;const q=buffer.getContext('2d');
   q.imageSmoothingEnabled=true;
   if(player){
-   q.translate(57,98);
-   q.scale(1.0,1.0);
+   q.translate(64,126);
+   q.scale(1.45,1.45);
    // Draw at the same position in its own source sprite frame.
    art.drawHero(q,s.warrior,s.face,s.animation,frame,0,0);
   }else{
-   q.translate(49,65);
+   const scale=s.boss?1.17:1.34;
+   q.translate(64-16*scale,110-16*scale);
+   q.scale(scale,scale);
    // Enemies are located in arbitrary rooms; normalize world space to 0,0.
    art.drawEnemy(q,{...s,kind,x:0,y:0},now,s.theme);
   }
-  const low=document.createElement('canvas');low.width=56;low.height=59;
+  const low=document.createElement('canvas');low.width=64;low.height=80;
   const lowc=low.getContext('2d');lowc.imageSmoothingEnabled=true;
-  lowc.drawImage(buffer,0,0,112,118,0,0,56,59);
+  lowc.drawImage(buffer,0,0,128,160,0,0,64,80);
   dynSprites.set(key,low);
   if(dynSprites.size>180)dynSprites.delete(dynSprites.keys().next().value);
   atlas=low;
@@ -262,7 +284,7 @@ function drawSprite(c,s,kind,now,player=false){
  c.save();c.imageSmoothingEnabled=false;
  const x=(player?s.player.x:s.x)*TILE+16,y=(player?s.player.y:s.y)*TILE+16;
  // Feet anchored at tile center; character upper body projects into tile above.
- c.drawImage(atlas,Math.round(x-28),Math.round(y-42),56,59);
+ c.drawImage(atlas,Math.round(x-40),Math.round(y-77),80,100);
  c.restore();
 }
 const dynSprites=new Map();
