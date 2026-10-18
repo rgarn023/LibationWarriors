@@ -64,12 +64,14 @@ function generateLayout(value,count){
  const treasure=leaves.sort((a,b)=>depth[b.id]-depth[a.id])[0]?.id ??
   nodes.find(n=>n.id!==0&&n.id!==boss)?.id;
  const shrine=nodes.find(n=>n.id!==0&&n.id!==boss&&n.id!==treasure&&depth[n.id]>=2)?.id;
+ const requiredThemes=new Map(nodes.filter(n=>n.id!==boss).slice(0,3)
+  .map((n,i)=>[n.id,['cellar','flooded','fracture'][i]]));
  for(const n of nodes){
   if(n.id===boss)n.type='boss';
   else if(n.id===treasure)n.type='treasure';
   else if(n.id===shrine)n.type='shrine';
   n.depth=depth[n.id];
-  n.template=n.type==='boss'?'sanctum':n.id===1?'cellar':n.id===2?'flooded':n.id===3?'fracture':randomItem(r,THEMES);
+  n.template=n.type==='boss'?'sanctum':(requiredThemes.get(n.id)||randomItem(r,THEMES));
   n.cleared=false;n.collected=false;
  }
  return {seed:String(value),count,boss,treasure,shrine,nodes};
