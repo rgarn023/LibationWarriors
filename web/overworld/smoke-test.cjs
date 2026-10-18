@@ -609,6 +609,21 @@ const fs=require('fs');
   return variants;
  });
  console.log('RANDOM DUNGEON LAYOUT PROPERTY TESTS:',JSON.stringify(layouts));
+ const capacity=await page.evaluate(()=>{
+  const d=window.LibationDungeon,s=d.snapshot(),g=s.geometry||{};
+  const slots=s.partySpawnSlots||[];
+  if(g.width<25||g.height<19||g.pixelWidth<800||g.pixelHeight<608)
+   throw Error('Arena too small for a four-person party: '+JSON.stringify(g));
+  if(s.partyCapacity!==4||slots.length!==4||new Set(slots.map(p=>p.x+','+p.y)).size!==4)
+   throw Error('Expected four distinct party entry positions');
+  if(slots.some(p=>p.x<=0||p.x>=g.width-1||p.y<=0||p.y>=g.height-1||s.walls.includes(p.x+','+p.y)))
+   throw Error('One or more party entry positions are obstructed');
+  if(!d.debugPartyPreview(true))throw Error('Four-character scale preview unavailable');
+  return {dimensions:g,slots,partyCapacity:s.partyCapacity};
+ });
+ console.log('FOUR-HERO DUNGEON ROOM CAPACITY:',JSON.stringify(capacity));
+ await page.screenshot({path:'/tmp/libation-dungeon-four-heroes-snes.png',fullPage:false});
+ await page.evaluate(()=>window.LibationDungeon.debugPartyPreview(false));
  const artQA=await page.evaluate(()=>{
   const art=window.LibationDungeonArt,d=window.LibationDungeon;
   if(!art||typeof art.drawRoom!=='function'||typeof art.drawEnemy!=='function')
@@ -617,7 +632,7 @@ const fs=require('fs');
    'archer','brute','wisp','spider','mage','acolyte','leech','shaman'];
   if(kinds.some(k=>!art.enemyTypes.includes(k)))throw Error('Incomplete enemy roster');
   const s=d.snapshot();
-  if(s.artStyle!=='painted-2.5d')throw Error('Fallback art unexpectedly active');
+  if(s.artStyle!=='snes-16bit')throw Error('SNES dungeon renderer missing');
   for(const kind of kinds){
    if(!d.debugEnemyEncounter(kind))throw Error('Enemy fixture missing '+kind);
    if(d.snapshot().enemyTypes[0]!==kind)throw Error('Wrong enemy type '+kind);
@@ -695,7 +710,7 @@ const fs=require('fs');
   const d=window.LibationDungeon,plan=d.inspectLayout(d.snapshot().layoutSeed,'challenge');
   const opposite={up:'down',right:'left',down:'up',left:'right'};
   const offsets={up:[0,-1],right:[1,0],down:[0,1],left:[-1,0]};
-  const doors={up:[8,1],right:[15,6],down:[8,11],left:[1,6]};
+  const doors={up:[12,1],right:[23,9],down:[12,17],left:[1,9]};
   const traversed=new Set(),allMoves=[];
   function walkTo(dir){
    const snap=d.snapshot(),start=snap.player,target=doors[dir];
@@ -710,7 +725,7 @@ const fs=require('fs');
     }
     for(const [name,[dx,dy]] of Object.entries(offsets)){
      const xx=x+dx,yy=y+dy;
-     if(xx<1||yy<1||xx>15||yy>11||walls.has(xx+','+yy)||seen.has(xx+','+yy))continue;
+     if(xx<1||yy<1||xx>23||yy>17||walls.has(xx+','+yy)||seen.has(xx+','+yy))continue;
      todo.push([xx,yy,[...path,name]]);
     }
    }
@@ -749,9 +764,9 @@ const fs=require('fs');
   d.debugClearRoom();
   // Walk back out of the altar and then into the center seal.
   let guard=0;
-  while(!d.snapshot().completed&&guard++<20){
+  while(!d.snapshot().completed&&guard++<42){
    const p=d.snapshot().player;
-   d.move(p.x<8?'right':p.x>8?'left':p.y<6?'down':'up');
+   d.move(p.x<12?'right':p.x>12?'left':p.y<9?'down':'up');
   }
   const won=d.snapshot();
   if(!won.completed)throw Error('Boss seal cannot complete traversal');
@@ -771,7 +786,7 @@ const fs=require('fs');
  const rupture=await page.evaluate(()=>window.LibationDungeon.snapshot());
  if(rupture.kind!=='rupture'||rupture.rooms!==10||rupture.maxHP!==18)
   throw Error('Ten-room rupture failed: '+JSON.stringify(rupture));
- if(rupture.artStyle!=='painted-2.5d')throw Error('Rupture uses outdated flat tiles');
+ if(rupture.artStyle!=='snes-16bit')throw Error('Rupture uses outdated style');
  await page.screenshot({path:'/tmp/libation-dungeon-new-rupture.png',fullPage:false});
  await page.locator('#lwDExit').click();
  await page.locator('.dev-select-portal[data-kind="challenge"]').click();
