@@ -624,6 +624,20 @@ const fs=require('fs');
  console.log('FOUR-HERO DUNGEON ROOM CAPACITY:',JSON.stringify(capacity));
  await page.screenshot({path:'/tmp/libation-dungeon-four-heroes-snes.png',fullPage:false});
  await page.evaluate(()=>window.LibationDungeon.debugPartyPreview(false));
+ const authoredArt=await page.evaluate(()=>{
+  const studio=window.LibationSpriteStudio,d=window.LibationDungeon;
+  if(!studio||studio.frameCount!==8||studio.archetypes.length!==16)
+   throw Error('Original eight-frame actor sprite sheets are missing');
+  const example={id:'sheet-demo',gender:'female',faction:'Pirate'};
+  const attacks=new Set(Array.from({length:8},(_,i)=>studio.previewHero(example,'right','attack',i)));
+  const walks=new Set(Array.from({length:8},(_,i)=>studio.previewHero(example,'down','walk',i)));
+  const facings=new Set(['up','down','left','right'].map(dir=>studio.previewHero(example,dir,'idle',0)));
+  if(attacks.size<7||walks.size<5||facings.size!==4)
+   throw Error('Character pose frames are repeated or do not face correctly');
+  return {attackFrames:attacks.size,walkFrames:walks.size,directions:facings.size,
+   archetypes:studio.archetypes.length,artVersion:studio.artVersion};
+ });
+ console.log('NEW AUTHORED HERO & ENEMY SPRITES:',JSON.stringify(authoredArt));
  const artQA=await page.evaluate(()=>{
   const art=window.LibationDungeonArt,d=window.LibationDungeon;
   if(!art||typeof art.drawRoom!=='function'||typeof art.drawEnemy!=='function')
@@ -643,6 +657,13 @@ const fs=require('fs');
  });
  console.log('PAINTED DUNGEON RENDERER & FIFTEEN ENEMIES:',JSON.stringify(artQA));
  await page.screenshot({path:'/tmp/libation-dungeon-new-enemies.png',fullPage:false});
+ // Capture the swing mid-animation to inspect the actual blade arc.
+ await page.evaluate(()=>{
+  const d=window.LibationDungeon;d.debugCombatEncounter();d.attack();
+ });
+ await page.waitForTimeout(185);
+ await page.screenshot({path:'/tmp/libation-dungeon-sword-impact.png',fullPage:false});
+ await page.waitForFunction(()=>window.LibationDungeon.snapshot().enemies===0,null,{timeout:2000});
  const themeScreens=['cellar','flooded','fracture'];
  for(const template of themeScreens){
   if(!await page.evaluate(name=>window.LibationDungeon.debugThemePreview(name),template))
@@ -673,9 +694,12 @@ const fs=require('fs');
   throw Error('Developer enemy combat unavailable');
  const beforeAttack=await page.evaluate(()=>window.LibationDungeon.snapshot());
  await page.locator('#lwDAttack').tap();
+ // Damage now lands at the weapon's impact frame, not at button-down.
+ await page.waitForFunction(()=>window.LibationDungeon.snapshot().enemies===0,null,{timeout:3000});
  const afterAttack=await page.evaluate(()=>window.LibationDungeon.snapshot());
- if(beforeAttack.enemies!==1||afterAttack.enemies!==0||afterAttack.gold<4||!afterAttack.cleared)
-  throw Error('Forward sword strike did not defeat enemy: '+JSON.stringify({beforeAttack,afterAttack}));
+ if(beforeAttack.enemies!==1||afterAttack.enemies!==0||afterAttack.gold<4||
+    !afterAttack.cleared||afterAttack.lastImpactAt<=0)
+  throw Error('Sword strike damage not synchronized to impact: '+JSON.stringify({beforeAttack,afterAttack}));
  console.log('REAL TOUCH SWORD COMBAT:',JSON.stringify({beforeAttack,afterAttack}));
  if(!await page.locator('#lwDMap').isVisible()||!await page.locator('#lwDCanvas').isVisible())
   throw Error('Dungeon canvas or minimap is not visible');

@@ -51,6 +51,9 @@ jobs:
           node --check web/overworld/game-world.js
           node --check web/overworld/dungeon.js
           node --check web/overworld/smoke-test.cjs
+          node --check web/overworld/dungeon.js
+          node --check web/overworld/dungeon-snes.js
+          node --check web/overworld/dungeon-sprite-studio.js
           test -s web/overworld/dungeon.js
           test -s web/overworld/game-world.js
       - name: Browser smoke test of GPS game canvas
@@ -73,6 +76,7 @@ jobs:
             /tmp/libation-dev-portals.png
             /tmp/libation-dungeon-room.png
             /tmp/libation-dungeon-new-enemies.png
+            /tmp/libation-dungeon-sword-impact.png
             /tmp/libation-dungeon-four-heroes-snes.png
             /tmp/libation-dungeon-theme-cellar.png
             /tmp/libation-dungeon-theme-flooded.png
