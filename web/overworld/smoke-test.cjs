@@ -598,6 +598,9 @@ const fs=require('fs');
     }
     if(seen.size!==expected)throw Error('Unreachable generated room '+kind);
     if(new Set(p.nodes.map(n=>n.template)).size<3)throw Error('Room art templates too repetitive '+kind);
+    const must=['cellar','flooded','fracture'];
+    if(must.some(name=>!p.nodes.some(n=>n.template===name)))
+      throw Error('One of the new themed environments is absent: '+kind);
     signatures.add(p.nodes.map(n=>n.gx+','+n.gy+':'+n.template).join(';'));
    }
    if(signatures.size<70)throw Error('Generator not diverse enough: '+kind);
@@ -610,7 +613,8 @@ const fs=require('fs');
   const art=window.LibationDungeonArt,d=window.LibationDungeon;
   if(!art||typeof art.drawRoom!=='function'||typeof art.drawEnemy!=='function')
    throw Error('Painted dungeon renderer missing');
-  const kinds=['slime','skeleton','bat','sentinel','specter','thornbound','mimic'];
+  const kinds=['slime','skeleton','bat','sentinel','specter','thornbound','mimic',
+   'archer','brute','wisp','spider','mage','acolyte','leech','shaman'];
   if(kinds.some(k=>!art.enemyTypes.includes(k)))throw Error('Incomplete enemy roster');
   const s=d.snapshot();
   if(s.artStyle!=='painted-2.5d')throw Error('Fallback art unexpectedly active');
@@ -621,7 +625,7 @@ const fs=require('fs');
   d.debugClearRoom(); // clear the visual fixture before touch-movement verification
   return {render:s.artStyle,archetypes:kinds,wormhole:s.kind};
  });
- console.log('PAINTED DUNGEON RENDERER & SEVEN ENEMIES:',JSON.stringify(artQA));
+ console.log('PAINTED DUNGEON RENDERER & FIFTEEN ENEMIES:',JSON.stringify(artQA));
  await page.screenshot({path:'/tmp/libation-dungeon-new-enemies.png',fullPage:false});
  const first=await page.evaluate(()=>window.LibationDungeon.snapshot());
  if(first.kind!=='challenge'||first.rooms!==14||first.node!==0||
@@ -633,6 +637,13 @@ const fs=require('fs');
  const positionAfter=await page.evaluate(()=>window.LibationDungeon.snapshot().player);
  if(positionAfter.x<=positionBefore.x)
   throw Error('Touch D-pad did not move hero');
+ if(!await page.locator('#lwDDodge').isVisible())
+  throw Error('Missing touch dodge action');
+ await page.locator('#lwDDodge').tap();
+ const dodgeResult=await page.evaluate(()=>window.LibationDungeon.snapshot());
+ if(dodgeResult.player.x<=positionAfter.x||dodgeResult.dodgeReady)
+  throw Error('Touch dodge does not move player or respect cooldown: '+JSON.stringify(dodgeResult));
+ console.log('MOBILE DODGE COMBAT:',JSON.stringify({before:positionAfter,after:dodgeResult.player}));
  if(!await page.evaluate(()=>window.LibationDungeon.debugCombatEncounter()))
   throw Error('Developer enemy combat unavailable');
  const beforeAttack=await page.evaluate(()=>window.LibationDungeon.snapshot());
