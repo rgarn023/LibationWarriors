@@ -13,10 +13,10 @@ const DOOR={up:{x:12,y:1},right:{x:23,y:9},
 const ENTRY={up:{x:12,y:2},right:{x:22,y:9},
  down:{x:12,y:16},left:{x:2,y:9}};
 const SPAWNS={
- left:[{x:2,y:9},{x:4,y:7},{x:4,y:11},{x:6,y:9}],
- right:[{x:22,y:9},{x:20,y:7},{x:20,y:11},{x:18,y:9}],
- up:[{x:12,y:2},{x:10,y:4},{x:14,y:4},{x:12,y:6}],
- down:[{x:12,y:16},{x:10,y:14},{x:14,y:14},{x:12,y:12}]
+ left:[{x:2,y:9},{x:5,y:4},{x:5,y:14},{x:9,y:9}],
+ right:[{x:22,y:9},{x:19,y:4},{x:19,y:14},{x:15,y:9}],
+ up:[{x:12,y:2},{x:5,y:5},{x:19,y:5},{x:12,y:10}],
+ down:[{x:12,y:16},{x:5,y:13},{x:19,y:13},{x:12,y:8}]
 };
 const THEMES=['pillars','crypt','gallery','arcade','sanctum','ruins','vault','cellar','flooded','fracture'];
 const ENEMIES=['slime','skeleton','bat','sentinel','specter','thornbound','mimic','archer','brute','wisp','spider','mage','acolyte','leech','shaman'];
@@ -126,8 +126,29 @@ function makeRoom(entry='left'){
  // Decoration may vary, but a room must never be unsolvable by construction.
  for(let x=1;x<=23;x++)for(let y=7;y<=11;y++)s.walls.delete(x+','+y);
  for(let x=10;x<=14;x++)for(let y=1;y<=17;y++)s.walls.delete(x+','+y);
- for(const p of s.partySpawnSlots)s.walls.delete(p.x+','+p.y);
+ // Spawn clearance accounts for the real 80+ pixel character silhouette.
+ // Reserve 3×3 walkable landing pads, plus five-wide cross corridors.
+ for(const p of s.partySpawnSlots){
+  for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
+   const x=p.x+dx,y=p.y+dy;
+   if(x>1&&x<W-2&&y>1&&y<H-2)s.walls.delete(x+','+y);
+  }
+  // Every party member gets a navigable connection to the open arena.
+  const sx=Math.min(p.x,12),ex=Math.max(p.x,12);
+  const sy=Math.min(p.y,9),ey=Math.max(p.y,9);
+  for(let x=sx;x<=ex;x++)for(let y=p.y-1;y<=p.y+1;y++)
+   if(x>1&&x<W-2&&y>1&&y<H-2)s.walls.delete(x+','+y);
+  for(let y=sy;y<=ey;y++)for(let x=11;x<=13;x++)
+   if(x>1&&x<W-2&&y>1&&y<H-2)s.walls.delete(x+','+y);
+ }
  s.props=s.props.filter(p=>s.walls.has(p.x+','+p.y));
+ s.partyClearance=s.partySpawnSlots.map(p=>({
+  ...p,free:s.walls.has(p.x+','+p.y)?false:true,
+  nearby:DIR&&Object.values(DIR).filter(([dx,dy])=>
+   p.x+dx>0&&p.x+dx<W-1&&p.y+dy>0&&p.y+dy<H-1&&
+   !s.walls.has((p.x+dx)+','+(p.y+dy))).length
+ }));
+ s.arenaWalkable=(W-2)*(H-2)-s.walls.size;
  s.visited.add(n.id);
  if(n.type==='treasure'&&!n.collected){
   n.collected=true;s.gold+=12;s.hp=Math.min(s.maxHP,s.hp+3);
@@ -974,6 +995,8 @@ function snapshot(){
   warnings:s.warnings.length,bossPhase:s.enemies.find(e=>e.boss)?.phase??null,
   geometry:{width:W,height:H,tile:T,pixelWidth:X,pixelHeight:Y},
   partyCapacity:4,partySpawnSlots:s.partySpawnSlots.map(p=>({...p})),
+  partyClearance:s.partyClearance?.map(p=>({...p}))||[],
+  arenaWalkable:s.arenaWalkable,
   partyPreview:!!s.previewParty,
   dodgeReady:performance.now()>=s.nextDodge,enemyVariants:s.enemies.map(e=>e.variant||0),
   artStyle:window.LibationDungeonSNES?'snes-16bit':window.LibationDungeonArt?'painted-2.5d':'legacy-pixel',
