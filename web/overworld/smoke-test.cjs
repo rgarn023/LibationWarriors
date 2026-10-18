@@ -618,6 +618,7 @@ const fs=require('fs');
    if(!d.debugEnemyEncounter(kind))throw Error('Enemy fixture missing '+kind);
    if(d.snapshot().enemyTypes[0]!==kind)throw Error('Wrong enemy type '+kind);
   }
+  d.debugClearRoom(); // clear the visual fixture before touch-movement verification
   return {render:s.artStyle,archetypes:kinds,wormhole:s.kind};
  });
  console.log('PAINTED DUNGEON RENDERER & SEVEN ENEMIES:',JSON.stringify(artQA));
