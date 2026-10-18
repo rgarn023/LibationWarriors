@@ -526,19 +526,31 @@ function render(now){
  const art=window.LibationDungeonArt,snes=window.LibationDungeonSNES;
  if(snes){
   snes.drawRoom(ctx,s,now);
-  for(const e of s.enemies)snes.drawEnemy(ctx,e,now,s.kind);
-  snes.drawEffects(ctx,s,now);
-  snes.drawHero(ctx,{...s,animation:heroAnimation(now)},now);
-  window.LibationSpriteStudio?.drawSlash(ctx,s,now);
+  // Smooth the visual crossing of a tile while retaining exact grid collision.
+  const old=s.visualFrom,elapsed=old?now-old.t:Infinity;
+  const interpolation=old&&elapsed>=0&&elapsed<145?
+   1-Math.pow(1-elapsed/145,2):1;
+  const visiblePlayer=old?loc(
+   old.x+(s.player.x-old.x)*interpolation,
+   old.y+(s.player.y-old.y)*interpolation):s.player;
+  const drawables=s.enemies.map(e=>({y:e.y,draw:()=>snes.drawEnemy(ctx,e,now,s.kind)}));
+  drawables.push({y:visiblePlayer.y,
+   draw:()=>snes.drawHero(ctx,{...s,player:visiblePlayer,
+      animation:heroAnimation(now)},now)});
   if(s.previewParty){
    // Developer-only four-person scale preview; not connected players.
    for(let i=1;i<4;i++){
-    const p=s.partySpawnSlots[i];
-    snes.drawHero(ctx,{...s,player:p,
-      warrior:{...s.warrior,gender:i%2?'male':'female'},
-      face:i===1?'down':'right',animation:'idle'},now);
+    const pos=s.partySpawnSlots[i];
+    drawables.push({y:pos.y,draw:()=>snes.drawHero(ctx,{...s,
+      player:pos,warrior:{...s.warrior,gender:i%2?'male':'female'},
+      face:i===1?'down':'right',animation:'idle'},now)});
    }
   }
+  // Back-to-front rendering respects standing positions and overlapping capes.
+  drawables.sort((a,b)=>a.y-b.y);
+  for(const actor of drawables)actor.draw();
+  snes.drawEffects(ctx,s,now);
+  window.LibationSpriteStudio?.drawSlash(ctx,{...s,player:visiblePlayer},now);
  }else{
   if(art)art.drawRoom(ctx,s,now);else drawFloor(now);
   for(const e of s.enemies){if(art)art.drawEnemy(ctx,e,now,s.kind);else drawEnemy(e,now)}
@@ -573,7 +585,9 @@ function step(dir){
  const s=state;if(!s||s.completed||s.defeated||!DIR[dir])return false;
  s.face=dir;const [dx,dy]=DIR[dir],x=s.player.x+dx,y=s.player.y+dy;
  if(blocked(x,y)||s.enemies.some(e=>e.x===x&&e.y===y))return false;
- s.player=loc(x,y);s.lastStep=performance.now();s.walkUntil=s.lastStep+230;s.walkFrame=(s.walkFrame+1)%4;
+ const now=performance.now();
+ s.visualFrom={x:s.player.x,y:s.player.y,t:now};
+ s.player=loc(x,y);s.lastStep=now;s.walkUntil=s.lastStep+230;s.walkFrame=(s.walkFrame+1)%4;
  // A doorway responds to the tile reached, regardless of whether the
  // player approached its threshold from the side or straight on.
  if(s.roomClear)for(const side of ORDER){
@@ -666,12 +680,14 @@ function dodge(){
  const s=state,now=performance.now();
  if(!s||s.completed||s.defeated||now<s.nextDodge)return false;
  const [dx,dy]=DIR[s.face];let moved=false;
+ const from=loc(s.player.x,s.player.y);
  for(let i=0;i<2;i++){
   const x=s.player.x+dx,y=s.player.y+dy;
   if(blocked(x,y)||s.enemies.some(e=>e.x===x&&e.y===y))break;
   s.player=loc(x,y);moved=true;
  }
  if(!moved)return false;
+ s.visualFrom={...from,t:now};
  s.nextDodge=now+1150;s.invulnUntil=Math.max(s.invulnUntil,now+430);
  s.walkUntil=now+190;s.walkFrame=(s.walkFrame+1)%4;
  announce('DODGE · brief invulnerability');return true;
@@ -920,7 +936,7 @@ function start({venue,warrior}={}){
   nodeIndex:0,visited:new Set(),hp:kind==='challenge'?14:18,
   maxHP:kind==='challenge'?14:18,player:loc(2,9),walls:new Set(),props:[],partySpawnSlots:[],
   enemies:[],projectiles:[],warnings:[],face:'right',gold:0,kills:0,nextAttack:0,nextDodge:0,
-  attackUntil:0,attackStart:0,attackCombo:0,pendingStrike:false,
+  attackUntil:0,attackStart:0,attackCombo:0,pendingStrike:false,visualFrom:null,
   hitStopUntil:0,lastImpactAt:0,
   invulnUntil:0,hurtUntil:0,lastStep:0,walkUntil:0,walkFrame:0,sparks:[],
   completed:false,defeated:false,roomClear:false,message:''};
@@ -942,6 +958,8 @@ function snapshot(){
   player:{...s.player},face:s.face,warrior:{...s.warrior},animation:heroAnimation(performance.now()),gold:s.gold,kills:s.kills,
   bossHP:s.enemies.find(e=>e.boss)?.hp??null,
   strikePending:!!s.pendingStrike,
+  visualInterpolation:!!s.visualFrom,
+  hitStopActive:performance.now()<s.hitStopUntil,
   attackFrame:s.attackStart&&performance.now()<s.attackUntil?
    Math.min(7,Math.floor((performance.now()-s.attackStart)/52)):null,
   lastImpactAt:s.lastImpactAt,

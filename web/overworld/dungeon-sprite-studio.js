@@ -267,11 +267,13 @@ function beastFrame(e,frame){
 }
 function drawHero(c,s,now){
  const action=s.animation||'idle';
+ // Pause the contact pose for just 64ms to make every landed strike punchy.
+ const t=now<s.hitStopUntil?s.lastImpactAt:now;
  let frame=0;
- if(action==='attack')frame=Math.min(7,Math.max(0,Math.floor((now-s.attackStart)/52)));
- else if(action==='walk')frame=Math.floor(now/73)%8;
- else if(action==='hurt')frame=Math.floor(now/82)%8;
- else if(action==='idle')frame=Math.floor(now/450)%4;
+ if(action==='attack')frame=Math.min(7,Math.max(0,Math.floor((t-s.attackStart)/52)));
+ else if(action==='walk')frame=Math.floor(t/73)%8;
+ else if(action==='hurt')frame=Math.floor(t/82)%8;
+ else if(action==='idle')frame=Math.floor(t/450)%4;
  else frame=7;
  const image=heroFrame(s.warrior,s.face,action,frame);
  const x=s.player.x*32+16,y=s.player.y*32+16;
@@ -288,7 +290,9 @@ function previewHero(who,dir='down',act='idle',frame=0){
 function drawEnemy(c,e,now){
  const frame=Math.floor(now/(e.boss?130:160))%6;
  const img=beastFrame(e,frame);
- const x=e.x*32+16,y=e.y*32+16,large=e.boss?1.45:1;
+ const f=e.visualFrom,t=f?Math.max(0,Math.min(1,(now-f.t)/145)):1;
+ const x=(f?f.x+(e.x-f.x)*t:e.x)*32+16;
+ const y=(f?f.y+(e.y-f.y)*t:e.y)*32+16,large=e.boss?1.45:1;
  const w=94*large,h=120*large;
  c.save();c.imageSmoothingEnabled=false;
  if(e.windup) {c.fillStyle='#ffbf7699';c.fillRect(x-25,y-12,50,5)}
@@ -302,14 +306,17 @@ function drawEnemy(c,e,now){
 }
 function drawSlash(c,s,now){
  if(!s.attackStart||now>=s.attackUntil)return;
- const p=Math.min(1,(now-s.attackStart)/440);
+ const t=now<s.hitStopUntil?s.lastImpactAt:now;
+ const p=Math.min(1,(t-s.attackStart)/416);
  if(p<.17||p>.76)return;
  const x=s.player.x*32+16,y=s.player.y*32+16;
  // Melee contact is at 0.32 of the full eight-frame animation.
  const phase=(p-.17)/.59, angle=phase*Math.PI*.92,dir=s.face;
  c.save();c.translate(x,y-37);
  const rot={right:0,down:Math.PI*.5,left:Math.PI,up:-Math.PI*.5}[dir]||0;
- c.rotate(rot);c.globalAlpha=Math.min(1,phase*7,(1-phase)*7);
+ c.rotate(rot);
+ if(s.attackCombo===0)c.scale(1,-1);
+ c.globalAlpha=Math.min(1,phase*7,(1-phase)*7);
  const rx=36;
  c.strokeStyle='#5bbbd3';c.lineWidth=13;c.beginPath();
  c.ellipse(24,0,rx,34,0,-1.15+angle*.85,-.25+angle*.85);c.stroke();
