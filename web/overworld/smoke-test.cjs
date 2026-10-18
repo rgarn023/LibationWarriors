@@ -618,12 +618,43 @@ const fs=require('fs');
    throw Error('Expected four distinct party entry positions');
   if(slots.some(p=>p.x<=0||p.x>=g.width-1||p.y<=0||p.y>=g.height-1||s.walls.includes(p.x+','+p.y)))
    throw Error('One or more party entry positions are obstructed');
+  const clearance=s.partyClearance||[];
+  if(s.arenaWalkable<300||clearance.length!==4||
+     clearance.some(p=>!p.free||p.nearby<3))
+   throw Error('Four players do not have clear combat lanes: '+JSON.stringify({
+    free:s.arenaWalkable,clearance}));
+  for(let i=0;i<slots.length;i++)for(let j=i+1;j<slots.length;j++){
+   const distance=Math.abs(slots[i].x-slots[j].x)+Math.abs(slots[i].y-slots[j].y);
+   if(distance<5)throw Error('Party entry positions are too close to move independently');
+  }
   if(!d.debugPartyPreview(true))throw Error('Four-character scale preview unavailable');
-  return {dimensions:g,slots,partyCapacity:s.partyCapacity};
+  return {dimensions:g,slots,partyCapacity:s.partyCapacity,
+   openFloor:s.arenaWalkable,clearance};
  });
  console.log('FOUR-HERO DUNGEON ROOM CAPACITY:',JSON.stringify(capacity));
  await page.screenshot({path:'/tmp/libation-dungeon-four-heroes-snes.png',fullPage:false});
  await page.evaluate(()=>window.LibationDungeon.debugPartyPreview(false));
+ await page.waitForFunction(()=>window.LibationSpriteStudio?.sheetAvailable?.(),
+  null,{timeout:12000});
+ const pirateAnimation=await page.evaluate(()=>{
+  const studio=window.LibationSpriteStudio,pirate={
+   id:'pirate-proof',gender:'male',faction:'Pirate'};
+  const actions={idle:6,walk:12,attack:8,dodge:8,hurt:4,defeat:6};
+  const found={};
+  for(const [action,frames] of Object.entries(actions)){
+   const data=new Set(Array.from({length:frames},(_,i)=>
+    studio.previewHero(pirate,'right',action,i)));
+   if(data.size<Math.min(3,frames))
+    throw Error('Missing authored pirate animation frames for '+action);
+   found[action]=data.size;
+  }
+  if(studio.walkingFrames<12||studio.attackFrames<8)
+   throw Error('Warrior animation fps/frames regressed');
+  return {loaded:studio.sheetAvailable(),uniqueFrames:found,
+   artVersion:studio.artVersion};
+ });
+ console.log('REAL AUTHOR-REFERENCED PIRATE SPRITE ATLAS:',JSON.stringify(pirateAnimation));
+ await page.screenshot({path:'/tmp/libation-dungeon-pirate-animation.png',fullPage:false});
  const authoredArt=await page.evaluate(()=>{
   const studio=window.LibationSpriteStudio,d=window.LibationDungeon;
   if(!studio||studio.frameCount!==8||studio.archetypes.length!==16)
