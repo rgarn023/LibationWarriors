@@ -13,10 +13,10 @@ const DOOR={up:{x:12,y:1},right:{x:23,y:9},
 const ENTRY={up:{x:12,y:2},right:{x:22,y:9},
  down:{x:12,y:16},left:{x:2,y:9}};
 const SPAWNS={
- left:[{x:2,y:9},{x:2,y:8},{x:2,y:10},{x:3,y:9}],
- right:[{x:22,y:9},{x:22,y:8},{x:22,y:10},{x:21,y:9}],
- up:[{x:12,y:2},{x:11,y:2},{x:13,y:2},{x:12,y:3}],
- down:[{x:12,y:16},{x:11,y:16},{x:13,y:16},{x:12,y:15}]
+ left:[{x:2,y:9},{x:4,y:7},{x:4,y:11},{x:6,y:9}],
+ right:[{x:22,y:9},{x:20,y:7},{x:20,y:11},{x:18,y:9}],
+ up:[{x:12,y:2},{x:10,y:4},{x:14,y:4},{x:12,y:6}],
+ down:[{x:12,y:16},{x:10,y:14},{x:14,y:14},{x:12,y:12}]
 };
 const THEMES=['pillars','crypt','gallery','arcade','sanctum','ruins','vault','cellar','flooded','fracture'];
 const ENEMIES=['slime','skeleton','bat','sentinel','specter','thornbound','mimic','archer','brute','wisp','spider','mage','acolyte','leech','shaman'];
