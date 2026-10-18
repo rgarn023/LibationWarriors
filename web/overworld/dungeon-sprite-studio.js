@@ -305,7 +305,7 @@ function drawHero(c,s,now){
   else if(action==='attack')frame=Math.min(7,Math.max(0,Math.floor((t-s.attackStart)/52)));
   else if(action==='idle')frame=Math.floor(t/260)%6;
   else if(action==='hurt')frame=Math.floor(t/95)%4;
-  else if(action==='dodge')frame=Math.floor(t/55)%8;
+  else if(action==='dodge')frame=Math.min(7,Math.max(0,Math.floor((t-(s.dodgeUntil-440))/55)));
   else frame=5;
   drawSheetFrame(c,s.warrior,s.face,action,frame,s.player.x*32+16,s.player.y*32+16);
   return;

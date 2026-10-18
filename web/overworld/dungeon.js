@@ -505,6 +505,7 @@ function heroAnimation(now){
  const s=state;if(!s)return 'idle';
  if(s.defeated)return 'defeat';
  if(now<s.hurtUntil)return 'hurt';
+ if(now<s.dodgeUntil)return 'dodge';
  if(now<s.attackUntil)return 'attack';
  if(now<s.walkUntil)return 'walk';
  return 'idle';
@@ -732,7 +733,8 @@ function dodge(){
  }
  if(!moved)return false;
  s.visualFrom={...from,t:now};
- s.nextDodge=now+1150;s.invulnUntil=Math.max(s.invulnUntil,now+430);
+ s.nextDodge=now+1150;s.dodgeUntil=now+440;
+ s.invulnUntil=Math.max(s.invulnUntil,now+430);
  s.walkUntil=now+190;s.walkFrame=(s.walkFrame+1)%4;
  announce('DODGE · brief invulnerability');return true;
 }
@@ -979,7 +981,7 @@ function start({venue,warrior}={}){
   warrior:identity(warrior),kind,rooms,plan:generateLayout(runSeed,rooms),
   nodeIndex:0,visited:new Set(),hp:kind==='challenge'?14:18,
   maxHP:kind==='challenge'?14:18,player:loc(2,9),walls:new Set(),props:[],partySpawnSlots:[],
-  enemies:[],projectiles:[],warnings:[],face:'right',gold:0,kills:0,nextAttack:0,nextDodge:0,
+  enemies:[],projectiles:[],warnings:[],face:'right',gold:0,kills:0,nextAttack:0,nextDodge:0,dodgeUntil:0,
   attackUntil:0,attackStart:0,attackCombo:0,pendingStrike:false,visualFrom:null,
   hitStopUntil:0,lastImpactAt:0,
   invulnUntil:0,hurtUntil:0,lastStep:0,walkUntil:0,walkFrame:0,sparks:[],
