@@ -126,122 +126,285 @@ function bossMark(c,p,cleared){
  color(c,cx-12,cy-9,25,18,cleared?'#5baaab':'#8f4f7a');
  color(c,cx-5,cy-4,10,8,p.gold);
 }
-let tileCache=null,tileKey='',tileLast=0;
-function drawRoom(c,s,now){
- const node=s.current,p=THEMES[s.kind]||THEMES.rupture;
- const key=s.plan.seed+':'+s.nodeIndex+':'+node.template+':'+s.roomClear;
- if(tileCache&&tileKey===key&&now-tileLast<150){
-  c.drawImage(tileCache,0,0);return;
- }
- c.save();c.imageSmoothingEnabled=false;
- color(c,0,0,W,H,'#080f1c');
- for(let y=0;y<GRID_H;y++)for(let x=0;x<GRID_W;x++){
-  const sx=x*TILE,sy=y*TILE;
-  if(x===0||y===0||x===GRID_W-1||y===GRID_H-1){
-   color(c,sx,sy,32,32,'#10182a');color(c,sx+2,sy+3,28,15,p.deep);
-   color(c,sx+3,sy+3,27,3,p.hi);
-   color(c,sx+1,sy+20,30,9,'#0d1424');continue;
-  }
-  tile(c,x,y,x*37+y*173+node.id*987,p,node.template);
- }
- // Additional relief on upper/lower walls, with stone arches and banners.
- for(let x=2;x<GRID_W-2;x+=3){
-  const px=x*TILE;
-  color(c,px,30,8,45,p.deep);
-  color(c,px+2,33,5,34,p.hi);
-  color(c,px-5,54,44,5,p.gold);
-  color(c,px+10,H-41,31,5,p.deep);
- }
- // Distinct themed floor features, kept on nonblocking cells.
- const r=n=>HASH(n*97+node.id*199);
- if(['gallery','crypt','cellar'].includes(node.template)){
-  for(let y=3;y<16;y++){
-   for(let x=10;x<=14;x++){
-    const xx=x*TILE,yy=y*TILE;
-    color(c,xx+2,yy+2,29,28,(x+y)%2?'#654759':'#76505b');
-    color(c,xx+4,yy+3,25,3,'#ab7d72');
+// Art-directed SNES chamber, with broad masonry courses rather than a
+// checkerboard of identical outlines. All decor uses local fictional geometry.
+const styles={
+ cellar:{stone:'#7a6c5d',mid:'#514a48',dark:'#2a303d',rim:'#d0a16d',rug:'#7e4348',accent:'#e1bd7b'},
+ flooded:{stone:'#717b79',mid:'#445e67',dark:'#1b3544',rim:'#a6c5b6',rug:'#486f78',accent:'#8bd5d7'},
+ fracture:{stone:'#73709a',mid:'#4d456f',dark:'#262641',rim:'#ceb7f2',rug:'#574882',accent:'#ae9ff5'},
+ crypt:{stone:'#787583',mid:'#514d60',dark:'#2f293b',rim:'#c0ac91',rug:'#5a3f57',accent:'#d4c38d'},
+ ruins:{stone:'#8a7e72',mid:'#575b53',dark:'#2b3640',rim:'#b2b88e',rug:'#656b55',accent:'#d4be85'}
+};
+function palette(s){
+ const p=THEMES[s.kind]||THEMES.rupture,theme=styles[s.current.template];
+ return theme?{...p,...theme}: {...p,stone:p.base,mid:p.joint,dark:p.deep,
+  rim:p.gold,rug:p.carpet,accent:p.fire};
+}
+function pixelLine(c,x,y,dx,dy,stroke,width=2){
+ c.save();c.strokeStyle=stroke;c.lineWidth=width;c.lineCap='square';
+ c.beginPath();c.moveTo(Math.round(x),Math.round(y));
+ c.lineTo(Math.round(x+dx),Math.round(y+dy));c.stroke();c.restore();
+}
+function isSafeFloor(s,x,y){
+ return x>=2&&x<=22&&y>=2&&y<=16&&!s.walls.has(x+','+y)&&
+  !(x>=9&&x<=15&&y>=6&&y<=12)&&
+  !s.partySpawnSlots.some(a=>Math.abs(a.x-x)<=1&&Math.abs(a.y-y)<=1);
+}
+function drawMasonry(c,s,p){
+ const id=s.current.id,template=s.current.template;
+ color(c,0,0,W,H,'#0d1522');
+ // Three courses of uneven large flagstones, with running (offset) bonds.
+ // Individual stones have multiple shades, chips and local imperfections.
+ for(let gy=0;gy<H;gy+=48){
+  const row=gy/48,shift=(row%2)*35;
+  for(let gx=-70+shift;gx<W+70;gx+=70){
+   const v=HASH(id*877+row*991+gx*11),
+    x=Math.round(gx),y=gy;
+   const upper=v>.64?p.stone:v>.28?p.mid:p.base;
+   color(c,x,y,69,47,p.dark);
+   color(c,x+3,y+3,64,40,upper);
+   color(c,x+4,y+3,59,3,'#e1cba039');
+   color(c,x+4,y+39,63,3,'#101b2c77');
+   color(c,x+63,y+6,3,35,'#1a243c66');
+   if(v>.21){
+    const x1=x+13+Math.round(HASH(gx+id)*25),y1=y+11+Math.round(v*11);
+    pixelLine(c,x1,y1,10,1,'#111f30ad',2);
+    pixelLine(c,x1+8,y1+1,5,9,p.dark,2);
+    color(c,x+34,y+6,3,2,p.rim);
+   }
+   if(v>.72){
+    color(c,x+20,y+33,15,4,p.moss);
+    color(c,x+27,y+30,3,9,'#789978');
    }
   }
- }else if(['flooded','ruins'].includes(node.template)){
-  for(let i=0;i<24;i++){
-   const x=2+Math.floor(r(i+19)*21),y=2+Math.floor(r(i+67)*15);
-   if(s.walls.has(x+','+y))continue;
-   color(c,x*TILE+3,y*TILE+15,25,12,p.water);
-   color(c,x*TILE+6,y*TILE+17,15,2,'#a3c2cd');
+ }
+ // Subtle damp floor patches, following broad contours, not tile cells.
+ for(let j=0;j<13;j++){
+  const rand=HASH(id*59+j*111),x=72+HASH(id*17+j*557)*650,
+   y=97+HASH(j*103+id*31)*425;
+  if(x>295&&x<505&&y>205&&y<420)continue;
+  c.fillStyle=template==='flooded'?'#4a8c9d80':'#1e304042';
+  c.beginPath();c.ellipse(x,y,18+rand*34,5+rand*13,0,0,TAU);c.fill();
+ }
+ // Raised rear masonry wall, niche shadows, column capitals and battlements.
+ color(c,0,0,W,73,'#131d2d');
+ color(c,30,13,W-60,62,p.mid);
+ color(c,32,14,W-64,6,p.rim);
+ color(c,32,24,W-64,42,p.dark);
+ for(let x=42;x<W-36;x+=83){
+  color(c,x,18,73,11,p.stone);
+  color(c,x+3,21,66,4,'#dbc6a250');
+  color(c,x+7,38,60,23,'#182238');
+  color(c,x+12,41,51,17,p.mid);
+  color(c,x+25,44,24,11,p.dark);
+ }
+ color(c,0,67,W,7,'#1a2233');
+ color(c,2,71,W-4,5,p.rim);
+ // Thick side-wall silhouette with projecting buttresses.
+ for(const right of [false,true]){
+  const x=right?744:0;
+  color(c,x,40,56,H-74,p.dark);
+  color(c,x+(right?0:45),42,11,H-83,p.stone);
+  color(c,x+(right?0:50),40,5,H-88,p.rim);
+  for(let y=90;y<H-34;y+=96){
+   const px=right?744:18;
+   color(c,px,y,39,16,p.stone);
+   color(c,px+4,y+2,30,5,p.rim);
+   color(c,px+9,y+16,23,49,p.mid);
+   color(c,px+13,y+19,7,39,'#bea58a62');
   }
- }else if(['fracture','sanctum','vault'].includes(node.template)){
-  bossMark(c,p,false);
-  for(let j=0;j<20;j++){
-   const x=70+r(j+50)*(W-140),y=72+r(j+155)*(H-140);
-   color(c,x,y,3,19,j%2?'#aa90e4':'#7abdc4');
-   color(c,x+4,y+13,3,5,'#f2e7ff');
+ }
+ // South parapet; open-center movement is never occluded by collision art.
+ color(c,0,H-31,W,31,p.deep);
+ color(c,0,H-34,W,7,p.stone);
+ color(c,0,H-36,W,4,p.rim);
+ for(let x=44;x<W-36;x+=67){
+  color(c,x,H-24,58,5,p.mid);
+  color(c,x+3,H-20,53,8,p.stone);
+ }
+}
+function drawRug(c,s,p){
+ const type=s.current.template;
+ if(!['cellar','crypt','gallery','sanctum','vault'].includes(type))return;
+ // Worn ceremonial carpet is one uninterrupted area with fringe and trim.
+ color(c,314,121,172,365,'#1a25347d');
+ color(c,318,119,164,363,p.rug);
+ color(c,322,124,156,354,'#674453');
+ for(const x of [322,329,470,477]){
+  color(c,x,131,3,335,p.rim);
+ }
+ for(let y=142;y<463;y+=39){
+  color(c,340,y,121,2,'#cfa47766');
+  for(const x of [340,456]){
+   color(c,x,y-6,14,5,p.rim);
+   color(c,x+5,y-11,4,17,p.mid);
   }
  }
- if(node.template==='cellar'){
-  for(const x of [3,5,19,21])for(const y of [3,7,12,15])barrel(c,x,y,p);
+ for(const x of [328,351,374,397,420,443,466]){
+  color(c,x,477,3,10,p.rim);
  }
- for(const yy of [3,7,13,16])for(const xx of [3,21]){
-  const q=r(xx+yy*25);
-  if(node.template!=='cellar'&&q>.4)rubble(c,xx,yy,p,xx+yy);
+}
+function drawRoomThemes(c,s,p,now){
+ const type=s.current.template,id=s.current.id;
+ if(type==='cellar'){
+  // Copper pipes, stacked casks, wall racks and suspended chain.
+  for(const x of [80,690]){
+   for(let y=122;y<466;y+=114){
+    color(c,x-20,y-10,72,64,'#1c2432a5');
+    barrel(c,x,y,p);
+    barrel(c,x+28,y-1,p);
+    color(c,x-26,y+39,92,9,'#493b36');
+    color(c,x-24,y+40,88,3,p.rim);
+   }
+  }
+  for(let x=123;x<660;x+=132){
+   color(c,x,74,5,80,'#735e50');
+   color(c,x-6,147,17,9,p.rim);
+   color(c,x+10,80,4,61,'#c6a778');
+   for(let y=92;y<138;y+=15)color(c,x+4,y,9,3,'#dfa969');
+  }
+ }else if(type==='flooded'){
+  // Jagged canal edges and animated reflection strips.
+  for(const side of [0,1]){
+   const x=side?623:104;
+   for(let y=112;y<520;y+=80){
+    color(c,x-11,y-8,95,57,p.dark);
+    color(c,x-6,y-5,86,49,p.water);
+    color(c,x-5,y-5,82,4,'#b2dee5');
+    const ripple=(Math.floor(now/160)+y)%19;
+    color(c,x+15+ripple,y+14,24,2,'#dbf6f3');
+    color(c,x+9,y+29,40,2,'#7baec2');
+   }
+  }
+  for(const pos of [[133,130],[641,457],[166,450]]){
+   color(c,pos[0],pos[1],24,12,'#58785b');
+   color(c,pos[0]+7,pos[1]-8,5,22,'#90b08b');
+  }
+ }else if(type==='fracture'){
+  // Multi-faceted crystals and rift lines with colored illumination.
+  for(const [x,y] of [[144,137],[664,135],[155,463],[645,446]]){
+   const q=Math.sin(now/480+x)*4;
+   c.fillStyle='#745db0';c.beginPath();
+   c.moveTo(x-27,y+22);c.lineTo(x-16,y-24+q);c.lineTo(x+6,y-52+q);
+   c.lineTo(x+27,y-16);c.lineTo(x+22,y+24);c.closePath();c.fill();
+   pixelLine(c,x-15,y+5,20,-36,'#c5b8f2',4);
+   pixelLine(c,x+8,y-32,7,44,'#8bd8e5',3);
+   color(c,x-29,y+22,57,8,p.rim);
+  }
+  for(let j=0;j<15;j++){
+   const x=105+HASH(j+id*21)*580,y=98+HASH(j*35+id)*410;
+   pixelLine(c,x,y,14,-20,'#a48def',3);
+   pixelLine(c,x+14,y-20,8,13,'#7fd0da',3);
+  }
+ }else{
+  // Distinct crypt statues, ruined masonry and arches at room perimeter.
+  for(const x of [112,653]){
+   for(const y of [152,419]){
+    color(c,x-19,y+25,69,16,'#131d2ba1');
+    color(c,x-10,y-41,48,77,p.mid);
+    color(c,x-5,y-42,40,11,p.rim);
+    color(c,x+2,y-30,25,38,p.stone);
+    color(c,x+8,y-23,11,14,p.deep);
+    color(c,x-11,y+26,52,8,p.rim);
+   }
+  }
  }
- // Props inherit the gameplay collision set.
+}
+function drawStructure(c,s,p){
+ // Collision columns are taller than floor markers; fronts overlap floor edge.
  for(const pos of s.walls){
   const [x,y]=pos.split(',').map(Number);
   if(x<2||y<2||x>22||y>16)continue;
   column(c,x,y,p);
  }
- for(const prop of s.props){
-  if(prop.kind==='pillar')column(c,prop.x,prop.y,p);
-  if(prop.kind==='coffin'){
-   const x=prop.x*TILE,y=prop.y*TILE;
-   color(c,x-6,y-3,70,34,'#1b2432');
-   color(c,x-3,y-10,66,32,p.hi);
-   color(c,x+3,y-5,55,22,p.deep);
-   color(c,x+29,y,4,14,p.gold);
+ for(const prop of s.props)if(prop.kind==='coffin'){
+  const x=prop.x*TILE,y=prop.y*TILE;
+  color(c,x-6,y+20,72,15,'#101829af');
+  color(c,x-10,y-8,75,35,p.mid);
+  color(c,x-5,y-12,68,8,p.rim);
+  color(c,x+2,y-4,57,18,p.dark);
+  color(c,x+26,y+2,4,17,p.rim);
+ }
+}
+function edgeDecor(c,s,p,now){
+ const id=s.current.id,type=s.current.template;
+ // Fixed architectural accents selected by theme and room ID, never obstacles.
+ for(let j=0;j<12;j++){
+  const x=j%2?3:21,y=3+Math.floor(j/2)*2;
+  if(!isSafeFloor(s,x,y))continue;
+  const seed=HASH(id*739+j*59);
+  if(type==='cellar'){
+   if(seed>.28)barrel(c,x,y,p);
+  }else if(type==='fracture'){
+   if(seed>.37){
+    color(c,x*TILE+6,y*TILE-16,18,51,p.rim);
+    color(c,x*TILE+12,y*TILE-33,7,48,'#918ad1');
+    color(c,x*TILE+15,y*TILE-25,3,31,'#e4d5ff');
+   }
+  }else if(seed>.58){
+   rubble(c,x,y,p,j+id);
+  }else if(seed>.31){
+   color(c,x*TILE+8,y*TILE+20,14,6,p.moss);
+   color(c,x*TILE+10,y*TILE+15,4,9,'#98b67b');
   }
  }
- // Warm torch pools, arched shadows, scratches and damaged stone.
- for(const tx of [2,22])for(const ty of [3,15]){
-  const cx=tx*TILE,cy=ty*TILE;
-  const light=c.createRadialGradient(cx,cy,1,cx,cy,115);
-  light.addColorStop(0,node.template==='fracture'?'#988bea52':'#ffab5c49');
-  light.addColorStop(1,'#00000000');
-  c.fillStyle=light;c.fillRect(cx-115,cy-115,230,230);
- }
- for(let i=0;i<30;i++){
-  const v=HASH(node.id*83+i*519);
-  const x=70+HASH(i+node.id*19)*(W-140),y=86+HASH(i*61+node.id*43)*(H-165);
-  if(v>.6){color(c,x,y,8,3,v>.82?p.moss:p.gold);color(c,x+3,y+3,3,3,p.deep)}
- }
- if(node.template==='flooded'||node.template==='ruins'){
-  for(const cx of [3,21])for(const cy of [5,13]){
-   color(c,cx*TILE-2,cy*TILE+4,63,24,p.water);
-   color(c,cx*TILE+5,cy*TILE+8,37,2,'#bad9de');
-   color(c,cx*TILE+4,cy*TILE+24,48,3,p.deep);
-  }
- }
- for(const xx of [4,20])banner(c,xx,1,p);
+ for(const x of [4,20])banner(c,x,1,p);
  for(const x of [2,22])for(const y of [3,15])flame(c,x,y,p,now);
+}
+function centralFocus(c,s,p,now){
+ const n=s.current;
+ if(n.type==='boss'){
+  const x=400,y=305;
+  c.strokeStyle=p.rim;c.lineWidth=5;
+  c.beginPath();c.ellipse(x,y,95,72,0,0,TAU);c.stroke();
+  for(let i=0;i<8;i++){
+   const theta=i*Math.PI/4,x1=x+Math.cos(theta)*83,y1=y+Math.sin(theta)*62;
+   color(c,x1-6,y1-4,12,8,p.rim);
+  }
+  color(c,x-24,y-19,47,39,n.cleared?'#65aea7':'#593e66');
+  color(c,x-4,y-12,9,29,p.accent);
+  color(c,x-14,y-3,29,9,p.accent);
+ }else if(n.type==='treasure'){
+  const x=386,y=284;
+  color(c,x-20,y+37,94,13,'#1a2233b2');
+  color(c,x-17,y-1,73,46,'#52372f');
+  color(c,x-13,y-13,66,28,'#bb8756');
+  color(c,x-7,y-12,53,5,p.rim);
+  color(c,x+13,y+8,17,17,'#eac17b');
+ }else if(n.type==='shrine'){
+  const x=398,y=294;
+  color(c,x-46,y+24,92,19,p.dark);
+  color(c,x-29,y+18,59,11,p.rim);
+  c.fillStyle='#7dd5cb';c.beginPath();
+  c.moveTo(x,y-47);c.lineTo(x+19,y-12);
+  c.lineTo(x,y+13);c.lineTo(x-18,y-12);c.closePath();c.fill();
+  pixelLine(c,x-1,y-38,6,34,'#e0fff0',4);
+ }
+}
+let tileCache=null,tileKey='',tileLast=0;
+function drawRoom(c,s,now){
+ const node=s.current,p=palette(s);
+ const key=s.plan.seed+':'+s.nodeIndex+':'+node.template+':'+s.roomClear;
+ if(tileCache&&tileKey===key&&now-tileLast<105){
+  c.drawImage(tileCache,0,0);return;
+ }
+ c.save();c.imageSmoothingEnabled=false;
+ drawMasonry(c,s,p);
+ drawRug(c,s,p);
+ drawRoomThemes(c,s,p,now);
+ drawStructure(c,s,p);
+ edgeDecor(c,s,p,now);
+ centralFocus(c,s,p,now);
  for(const side of ['up','down','left','right'])if(node.edges[side]!==undefined)
   door(c,DOORS[side],s.roomClear,p,now);
- if(node.type==='boss')bossMark(c,p,s.roomClear);
- if(node.type==='treasure'){
-  const x=12*TILE,y=9*TILE;
-  color(c,x-14,y-7,58,38,'#3c2834');color(c,x-9,y-12,48,31,'#a27543');
-  color(c,x-6,y-12,42,5,'#e3b16b');color(c,x+13,y,8,12,p.gold);
- }else if(node.type==='shrine'){
-  const x=12*TILE,y=9*TILE;
-  color(c,x-18,y+5,67,28,p.deep);
-  color(c,x-4,y-24,39,44,'#69b1bc');
-  color(c,x+8,y-21,8,32,'#dbfaed');
- }
- // Sprites at entrances represent available *space*, not connected players.
- // No fake connected avatars or implied multiplayer session.
+ // Architectural shadows pull attention to the four-player combat space.
+ const shadow=c.createRadialGradient(400,285,96,400,285,470);
+ shadow.addColorStop(0,'#00000000');shadow.addColorStop(1,'#080e206d');
+ c.fillStyle=shadow;c.fillRect(0,0,W,H);
  c.restore();
  if(!tileCache){tileCache=document.createElement('canvas');tileCache.width=W;tileCache.height=H}
- const cache=tileCache.getContext('2d');
- cache.clearRect(0,0,W,H);cache.drawImage(c.canvas,0,0);
- tileKey=key;tileLast=now;
+ const cache=tileCache.getContext('2d');cache.clearRect(0,0,W,H);
+ cache.drawImage(c.canvas,0,0);tileKey=key;tileLast=now;
 }
 function drawSprite(c,s,kind,now,player=false){
  const art=window.LibationDungeonArt;
