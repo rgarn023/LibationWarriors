@@ -307,15 +307,19 @@ const fs=require('fs');
   throw Error('Character size failed to restore after zooming in: '+JSON.stringify({baseAvatar,resetAvatar}));
  await page.waitForFunction(()=>window.LibationPaintedAvatar?.ready()===true,null,{timeout:12000});
  const illustration=await page.evaluate(async()=>{
-  const atlas=new Image();atlas.src='./avatar_jrpg_strip.avif';await atlas.decode();
+  const atlas=new Image();atlas.src='./avatar_jrpg_strip.webp';await atlas.decode();
   const spr=document.querySelector('#gpsMarker .sprite');
-  return {atlas:[atlas.naturalWidth,atlas.naturalHeight],
+  const alphaSample=document.createElement('canvas');
+  alphaSample.width=atlas.naturalWidth;alphaSample.height=atlas.naturalHeight;
+  const ctx=alphaSample.getContext('2d');ctx.drawImage(atlas,0,0);
+  const cornerAlpha=ctx.getImageData(0,0,1,1).data[3];
+  return {cornerAlpha,atlas:[atlas.naturalWidth,atlas.naturalHeight],
    rendered:[spr?.naturalWidth,spr?.naturalHeight],
    style:spr?getComputedStyle(spr).imageRendering:'missing',
    source:window.LibationPaintedAvatar?.source};
  });
  console.log('APPROVED JRPG ANIMATED ART:',JSON.stringify(illustration));
- if(illustration.atlas[0]!==640||illustration.atlas[1]!==140||
+ if(illustration.cornerAlpha!==0||illustration.atlas[0]!==640||illustration.atlas[1]!==140||
   illustration.rendered[0]!==80||illustration.rendered[1]!==140||
   illustration.style==='pixelated'||illustration.source!=='approved-illustration')
   throw Error('Approved high-resolution avatar art did not render: '+JSON.stringify(illustration));

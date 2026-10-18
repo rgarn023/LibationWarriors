@@ -13,7 +13,7 @@ art.onload=()=>{
  window.dispatchEvent(new Event('libation-painted-avatar-ready'));
 };
 art.onerror=()=>console.warn('Painted JRPG avatar unavailable; keeping vector fallback.');
-art.src='./avatar_jrpg_strip.avif';
+art.src='./avatar_jrpg_strip.webp';
 function render(frame,facing='up',config={}){
  if(!ready)return null;
  const phase=frame>=16?16+(frame%2):((frame%16)+16)%16;
@@ -72,7 +72,7 @@ function render(frame,facing='up',config={}){
 }
 window.LibationPaintedAvatar=Object.freeze({
  render,ready:()=>ready,frameSize:[80,140],atlasSize:[640,140],
- directions:4,sideWalkFrames:6,source:'approved-illustration',
+ directions:4,sideWalkFrames:6,source:'approved-illustration',assetFormat:'webp',
  clearCache:()=>cache.clear()
 });
 })();
