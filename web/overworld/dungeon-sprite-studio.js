@@ -156,20 +156,28 @@ function heroFrame(w,dir,act,n){
  cache.set(key,cvs);if(cache.size>440)cache.delete(cache.keys().next().value);
  return cvs;
 }
-function beastFrame(e,frame){
- const kind=e.kind||'slime',v=e.variant||0,phase=frame%6;
- const key=['enemy',kind,v,phase,e.boss?'boss':'minion',e.awake===false?'sleep':'awake'].join(':');
+function beastFrame(e,frame,action='idle'){
+ const kind=e.kind||'slime',v=e.variant||0,phase=frame%8;
+ const key=['enemy',kind,v,action,phase,e.boss?'boss':'minion',
+  e.awake===false?'sleep':'awake'].join(':');
  if(cache.has(key))return cache.get(key);
  const cv=document.createElement('canvas');cv.width=68;cv.height=88;
  const c=cv.getContext('2d');c.imageSmoothingEnabled=false;
- const pulse=Math.sin(phase*Math.PI/3),bob=Math.round(Math.abs(pulse)*3);
+ const pulse=Math.sin(phase*Math.PI/4);
+ const bob=action==='walk'?Math.round(Math.abs(pulse)*5):
+  action==='hurt'?(phase%2?3:0):
+  action==='attack'?Math.round(Math.sin(phase*Math.PI/4)*4):
+  Math.round(Math.abs(pulse)*2);
  const p=(x,y,w,h,col)=>rect(c,x,y,w,h,col);
  const beastPal=[
   {main:'#8d6db0',light:'#c5a6e2',shade:'#4c3d70',eye:'#fceba9'},
   {main:'#5c9a9b',light:'#b4e0be',shade:'#345b78',eye:'#fff4c6'},
   {main:'#ad755e',light:'#e9b884',shade:'#65485f',eye:'#e9f9f6'}
  ][v%3];
- c.save();oval(c,34,78,23,6,'#0b1a2a75');c.translate(0,-bob);
+ c.save();oval(c,34,78,23,6,'#0b1a2a75');
+ if(action==='defeat'){c.translate(7,67);c.rotate(-.35);c.translate(-7,-67)}
+ if(action==='attack')c.translate(Math.round(Math.sin(phase*Math.PI/4)*2),0);
+ c.translate(0,-bob);
  const eye=(x,y)=>{p(x-2,y-2,6,6,ink);p(x,y-1,3,3,beastPal.eye);p(x+1,y,1,1,'#ffffff')};
  const horn=(x,y,dx=1)=>poly(c,[[x,y+10],[x+dx*3,y-4],[x+dx*10,y+14]],beastPal.light,ink,1.8);
  const sword=(x,y)=>{p(x,y-22,7,30,ink);p(x+1,y-22,5,26,'#b9d6dd');p(x+2,y-19,2,22,'#fffcee');p(x-5,y+5,17,5,gold)};
@@ -328,8 +336,11 @@ function previewHero(who,dir='down',act='idle',frame=0){
  c.drawImage(img,0,0,128,192);return cv.toDataURL('image/png');
 }
 function drawEnemy(c,e,now){
- const frame=Math.floor(now/(e.boss?130:160))%6;
- const img=beastFrame(e,frame);
+ const action=e.hitUntil>now?'hurt':
+  e.windup>0?'attack':
+  e.visualFrom&&now-e.visualFrom.t<180?'walk':'idle';
+ const frame=Math.floor(now/(action==='walk'?84:action==='attack'?70:150))%8;
+ const img=beastFrame(e,frame,action);
  const f=e.visualFrom,t=f?Math.max(0,Math.min(1,(now-f.t)/145)):1;
  const x=(f?f.x+(e.x-f.x)*t:e.x)*32+16;
  const y=(f?f.y+(e.y-f.y)*t:e.y)*32+16,large=e.boss?1.45:1;
@@ -372,7 +383,8 @@ function drawSlash(c,s,now){
 }
 window.LibationSpriteStudio=Object.freeze({
  drawHero,drawEnemy,drawSlash,previewHero,
- frameCount:8,walkingFrames:12,attackFrames:8,authoredAnimationRows:6,
+ frameCount:8,walkingFrames:12,attackFrames:8,enemyPoseFrames:8,
+ authoredAnimationRows:6,
  sheetAvailable:()=>pirateSheetReady,
  artVersion:'authored-pirate-atlas-plus-mana-fallback-v2',
  archetypes:['slime','skeleton','bat','sentinel','specter','thornbound','mimic',

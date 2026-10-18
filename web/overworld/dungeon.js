@@ -573,9 +573,14 @@ function render(now){
    // Developer-only four-person scale preview; not connected players.
    for(let i=1;i<4;i++){
     const pos=s.partySpawnSlots[i];
-    drawables.push({y:pos.y,draw:()=>snes.drawHero(ctx,{...s,
-      player:pos,warrior:{...s.warrior,gender:i%2?'male':'female'},
-      face:i===1?'down':'right',animation:'idle'},now)});
+    drawables.push({y:pos.y,draw:()=>{
+      ctx.save();
+      ctx.filter=i===1?'hue-rotate(35deg)':i===2?'hue-rotate(155deg)':'hue-rotate(240deg)';
+      snes.drawHero(ctx,{...s,player:pos,
+        warrior:{...s.warrior,gender:'male',faction:'Pirate'},
+        face:i===1?'left':'right',animation:'idle'},now);
+      ctx.restore();
+    }});
    }
   }
   // Back-to-front rendering respects standing positions and overlapping capes.
