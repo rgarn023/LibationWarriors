@@ -406,56 +406,160 @@ function drawRoom(c,s,now){
  const cache=tileCache.getContext('2d');cache.clearRect(0,0,W,H);
  cache.drawImage(c.canvas,0,0);tileKey=key;tileLast=now;
 }
-function drawSprite(c,s,kind,now,player=false){
- const art=window.LibationDungeonArt;
- if(!art)return;
- // Source artists' multi-layer original character designs are sampled onto
- // 16-bit pixel-grid sprites; nearest neighbor upscale preserves sprite pixels.
- const frame=player?
-  s.animation==='walk'?s.walkFrame%4:
-  s.animation==='attack'?Math.max(0,Math.min(3,Math.floor((205-(s.attackUntil-now))/55))):
-  s.animation==='hurt'?Math.floor(now/90)%4:
-  s.animation==='defeat'?3:Math.floor(now/550)%2:
-  Math.floor(now/170)%4;
- const key=player?
-  ['hero',s.warrior?.id,s.warrior?.gender,s.face,s.animation,frame].join(':'):
-  [kind,s.theme,s.variant??0,frame].join(':');
- let atlas=dynSprites.get(key);
- if(!atlas){
-  const buffer=document.createElement('canvas');
-  buffer.width=128;buffer.height=160;const q=buffer.getContext('2d');
-  q.imageSmoothingEnabled=true;
-  if(player){
-   q.translate(64,126);
-   q.scale(1.45,1.45);
-   // Draw at the same position in its own source sprite frame.
-   art.drawHero(q,s.warrior,s.face,s.animation,frame,0,0);
-  }else{
-   const scale=s.boss?1.17:1.34;
-   q.translate(64-16*scale,110-16*scale);
-   q.scale(scale,scale);
-   // Enemies are located in arbitrary rooms; normalize world space to 0,0.
-   art.drawEnemy(q,{...s,kind,x:0,y:0},now,s.theme);
-  }
-  const low=document.createElement('canvas');low.width=64;low.height=80;
-  const lowc=low.getContext('2d');lowc.imageSmoothingEnabled=true;
-  lowc.drawImage(buffer,0,0,128,160,0,0,64,80);
-  dynSprites.set(key,low);
-  if(dynSprites.size>180)dynSprites.delete(dynSprites.keys().next().value);
-  atlas=low;
+// Original individually outlined sprite artwork (54×78 at native 16-bit
+// resolution). All hero states share exact foot anchoring and face directions.
+const spriteCache=new Map();
+function heroSprite(who,face,action,frame){
+ const gender=who?.gender==='female',back=face==='up',side=face==='right'||face==='left';
+ const key=['hero',who?.id,gender,face,action,frame].join(':');
+ if(spriteCache.has(key))return spriteCache.get(key);
+ const layer=document.createElement('canvas');layer.width=60;layer.height=84;
+ const c=layer.getContext('2d'),skin=gender?'#e7b58e':'#ca9478',
+  hair=gender?'#e8c277':'#674331',base=gender?'#35638d':'#893c47',
+  light=gender?'#7eafcf':'#cc6c5b',shadow=gender?'#203b5e':'#503040',
+  metal='#deb978',outline='#272838';
+ const p=(x,y,w,h,col)=>color(c,x,y,w,h,col);
+ const moving=action==='walk',bounce=moving?[0,2,4,2][frame]:action==='idle'&&frame%2?1:0;
+ const left=moving?[0,-4,0,4][frame]:0,right=-left;
+ c.save();if(face==='left'){c.translate(60,0);c.scale(-1,1)}
+ if(action==='defeat'){c.translate(-2,59);c.rotate(-.93);c.translate(3,-59)}
+ // Transparent ground shadow and independent boots.
+ c.fillStyle='#0c1d2c99';c.beginPath();c.ellipse(30,77,24,5,0,0,TAU);c.fill();
+ for(const [x,dy] of [[18,left],[34,right]]){
+  p(x-4,58+dy,11,14,outline);p(x-2,58+dy,8,13,'#655344');
+  p(x-1,61+dy,4,7,'#9b7b5b');p(x-6,70+dy,16,6,outline);
+  p(x-5,71+dy,13,3,'#6c503f');p(x-4,71+dy,8,2,metal);
  }
+ // Wide scarf and tapering, animated cloak.
+ const sway=moving?left*.85:(frame%2?1:-1);
+ p(12,29-bounce,36,29,outline);p(14,30-bounce,31,28,shadow);
+ p(16+sway,48-bounce,28,16,shadow);
+ p(18+sway,49-bounce,20,12,base);
+ p(42+sway,50-bounce,4,12,metal);
+ p(13,33-bounce,7,22,metal);
+ p(16,35-bounce,4,17,light);
+ // Structured tunic, chest plate, satchel and diagonal leather harness.
+ p(17,29-bounce,27,28,outline);
+ p(19,30-bounce,23,23,base);
+ p(21,31-bounce,19,5,light);
+ p(23,36-bounce,17,14,'#d1b58a');
+ p(27,37-bounce,10,8,light);
+ for(let j=0;j<3;j++)p(22+j*5,46-bounce,3,4,shadow);
+ p(16,50-bounce,28,6,outline);
+ p(18,51-bounce,23,3,metal);
+ p(28,50-bounce,7,7,'#6c4b35');
+ p(29,51-bounce,5,4,'#f1d5a5');
+ p(10,40-bounce,10,17,shadow);
+ p(11,41-bounce,8,14,'#6b513a');
+ p(12,44-bounce,5,8,'#c29362');
+ // Left arm, shoulder pauldron and glove.
+ p(10,31-bounce,12,14,outline);
+ p(11,31-bounce,11,6,light);p(12,32-bounce,9,2,metal);
+ p(11,41-bounce,8,10,base);p(12,48-bounce,7,6,outline);
+ p(13,49-bounce,5,3,skin);
+ // Animated sword hand and physical weapon arc.
+ const lift=action==='attack'?[0,10,22,8][frame]:0;
+ p(40,29-bounce-lift,11,14,outline);
+ p(42,31-bounce-lift,7,13,base);
+ p(42,43-bounce-lift,8,8,'#42394a');
+ p(43,44-bounce-lift,6,5,skin);
+ if(action==='attack'){
+  const vx=[47,51,35,47][frame],vy=[41,23,16,34][frame];
+  p(vx-1,vy-32,7,34,outline);
+  p(vx,vy-32,5,29,'#b8dce5');
+  p(vx+1,vy-31,2,26,'#f4ffff');
+  p(vx-7,vy,19,5,metal);
+  if(frame===2){
+   for(let i=0;i<5;i++)p(43-i*7,8+i*4,6,3,'#c4f6f7');
+  }
+ }else if(gender){
+  p(51,23-bounce,4,36,'#675139');
+  p(47,19-bounce,12,11,'#74a8c9');
+  p(50,22-bounce,5,4,'#e7fff1');
+ }else{
+  p(50,30-bounce,5,31,outline);p(51,30-bounce,3,24,'#b9d8e1');
+  p(45,49-bounce,14,5,metal);
+ }
+ // Scarf and shaped neck; separates head from body.
+ p(19,26-bounce,25,7,'#e7cd9c');p(19,27-bounce,21,3,'#fff0c2');
+ p(34,30-bounce,5,11,'#b68e5a');
+ // Face, directional hair, eye readability and detailed headgear.
+ p(18,8-bounce,25,23,outline);
+ p(20,12-bounce,22,17,skin);
+ p(21,18-bounce,4,7,'#dfab84');
+ p(37,18-bounce,4,6,'#b67d69');
+ if(back){
+  p(17,8-bounce,27,23,hair);
+  p(17,14-bounce,8,16,'#997657');
+  p(22,9-bounce,19,17,'#b88b62');
+  for(let i=0;i<4;i++)p(17+i*6,24-bounce,4,8,hair);
+ }else if(side){
+  p(19,7-bounce,25,10,hair);
+  p(18,9-bounce,9,16,hair);
+  p(39,21-bounce,3,3,outline);
+  p(42,25-bounce,3,2,'#ae7860');
+ }else{
+  p(18,7-bounce,27,11,hair);
+  p(18,10-bounce,7,13,hair);
+  p(37,10-bounce,6,8,'#956444');
+  p(25,21-bounce,3,3,outline);
+  p(37,21-bounce,3,3,outline);
+  p(30,26-bounce,6,2,'#a65e58');
+ }
+ // Carefully shaded tricorn/helmet, feather and crest.
+ p(16,5-bounce,33,9,outline);
+ p(18,4-bounce,29,8,gender?'#315d8d':'#34384e');
+ p(19,4-bounce,26,3,metal);
+ p(15,11-bounce,35,5,outline);
+ p(18,11-bounce,28,2,metal);
+ p(30,7-bounce,5,4,'#f6e6c6');
+ p(42,1-bounce,4,11,gender?'#f3e0a1':'#d7b58b');
+ if(action==='hurt'){
+  p(17,15-bounce,28,20,'#fff6d491');
+  p(11,40-bounce,7,10,'#f39a88aa');
+ }
+ c.restore();
+ if(spriteCache.size>220)spriteCache.clear();
+ spriteCache.set(key,layer);return layer;
+}
+function drawHero(c,s,now){
+ const action=s.animation||'idle',frame=action==='walk'?s.walkFrame%4:
+  action==='attack'?Math.max(0,Math.min(3,Math.floor((205-(s.attackUntil-now))/55))):
+  action==='hurt'?Math.floor(now/95)%4:action==='defeat'?3:Math.floor(now/600)%2;
+ const sprite=heroSprite(s.warrior,s.face,action,frame);
+ const x=s.player.x*TILE+16,y=s.player.y*TILE+16;
  c.save();c.imageSmoothingEnabled=false;
- const x=(player?s.player.x:s.x)*TILE+16,y=(player?s.player.y:s.y)*TILE+16;
- // Feet anchored at tile center; character upper body projects into tile above.
- c.drawImage(atlas,Math.round(x-40),Math.round(y-77),80,100);
+ // 60×84 source becomes 84×118 screen pixels, visible even at 390px wide.
+ c.drawImage(sprite,Math.round(x-42),Math.round(y-108),84,118);
  c.restore();
 }
 const dynSprites=new Map();
-function drawEnemy(c,e,now,theme){
- drawSprite(c,{...e,theme},e.kind,now,false);
+function enemyImage(e,now,theme){
+ const art=window.LibationDungeonArt;if(!art)return null;
+ const frame=Math.floor(now/180)%4,key=[e.kind,e.boss?'boss':'regular',e.variant||0,
+  e.kind==='bat'||e.kind==='wisp'||e.kind==='spider'?frame:0,theme,e.awake].join(':');
+ let img=dynSprites.get(key);if(img)return img;
+ const buffer=document.createElement('canvas');buffer.width=128;buffer.height=144;
+ const ctx=buffer.getContext('2d');ctx.imageSmoothingEnabled=true;
+ const scale=e.boss?1.6:1.7;
+ ctx.translate(64-16*scale,105-16*scale);
+ ctx.scale(scale,scale);
+ art.drawEnemy(ctx,{...e,x:0,y:0},now,theme);
+ const res=document.createElement('canvas');res.width=64;res.height=72;
+ const c=res.getContext('2d');c.imageSmoothingEnabled=true;
+ c.drawImage(buffer,0,0,128,144,0,0,64,72);
+ dynSprites.set(key,res);
+ if(dynSprites.size>190)dynSprites.delete(dynSprites.keys().next().value);
+ return res;
 }
-function drawHero(c,s,now){
- drawSprite(c,{...s,animation:s.animation,walkFrame:s.walkFrame},'hero',now,true);
+function drawEnemy(c,e,now,theme){
+ const image=enemyImage(e,now,theme);if(!image)return;
+ const x=e.x*TILE+16,y=e.y*TILE+16;
+ c.save();c.imageSmoothingEnabled=false;
+ const scale=e.boss?1.3:1;
+ const w=102*scale,h=118*scale;
+ c.drawImage(image,Math.round(x-w/2),Math.round(y-h+10),w,h);
+ c.restore();
 }
 function drawEffects(c,s,now){
  const art=window.LibationDungeonArt;
