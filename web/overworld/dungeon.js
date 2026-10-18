@@ -466,6 +466,8 @@ function heroAtlas(v){
  heroCache.set(key,atlas);return atlas;
 }
 function previewWarrior(v,dir='down',action='idle',frame=0){
+ if(window.LibationDungeonSNES?.previewHero)
+  return window.LibationDungeonSNES.previewHero(v,dir,action,frame);
  if(window.LibationDungeonArt?.previewHero)
   return window.LibationDungeonArt.previewHero(v,dir,action,frame);
  const atlas=heroAtlas(v),c=document.createElement('canvas');
