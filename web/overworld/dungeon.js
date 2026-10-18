@@ -664,7 +664,13 @@ function chase(enemy){
   s.enemies.some(other=>other!==enemy&&other.x===x&&other.y===y);
  for(let i=0;i<queue.length;i++){
   const p=queue[i];
-  if(dist(p,s.player)===1){if(p.first){enemy.x=p.first.x;enemy.y=p.first.y}return}
+  if(dist(p,s.player)===1){
+   if(p.first){
+    enemy.visualFrom={x:enemy.x,y:enemy.y,t:performance.now()};
+    enemy.x=p.first.x;enemy.y=p.first.y;
+   }
+   return;
+  }
   const directions=ORDER.slice().sort((a,b)=>{
    const [ax,ay]=DIR[a],[bx,by]=DIR[b];
    return dist(loc(p.x+ax,p.y+ay),s.player)-dist(loc(p.x+bx,p.y+by),s.player);
