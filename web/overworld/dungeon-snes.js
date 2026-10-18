@@ -228,9 +228,15 @@ function drawSprite(c,s,kind,now,player=false){
  if(!art)return;
  // Source artists' multi-layer original character designs are sampled onto
  // 16-bit pixel-grid sprites; nearest neighbor upscale preserves sprite pixels.
+ const frame=player?
+  s.animation==='walk'?s.walkFrame%4:
+  s.animation==='attack'?Math.max(0,Math.min(3,Math.floor((205-(s.attackUntil-now))/55))):
+  s.animation==='hurt'?Math.floor(now/90)%4:
+  s.animation==='defeat'?3:Math.floor(now/550)%2:
+  Math.floor(now/170)%4;
  const key=player?
-  ['hero',s.warrior?.gender,s.face,s.animation,s.walkFrame].join(':'):
-  [kind,s.kind,s.variant??0,Math.floor(now/180)%4].join(':');
+  ['hero',s.warrior?.id,s.warrior?.gender,s.face,s.animation,frame].join(':'):
+  [kind,s.theme,s.variant??0,frame].join(':');
  let atlas=dynSprites.get(key);
  if(!atlas){
   const buffer=document.createElement('canvas');
@@ -240,11 +246,11 @@ function drawSprite(c,s,kind,now,player=false){
    q.translate(57,98);
    q.scale(1.0,1.0);
    // Draw at the same position in its own source sprite frame.
-   art.drawHero(q,s.warrior,s.face,s.animation,s.walkFrame,0,0);
+   art.drawHero(q,s.warrior,s.face,s.animation,frame,0,0);
   }else{
    q.translate(49,65);
    // Enemies are located in arbitrary rooms; normalize world space to 0,0.
-   art.drawEnemy(q,{...s,x:0,y:0},now,s.kind);
+   art.drawEnemy(q,{...s,kind,x:0,y:0},now,s.theme);
   }
   const low=document.createElement('canvas');low.width=56;low.height=59;
   const lowc=low.getContext('2d');lowc.imageSmoothingEnabled=true;
@@ -261,7 +267,7 @@ function drawSprite(c,s,kind,now,player=false){
 }
 const dynSprites=new Map();
 function drawEnemy(c,e,now,theme){
- drawSprite(c,{...e,kind:theme},e.kind,now,false);
+ drawSprite(c,{...e,theme},e.kind,now,false);
 }
 function drawHero(c,s,now){
  drawSprite(c,{...s,animation:s.animation,walkFrame:s.walkFrame},'hero',now,true);
