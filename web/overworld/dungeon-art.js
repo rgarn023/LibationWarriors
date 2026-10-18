@@ -131,6 +131,62 @@ function drawRoom(c,s,time){
   const x=57+rand(salt+3)*430,y=76+rand(salt+8)*272;
   if(q>.57){ellipse(c,x,y,5+q*13,1.7,p.moss);ellipse(c,x+4,y-2,2,1,p.light)}
  }
+
+ // Three genuinely distinct dungeon sets, with local architectural dressing.
+ if(n.template==='cellar'){
+  // Barrel banks, copper pipework, iron chains and cellar shelving.
+  for(const side of [0,1]){
+   const x=side?425:75;
+   for(const row of [0,1,2]){
+    const y=104+row*76;
+    ellipse(c,x,y+22,31,12,'#10151b99');
+    rounded(c,x-25,y-22,50,44,11,
+     grad(c,x-25,y-22,50,44,'#9f7045','#402d2a'),'#dfb477');
+    for(const yy of [y-15,y+12])rounded(c,x-26,yy,52,5,2,'#535260','#bba58b');
+    ellipse(c,x-1,y,11,13,'#755038');ellipse(c,x-1,y,5,6,'#e0b87b');
+   }
+  }
+  for(let x=154;x<=386;x+=36){
+   line(c,x,54,x,83,2,'#756d61');
+   ellipse(c,x,84,4,4,'#e7b37b');
+  }
+  rounded(c,170,90,204,12,4,'#583c31','#bb8e56');
+  rounded(c,185,323,175,11,4,'#51382e','#ad865c');
+ }else if(n.template==='flooded'){
+  // Water-shimmer slate: ripples animate while obstacle coordinates stay fixed.
+  for(let k=0;k<14;k++){
+   const x=85+rand(n.id*331+k*19)*375;
+   const y=95+rand(n.id*433+k*29)*210;
+   const rx=18+rand(k+111)*21;
+   ellipse(c,x,y,rx,8,'#34596988');
+   c.strokeStyle='#9bc8c5a6';c.lineWidth=1.8;c.beginPath();
+   c.ellipse(x,y,rx*.8,6,0,.2,Math.PI*1.7);c.stroke();
+   line(c,x-10+Math.sin(time/380+k)*3,y-1,x+14,y-1,1,'#bbf1e5');
+  }
+  for(const x of [105,438])for(const y of [128,315]){
+   poly(c,[[x-23,y+6],[x-13,y-18],[x+5,y-27],[x+21,y-4],
+    [x+16,y+16],[x-10,y+16]],'#617b75','#bac7ac',1.3);
+   line(c,x-3,y-19,x+7,y-6,2,'#d3ded0');
+  }
+ }else if(n.template==='fracture'){
+  // Broken reality seams, crystals, floating rubble and etheric light.
+  for(let k=0;k<12;k++){
+   const x=62+rand(n.id*123+k*67)*420;
+   const y=73+rand(n.id*321+k*71)*275;
+   const h=18+rand(k*79+7)*37;
+   halo(c,x,y,45,k%2?'#b78bff':'#81d2d5',.22);
+   poly(c,[[x-9,y+12],[x-8,y-9],[x,y-h],[x+10,y-7],[x+13,y+12]],
+    grad(c,x-9,y-h,24,h+15,k%2?'#b4a3ea':'#91d2d1','#424e83'),
+    '#e4daf8',1.2);
+   line(c,x-6,y+4,x+2,y-h+5,1.5,'#e7f5ed');
+  }
+  for(let k=0;k<8;k++){
+   const x=99+rand(k+77)*347,y=103+rand(k+28)*236;
+   c.strokeStyle='#b29ae4';c.lineWidth=2.5;c.beginPath();
+   c.moveTo(x-21,y-12);c.lineTo(x,y+3);c.lineTo(x-9,y+20);
+   c.stroke();
+  }
+ }
  if(n.template==='gallery'||n.template==='crypt'){
   const carpet=n.template==='crypt'?'#4c5268':'#685268';
   const runner=grad(c,190,72,160,290,carpet,p.dark);
@@ -200,6 +256,94 @@ function drawRoom(c,s,time){
 function line(c,x1,y1,x2,y2,width,col){
  c.strokeStyle=col;c.lineWidth=width;c.lineCap='round';c.beginPath();c.moveTo(x1,y1);c.lineTo(x2,y2);c.stroke();
 }
+
+function drawExpansionEnemy(c,e,t,p){
+ const kind=e.kind,variant=e.variant||0;
+ const base=variant===1?'#bc9888':variant===2?'#94a4c0':'#8bbaa3';
+ const fl=Math.sin(t/170+e.y);
+ if(kind==='archer'){
+  // Hood, layered leather, bow string and traveling cloak.
+  poly(c,[[-18,22],[-15,-24],[0,-36],[17,-19],[19,22]],
+   grad(c,-15,-31,25,52,'#4f626f','#262f43'),'#c8a876',2);
+  ellipse(c,0,-15,12,13,'#2c3a4a');
+  ellipse(c,-6,-13,3,3,'#ffe2a6');ellipse(c,6,-13,3,3,'#ffe2a6');
+  line(c,21,-24,29,-2,3,base);
+  c.strokeStyle='#d5a36e';c.lineWidth=3;c.beginPath();c.arc(21,-13,22,-1.3,1.3);c.stroke();
+  line(c,27,-34,28,7,1.3,'#f0dfc5');
+  line(c,0,10,-6,27,5,'#3b3c42');line(c,10,10,14,27,5,'#3b3c42');
+ }else if(kind==='brute'){
+  halo(c,0,0,42,'#ffaf63',.18);
+  poly(c,[[-24,-17],[-12,-34],[18,-32],[31,-14],[27,24],[-26,24]],
+   grad(c,-26,-34,58,60,'#b38b61','#4d3c3a'),'#dbb87b',2);
+  for(const yy of [-19,2,15]){
+   rounded(c,-29,yy,60,6,3,'#50565c','#c7b39c');
+  }
+  rounded(c,-10,-15,22,25,8,'#3a3d4b','#d1a56b');
+  ellipse(c,-5,-5,3,4,'#ffbc74');ellipse(c,7,-5,3,4,'#ffbc74');
+  poly(c,[[-30,-20],[-39,-10],[-31,14],[-20,12]],base,'#d7c3a2',2);
+  poly(c,[[28,-20],[39,-10],[31,14],[20,12]],base,'#d7c3a2',2);
+  ellipse(c,-15,25,13,7,'#374152');ellipse(c,17,25,13,7,'#374152');
+ }else if(kind==='wisp'){
+  halo(c,0,0,47,variant===2?'#ffaf9c':'#8de8ed',.35);
+  const g=c.createRadialGradient(-7,-9,2,0,2,25);
+  g.addColorStop(0,'#fff7de');g.addColorStop(.65,base);g.addColorStop(1,'#53749f');
+  ellipse(c,0,0,17+fl*2,21+fl,g);
+  for(let k=0;k<5;k++){
+   const angle=k*1.26+t/730;
+   ellipse(c,Math.cos(angle)*25,Math.sin(angle)*16,3.7,5,'#d9f7ed');
+  }
+  ellipse(c,-6,-3,3,3,'#25485a');ellipse(c,6,-3,3,3,'#25485a');
+ }else if(kind==='spider'){
+  halo(c,0,4,30,'#a5bbf7',.2);
+  for(const sign of [-1,1])for(let k=0;k<4;k++){
+   const y=-14+k*9,step=Math.sin(t/130+k)*4;
+   line(c,sign*10,y,sign*(19+k*2),y-5+step,4,'#54617e');
+   line(c,sign*(19+k*2),y-5+step,sign*(30+k),y+6+step,3,base);
+  }
+  ellipse(c,0,0,13,16,'#3b496c');ellipse(c,0,12,14,14,'#61769e');
+  poly(c,[[0,-17],[-10,-3],[-1,14],[9,-3]],'#9db9dc','#d9edfa',1.7);
+  for(const x of [-7,0,7])ellipse(c,x,-6,2.7,2.7,'#f6bc9e');
+ }else if(kind==='mage'){
+  poly(c,[[-21,26],[-16,-21],[-9,-32],[13,-31],[22,26]],
+   grad(c,-20,-32,44,60,variant?'#635783':'#435b86','#252d45'),
+   '#c2b39f',2);
+  ellipse(c,0,-18,11,13,'#e2b996');
+  poly(c,[[-13,-21],[-17,-39],[-2,-47],[18,-35],[13,-20]],
+   '#374363','#d1b49b',1.5);
+  ellipse(c,-4,-18,2,3,'#e8f3ff');ellipse(c,6,-18,2,3,'#e8f3ff');
+  line(c,23,-22,27,22,4,'#8b6947');ellipse(c,22,-27,9,10,'#91d0ef');
+  halo(c,21,-27,27,'#acbbed',.28);
+  rounded(c,-5,9,13,9,3,base);
+ }else if(kind==='acolyte'){
+  poly(c,[[-20,-16],[-15,-31],[14,-31],[23,-14],[21,26],[-22,26]],
+   grad(c,-20,-31,42,60,'#a7afbd','#37435c'),'#d9ba83',2.4);
+  rounded(c,-12,-31,25,21,6,'#344052','#c8d3d9');
+  ellipse(c,-5,-22,3,3,'#e8ca90');ellipse(c,6,-22,3,3,'#e8ca90');
+  rounded(c,-29,-7,14,30,6,'#6b778e','#f0d6a6');
+  line(c,21,-25,30,11,5,'#dbe7ed');line(c,14,12,34,12,4,'#c6a676');
+  line(c,-11,25,-12,32,10,'#333949');line(c,11,25,12,32,10,'#333949');
+ }else if(kind==='leech'){
+  halo(c,0,1,30,'#ba8eed',.23);
+  poly(c,[[-20,10],[-14,-23],[-2,-36],[13,-23],[21,8],[8,25],[-9,25]],
+   grad(c,-18,-34,36,58,'#6e5885','#22283c'),'#b5a3cb',2);
+  ellipse(c,0,-9,11,15,'#2b304b');
+  ellipse(c,-6,-10,3,4,'#f0a3cf');ellipse(c,6,-10,3,4,'#f0a3cf');
+  for(let k=0;k<3;k++){
+   line(c,-7+k*8,8,-13+k*13,22+fl,2,'#c291cd');
+  }
+ }else if(kind==='shaman'){
+  poly(c,[[-19,21],[-11,-26],[8,-33],[20,19]],
+   grad(c,-18,-33,38,53,'#6e8d65','#313e3d'),'#d2bd8f',2);
+  ellipse(c,0,-20,13,14,'#94aa76');
+  rounded(c,-17,-33,34,12,6,'#b77f70','#d2a78e');
+  for(let i=0;i<5;i++)ellipse(c,-13+i*6,-33+(i%2)*3,2,2,'#f6e6c1');
+  ellipse(c,-5,-21,2.5,3,'#f6e8a8');ellipse(c,6,-21,2.5,3,'#f6e8a8');
+  line(c,20,-19,26,25,4,'#5c5345');ellipse(c,25,-27,10,8,'#d0ba81');
+  for(let i=0;i<4;i++){
+   const a=t/390+i*1.57;ellipse(c,Math.cos(a)*24,Math.sin(a)*13,3,3,'#d1e4a7');
+  }
+ }
+}
 function drawEnemy(c,e,time,theme){
  const p=palettes[theme]||palettes.rupture,kind=e.kind;
  const cx=e.x*S+16,cy=e.y*S+16;
@@ -223,6 +367,8 @@ function drawEnemy(c,e,time,theme){
   line(c,19,2,30,-12,7,p.trim);ellipse(c,30,-13,6,6,p.accent);
   line(c,-11,21,-15,28,9,p.dark);line(c,11,21,15,28,9,p.dark);
   if(phase2)halo(c,0,10,23,'#f26cbd',.48);
+ }else if(['archer','brute','wisp','spider','mage','acolyte','leech','shaman'].includes(kind)){
+  drawExpansionEnemy(c,e,time,p);
  }else if(kind==='slime'){
   halo(c,0,5,27,'#81e6be',.16);
   const g=c.createRadialGradient(-5,-7,2,0,8,27);
@@ -285,6 +431,13 @@ function drawEnemy(c,e,time,theme){
   ellipse(c,0,-32,3.5,3.5,'#fff3d0');
  }
  c.restore();
+ // Distinct marked variants affect armor/eyes, not a copy of the same monster.
+ if(e.variant!==undefined&&e.variant>0){
+  c.save();c.globalAlpha=.65;
+  const cx2=e.x*S+16,cy2=e.y*S+16;
+  ellipse(c,cx2-9,cy2-16,2.4,2.4,e.variant===2?'#96d9fa':'#f2bc7b');
+  c.restore();
+ }
  // Grounded health bar, readable on dark and warm dungeons.
  rounded(c,cx-(boss?25:15),cy-(boss?42:31),boss?50:30,5,3,'#18242c');
  rounded(c,cx-(boss?23:13),cy-(boss?41:30),(boss?46:26)*Math.max(0,e.hp/e.maxHP),3,2,
@@ -424,6 +577,7 @@ function drawHero(c,value,dir,action,frame,x,y){
  c.scale(.83,.83);hero(c,value,dir,action,frame,0,0);c.restore();
 }
 window.LibationDungeonArt=Object.freeze({drawRoom,drawEnemy,drawEffects,drawHero,previewHero,
- enemyTypes:['slime','skeleton','bat','sentinel','specter','thornbound','mimic'],
+ enemyTypes:['slime','skeleton','bat','sentinel','specter','thornbound','mimic',
+ 'archer','brute','wisp','spider','mage','acolyte','leech','shaman'],
  palettes});
 })();
