@@ -606,6 +606,22 @@ const fs=require('fs');
   return variants;
  });
  console.log('RANDOM DUNGEON LAYOUT PROPERTY TESTS:',JSON.stringify(layouts));
+ const artQA=await page.evaluate(()=>{
+  const art=window.LibationDungeonArt,d=window.LibationDungeon;
+  if(!art||typeof art.drawRoom!=='function'||typeof art.drawEnemy!=='function')
+   throw Error('Painted dungeon renderer missing');
+  const kinds=['slime','skeleton','bat','sentinel','specter','thornbound','mimic'];
+  if(kinds.some(k=>!art.enemyTypes.includes(k)))throw Error('Incomplete enemy roster');
+  const s=d.snapshot();
+  if(s.artStyle!=='painted-2.5d')throw Error('Fallback art unexpectedly active');
+  for(const kind of kinds){
+   if(!d.debugEnemyEncounter(kind))throw Error('Enemy fixture missing '+kind);
+   if(d.snapshot().enemyTypes[0]!==kind)throw Error('Wrong enemy type '+kind);
+  }
+  return {render:s.artStyle,archetypes:kinds,wormhole:s.kind};
+ });
+ console.log('PAINTED DUNGEON RENDERER & SEVEN ENEMIES:',JSON.stringify(artQA));
+ await page.screenshot({path:'/tmp/libation-dungeon-new-enemies.png',fullPage:false});
  const first=await page.evaluate(()=>window.LibationDungeon.snapshot());
  if(first.kind!=='challenge'||first.rooms!==14||first.node!==0||
     first.roomType!=='entrance'||first.room!==1)
@@ -733,6 +749,8 @@ const fs=require('fs');
  const rupture=await page.evaluate(()=>window.LibationDungeon.snapshot());
  if(rupture.kind!=='rupture'||rupture.rooms!==10||rupture.maxHP!==18)
   throw Error('Ten-room rupture failed: '+JSON.stringify(rupture));
+ if(rupture.artStyle!=='painted-2.5d')throw Error('Rupture uses outdated flat tiles');
+ await page.screenshot({path:'/tmp/libation-dungeon-new-rupture.png',fullPage:false});
  await page.locator('#lwDExit').click();
  await page.locator('.dev-select-portal[data-kind="challenge"]').click();
  await page.locator('#enterVenue').click();

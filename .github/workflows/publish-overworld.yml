@@ -72,6 +72,8 @@ jobs:
             /tmp/libation-world-movement.png
             /tmp/libation-dev-portals.png
             /tmp/libation-dungeon-room.png
+            /tmp/libation-dungeon-new-enemies.png
+            /tmp/libation-dungeon-new-rupture.png
             /tmp/libation-warrior-selection.png
             /tmp/libation-dungeon-boss.png
             /tmp/libation-dungeon-boss-cleared.png

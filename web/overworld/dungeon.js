@@ -84,7 +84,7 @@ function updateHUD(){
 }
 function makeRoom(entry='left'){
  const s=state,n=s.current=s.plan.nodes[s.nodeIndex],r=rng(s.plan.seed+':room:'+n.id);
- s.player=loc(ENTRY[entry].x,ENTRY[entry].y);
+ s.projectiles=[];s.warnings=[];s.player=loc(ENTRY[entry].x,ENTRY[entry].y);
  s.face=entry==='left'?'right':entry==='right'?'left':entry==='up'?'down':'up';
  s.walls=new Set();s.props=[];s.enemies=[];s.roomClear=!!n.cleared;
  const wall=(x,y)=>{if(x>=2&&x<=14&&y>=2&&y<=10)s.walls.add(x+','+y)};
@@ -126,10 +126,16 @@ function makeRoom(entry='left'){
   }
   for(let i=0;i<amount&&spots.length;i++){
    const k=Math.floor(r()*spots.length),pos=spots.splice(k,1)[0];
-   const kind=boss?'guardian':randomItem(r,['slime','skeleton','bat','sentinel']);
-   const hp=boss?(s.kind==='challenge'?17:12):kind==='sentinel'?6:kind==='skeleton'?5:kind==='bat'?3:3;
-   s.enemies.push({...pos,kind,boss,hp,maxHP:hp,
-    lastMove:0,nextSwing:performance.now()+850,windup:0,hitUntil:0,stunnedUntil:0});
+   const roster=s.kind==='challenge'?
+    ['specter','sentinel','thornbound','skeleton','mimic','bat','slime']:
+    ['slime','skeleton','bat','thornbound','sentinel','mimic','specter'];
+   const kind=boss?'guardian':randomItem(r,roster);
+   const hp=boss?(s.kind==='challenge'?17:12):
+    kind==='sentinel'?7:kind==='skeleton'?5:
+    kind==='thornbound'?5:kind==='mimic'?5:kind==='specter'?4:3;
+   s.enemies.push({...pos,kind,boss,hp,maxHP:hp,awake:kind!=='mimic',
+    lastMove:performance.now(),nextSwing:performance.now()+1100,
+    windup:0,hitUntil:0,stunnedUntil:0,blocking:false,phase:1});
    for(let j=spots.length-1;j>=0;j--)if(dist(spots[j],pos)<3)spots.splice(j,1);
   }
  }
@@ -484,9 +490,13 @@ function drawMap(){
 }
 function render(now){
  if(!state||root.hidden)return;
- const s=state;ctx.imageSmoothingEnabled=false;
- drawFloor(now);
- for(const e of s.enemies)drawEnemy(e,now);
+ const s=state;ctx.imageSmoothingEnabled=true;
+ const art=window.LibationDungeonArt;
+ if(art)art.drawRoom(ctx,s,now);else drawFloor(now);
+ for(const e of s.enemies){
+  if(art)art.drawEnemy(ctx,e,now,s.kind);else drawEnemy(e,now);
+ }
+ if(art)art.drawEffects(ctx,s,now);
  drawHero(now);
  for(const fx of s.sparks){
   if(fx.until<=now)continue;
@@ -539,7 +549,11 @@ function attack(){
   const forward=(e.x-s.player.x)*dx+(e.y-s.player.y)*dy;
   const side=Math.abs((e.x-s.player.x)*dy-(e.y-s.player.y)*dx);
   if(forward!==1||side>1)continue;
-  hit=true;e.hp-=2;e.hitUntil=now+180;e.stunnedUntil=now+250;
+  hit=true;
+  const parried=e.kind==='skeleton'&&e.blocking&&e.hp>2;
+  e.hp-=parried?1:2;
+  e.blocking=false;e.awake=true;
+  e.hitUntil=now+200;e.stunnedUntil=now+(e.boss?230:320);
   e.windup=0;s.sparks.push({x:e.x,y:e.y,until:now+270});
   if(e.hp<=0){
    s.enemies.splice(s.enemies.indexOf(e),1);
@@ -553,6 +567,7 @@ function attack(){
   }
  }
  if(!s.enemies.length&&!s.roomClear){
+  s.projectiles=[];s.warnings=[];
   s.roomClear=true;s.current.cleared=true;
   announce(s.current.type==='boss'?'GUARDIAN DEFEATED · claim the central seal':'CHAMBER CLEARED · doors unlocked');
  }else if(hit)announce('SWORD STRIKE!');
@@ -576,29 +591,96 @@ function chase(enemy){
   }
  }
 }
+function hurtPlayer(s,damage,now){
+ s.hp=Math.max(0,s.hp-damage);
+ s.invulnUntil=now+780;s.hurtUntil=now+440;
+ announce(s.hp?'HIT · dodge and counterattack':'DEFEATED · retry or return to world');
+ if(!s.hp)s.defeated=true;
+}
 function tick(){
  const s=state;if(!s||s.completed||s.defeated)return;
  const now=performance.now();
+ // Projectile attacks move independently of pursuit. Warnings are fair:
+ // a visible marker appears before damage and can be dodged.
+ for(const shot of [...s.projectiles]){
+  if(now-shot.started>shot.lifetime){
+   s.projectiles.splice(s.projectiles.indexOf(shot),1);continue;
+  }
+  if(now<shot.nextMove)continue;
+  shot.nextMove=now+220;
+  const xx=shot.x+shot.dx,yy=shot.y+shot.dy;
+  if(blocked(xx,yy)){
+   s.projectiles.splice(s.projectiles.indexOf(shot),1);continue;
+  }
+  shot.x=xx;shot.y=yy;
+  if(xx===s.player.x&&yy===s.player.y){
+   s.projectiles.splice(s.projectiles.indexOf(shot),1);
+   if(now>=s.invulnUntil)hurtPlayer(s,1,now);
+  }
+ }
+ for(const warning of [...s.warnings]){
+  if(now<warning.until)continue;
+  s.warnings.splice(s.warnings.indexOf(warning),1);
+  if(dist(warning,s.player)<=warning.radius&&now>=s.invulnUntil)
+   hurtPlayer(s,warning.kind==='root'?1:2,now);
+ }
  for(const e of s.enemies){
   if(now<e.stunnedUntil)continue;
-  if(dist(e,s.player)===1){
+  const distance=dist(e,s.player);
+  if(e.boss){e.phase=e.hp<=Math.ceil(e.maxHP*.52)?2:1;
+   if(e.phase===2&&distance<=2&&now>=e.nextPulse){
+    e.nextPulse=now+2600;
+    s.warnings.push({x:e.x,y:e.y,radius:1.65,kind:'pulse',
+     started:now,until:now+800});
+   }
+  }
+  if(e.kind==='mimic'&&!e.awake){
+   if(distance<=3){e.awake=true;e.nextSwing=now+700}
+   else continue;
+  }
+  if(e.kind==='specter'&&distance>=2&&distance<=6&&now>=e.nextSwing){
+   const dx=Math.abs(s.player.x-e.x)>Math.abs(s.player.y-e.y)?
+    Math.sign(s.player.x-e.x):0;
+   const dy=dx?0:Math.sign(s.player.y-e.y);
+   s.projectiles.push({x:e.x,y:e.y,dx,dy,kind:'rift',
+    nextMove:now+230,started:now,lifetime:1600});
+   e.nextSwing=now+1700;e.lastMove=now;continue;
+  }
+  if(e.kind==='thornbound'&&distance>=2&&distance<=4&&now>=e.nextSwing){
+   s.warnings.push({x:s.player.x,y:s.player.y,kind:'root',radius:.5,
+    started:now,until:now+720});
+   e.nextSwing=now+1700;continue;
+  }
+  if(e.kind==='skeleton')e.blocking=distance===1&&now>=e.nextSwing-450;
+  if(distance===1){
    if(e.windup&&now>=e.windup){
     e.windup=0;e.nextSwing=now+(e.boss?1200:950);
     if(now>=s.invulnUntil){
-     s.hp=Math.max(0,s.hp-(e.boss?3:s.kind==='challenge'?2:1));
-     s.invulnUntil=now+770;s.hurtUntil=now+430;
-     announce(s.hp?'HIT · dodge away or counterattack':'DEFEATED · retry or return to world');
-     if(!s.hp)s.defeated=true;
+     hurtPlayer(s,e.boss?3:s.kind==='challenge'?2:1,now);
     }
    }else if(!e.windup&&now>=e.nextSwing){
     e.windup=now+(e.boss?530:e.kind==='bat'?280:420);
    }
   }else{
    if(e.windup)e.windup=0;
-   const pace=e.kind==='bat'?310:e.kind==='sentinel'?710:
-    e.kind==='skeleton'?450:e.kind==='guardian'?520:630;
+   const pace=e.kind==='bat'?330:e.kind==='sentinel'?580:
+    e.kind==='skeleton'?520:e.kind==='guardian'?560:
+    e.kind==='specter'?790:e.kind==='thornbound'?680:
+    e.kind==='mimic'?610:470;
    if(now-e.lastMove>pace*(s.kind==='challenge'?.88:1)){
-    e.lastMove=now;chase(e);
+    e.lastMove=now;
+    // Ancient sentinels charge along a clear lane; specters slip through
+    // walls only as a last resort. Everything respects chamber borders.
+    if(e.kind==='sentinel'&&dist(e,s.player)>=3&&
+       (e.x===s.player.x||e.y===s.player.y)){
+      chase(e);chase(e);
+    }else if(e.kind==='specter'&&dist(e,s.player)>=5){
+      const dx=Math.sign(s.player.x-e.x),dy=Math.sign(s.player.y-e.y);
+      const nx=e.x+dx,ny=e.y+dy;
+      if(!blocked(nx,ny)&&!s.enemies.some(o=>o!==e&&o.x===nx&&o.y===ny)){
+       e.x=nx;e.y=ny;
+      }else chase(e);
+    }else chase(e);
    }
   }
  }
@@ -643,7 +725,8 @@ function initialize(){
  '#lwDRoomInfo{font-size:11px;line-height:1.4;color:#ead6a8}'+
  '.lwDView{width:min(100%,700px);flex:none;min-height:0;display:flex;align-items:center;margin:5px 0}'+
  '#lwDCanvas{display:block;width:100%;max-height:52vh;aspect-ratio:17 / 13;object-fit:contain;'+
- 'image-rendering:pixelated;border:3px solid #cfb680;background:#1c293a}'+
+ 'image-rendering:auto;border:3px solid #cfb680;background:#1c293a;border-radius:8px;'+
+ 'box-shadow:0 8px 22px #040c14ad,0 0 22px #9679ba44}'+
  '#lwDMessage{text-align:center;min-height:20px;margin:4px;font-size:11px;color:#e8d397}'+
  '.lwDControls{width:min(100%,530px);min-height:132px;display:flex;justify-content:space-around;align-items:center}'+
  '.lwDPad{display:grid;grid-template-columns:repeat(3,48px);grid-template-rows:repeat(3,42px)}'+
@@ -693,7 +776,7 @@ function start({venue,warrior}={}){
   warrior:identity(warrior),kind,rooms,plan:generateLayout(runSeed,rooms),
   nodeIndex:0,visited:new Set(),hp:kind==='challenge'?14:18,
   maxHP:kind==='challenge'?14:18,player:loc(2,6),walls:new Set(),props:[],
-  enemies:[],face:'right',gold:0,kills:0,nextAttack:0,
+  enemies:[],projectiles:[],warnings:[],face:'right',gold:0,kills:0,nextAttack:0,
   attackUntil:0,invulnUntil:0,hurtUntil:0,lastStep:0,walkUntil:0,walkFrame:0,sparks:[],
   completed:false,defeated:false,roomClear:false,message:''};
  root.hidden=false;document.body.classList.add('in-dungeon');$('lwDResult').hidden=true;
@@ -714,6 +797,9 @@ function snapshot(){
   player:{...s.player},face:s.face,warrior:{...s.warrior},animation:heroAnimation(performance.now()),gold:s.gold,kills:s.kills,
   bossHP:s.enemies.find(e=>e.boss)?.hp??null,
   node:s.nodeIndex,roomType:s.current.type,template:s.current.template,
+  enemyTypes:s.enemies.map(e=>e.kind),projectiles:s.projectiles.length,
+  warnings:s.warnings.length,bossPhase:s.enemies.find(e=>e.boss)?.phase??null,
+  artStyle:window.LibationDungeonArt?'painted-2.5d':'legacy-pixel',
   exits:{...s.current.edges},layoutSeed:s.plan.seed,visited:[...s.visited],
   // These are only local fictional dungeon geometry, never user location.
   walls:[...s.walls]};
@@ -738,6 +824,18 @@ function debugCombatEncounter(){
  s.roomClear=false;s.current.cleared=false;s.nextAttack=0;
  announce('DEV COMBAT CHECK: strike the enemy in front');return true;
 }
+function debugEnemyEncounter(kind){
+ if(!state||!devAllowed())return false;
+ const allowed=window.LibationDungeonArt?.enemyTypes||['slime','skeleton','bat','sentinel'];
+ if(!allowed.includes(kind))return false;
+ const s=state,[dx,dy]=DIR[s.face],x=s.player.x+dx,y=s.player.y+dy,now=performance.now();
+ s.enemies=[{x,y,hp:kind==='sentinel'?7:5,maxHP:kind==='sentinel'?7:5,
+  kind,boss:false,lastMove:now,nextSwing:now+850,
+  windup:0,hitUntil:0,stunnedUntil:0,awake:kind!=='mimic',blocking:false,phase:1}];
+ s.projectiles=[];s.warnings=[];s.roomClear=false;s.current.cleared=false;
+ s.nextAttack=0;announce('DEV ENEMY CHECK: '+kind.toUpperCase());
+ return true;
+}
 function debugBossEncounter(){
  if(!state||!devAllowed())return false;
  const s=state;s.nodeIndex=s.plan.boss;makeRoom();
@@ -745,12 +843,14 @@ function debugBossEncounter(){
  s.enemies=[{x:3,y:6,hp:s.kind==='challenge'?17:12,
   maxHP:s.kind==='challenge'?17:12,kind:'guardian',boss:true,
   lastMove:performance.now(),nextSwing:performance.now()+850,
-  windup:0,hitUntil:0,stunnedUntil:0}];
+  windup:0,hitUntil:0,stunnedUntil:0,phase:1,awake:true}];
+ s.projectiles=[];s.warnings=[];
  s.roomClear=false;s.current.cleared=false;
  s.hp=s.maxHP;s.hurtUntil=0;s.nextAttack=0;s.invulnUntil=performance.now()+700;
  announce('DEV BOSS CHECK: fight a full-health guardian');
  return true;
 }
 window.LibationDungeon=Object.freeze({start,stop,snapshot,move:step,attack,
- previewWarrior,inspectLayout,debugClearRoom,debugCombatEncounter,debugBossEncounter});
+ previewWarrior,inspectLayout,debugClearRoom,debugCombatEncounter,
+ debugEnemyEncounter,debugBossEncounter});
 })();
