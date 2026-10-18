@@ -696,7 +696,7 @@ const fs=require('fs');
  await page.screenshot({path:'/tmp/libation-dungeon-boss-cleared.png',fullPage:false});
  console.log('REAL TOUCH BOSS COMBAT:',JSON.stringify({bossStart,bossEnd}));
  const sealVictory=await page.evaluate(()=>{
-  const d=window.LibationDungeon;for(let i=0;i<7;i++)d.move('right');
+  const d=window.LibationDungeon;for(let i=0;i<25&&!d.snapshot().completed;i++)d.move('right');
   return d.snapshot();
  });
  if(!sealVictory.completed)throw Error('Boss seal does not finish dungeon: '+JSON.stringify(sealVictory));
