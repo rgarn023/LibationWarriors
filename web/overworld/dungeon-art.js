@@ -453,7 +453,9 @@ function drawEffects(c,s,time){
  }
  for(const wave of s.warnings||[]){
   const x=wave.x*S+16,y=wave.y*S+16,progress=Math.min(1,(time-wave.started)/(wave.until-wave.started));
-  c.strokeStyle=wave.kind==='root'?'#8ac985':'#ee9dbc';c.lineWidth=4;
+  const effectColors={root:'#8ac985',web:'#a4d2f2',spore:'#b7d78b',
+   charge:'#edaf70',rune:'#c7aff4',leech:'#e39ec9',pulse:'#ee9dbc'};
+  c.strokeStyle=effectColors[wave.kind]||'#ee9dbc';c.lineWidth=4;
   c.beginPath();c.ellipse(x,y,wave.radius*S,wave.radius*S*.55,0,0,TAU);c.stroke();
   halo(c,x,y,(wave.radius+.5)*S,wave.kind==='root'?'#9ecf8c':'#fd8cbb',.09+progress*.16);
  }
@@ -463,6 +465,7 @@ function drawEffects(c,s,time){
 // A unified illustrated hero: the staging preview and active player use the
 // identical vector animation source. Faction and gender influence appearance,
 // but never mutate the normalized UPC blueprint or a user's collection.
+function shadowColor(woman){return woman?'#2d5374':'#533a41'}
 function hero(c,value,dir,action,frame,x,y){
  const who=value&&typeof value==='object'?value:{gender:'male',faction:'Pirate',name:'Warrior'};
  const woman=who.gender==='female',back=dir==='up',side=dir==='left'||dir==='right';
@@ -534,6 +537,21 @@ function hero(c,value,dir,action,frame,x,y){
    line(c,-2,-41,4,-41,1.6,'#955c53');
   }
  }
+ // Scaled JRPG illustration details: cloak seam, readable straps, layered
+ // armor plates, embossed guild sigil, belt loops and cloth embroidery.
+ line(c,-13,-31,-11,-10,1.4,'#e3c38a');
+ line(c,-8,-27,12,-15,3,shadowColor(woman));
+ line(c,12,-15,3,-4,1.4,'#f0d7a6');
+ rounded(c,-19,-30,11,7,4,grad(c,-19,-30,11,7,'#b7bec7','#4b5b70'),'#e7c992');
+ rounded(c,8,-32,12,7,4,grad(c,8,-32,12,7,'#c0bac5','#495472'),'#e2bd86');
+ ellipse(c,-14,-27,2,2,'#f7ead0');ellipse(c,14,-29,2,2,'#fff0c9');
+ for(const yy of [-20,-12]){
+  line(c,-13,yy,-9,yy+2,1.5,'#e1b275');
+ }
+ rounded(c,-6,-10,13,6,2,'#e1c28c','#7d573f');
+ ellipse(c,-1,-7,2,1.5,'#fff2da');
+ line(c,19,-25,22,-16,1.2,'#f4dabb');
+ line(c,14+flow,-5,17+flow,7,1.2,'#d4c5a9');
  // Distinguishing faction accessories and readable weapon movement.
  if(woman){
   poly(c,[[-20,-65],[-14,-73],[7,-75],[19,-63],[18,-55],[-19,-55]],
