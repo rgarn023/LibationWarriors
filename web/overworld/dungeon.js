@@ -546,6 +546,17 @@ function render(now){
  ctx.imageSmoothingEnabled=true;
  const art=window.LibationDungeonArt,snes=window.LibationDungeonSNES;
  if(snes){
+  ctx.save();ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,X,Y);
+  const cameraScale=1.24;
+  const follow=s.visualFrom&&now-s.visualFrom.t<145?
+   loc(s.visualFrom.x+(s.player.x-s.visualFrom.x)*Math.max(0,Math.min(1,(now-s.visualFrom.t)/145)),
+       s.visualFrom.y+(s.player.y-s.visualFrom.y)*Math.max(0,Math.min(1,(now-s.visualFrom.t)/145))):
+   s.player;
+  const viewW=X/cameraScale,viewH=Y/cameraScale;
+  const cameraX=Math.max(0,Math.min(X-viewW,follow.x*T+16-viewW/2));
+  const cameraY=Math.max(0,Math.min(Y-viewH,follow.y*T+16-viewH/2));
+  s.camera={scale:cameraScale,x:cameraX,y:cameraY};
+  ctx.setTransform(cameraScale,0,0,cameraScale,-cameraX*cameraScale,-cameraY*cameraScale);
   snes.drawRoom(ctx,s,now);
   // Smooth the visual crossing of a tile while retaining exact grid collision.
   const old=s.visualFrom,elapsed=old?now-old.t:Infinity;
@@ -572,6 +583,7 @@ function render(now){
   for(const actor of drawables)actor.draw();
   snes.drawEffects(ctx,s,now);
   window.LibationSpriteStudio?.drawSlash(ctx,{...s,player:visiblePlayer},now);
+  ctx.restore();
  }else{
   if(art)art.drawRoom(ctx,s,now);else drawFloor(now);
   for(const e of s.enemies){if(art)art.drawEnemy(ctx,e,now,s.kind);else drawEnemy(e,now)}
@@ -998,6 +1010,7 @@ function snapshot(){
   partyClearance:s.partyClearance?.map(p=>({...p}))||[],
   arenaWalkable:s.arenaWalkable,
   partyPreview:!!s.previewParty,
+  cameraZoom:s.camera?.scale||1,
   dodgeReady:performance.now()>=s.nextDodge,enemyVariants:s.enemies.map(e=>e.variant||0),
   artStyle:window.LibationDungeonSNES?'snes-16bit':window.LibationDungeonArt?'painted-2.5d':'legacy-pixel',
   exits:{...s.current.edges},layoutSeed:s.plan.seed,visited:[...s.visited],
@@ -1040,6 +1053,14 @@ function debugEnemyEncounter(kind){
 }
 // Visual QA fixtures are strictly developer-only, session-local and never
 // write scanned warrior ownership, GPS coordinates or account-backed rewards.
+function debugWarriorArtPreview(){
+ if(!state||!devAllowed())return false;
+ state.warrior={id:'dev-pirate-illustration',name:'Illustrated Pirate',
+  faction:'Pirate',gender:'male'};
+ state.face='right';
+ announce('DEV SPRITE CHECK · authored pirate atlas');
+ return true;
+}
 function debugPartyPreview(enabled=true){
  if(!state||!devAllowed())return false;
  state.previewParty=!!enabled;
@@ -1081,5 +1102,6 @@ function debugBossEncounter(){
 }
 window.LibationDungeon=Object.freeze({start,stop,snapshot,move:step,attack,dodge,
  previewWarrior,inspectLayout,debugClearRoom,debugCombatEncounter,
- debugEnemyEncounter,debugEnemyGallery,debugPartyPreview,debugThemePreview,debugBossEncounter});
+ debugEnemyEncounter,debugEnemyGallery,debugWarriorArtPreview,
+ debugPartyPreview,debugThemePreview,debugBossEncounter});
 })();

@@ -413,12 +413,17 @@ function centralFocus(c,s,p,now){
  }
 }
 let tileCache=null,tileKey='',tileLast=0;
-function drawRoom(c,s,now){
+function drawRoom(destination,s,now){
  const node=s.current,p=palette(s);
  const key=s.plan.seed+':'+s.nodeIndex+':'+node.template+':'+s.roomClear;
  if(tileCache&&tileKey===key&&now-tileLast<105){
-  c.drawImage(tileCache,0,0);return;
+  destination.drawImage(tileCache,0,0);return;
  }
+ if(!tileCache){
+  tileCache=document.createElement('canvas');tileCache.width=W;tileCache.height=H;
+ }
+ const c=tileCache.getContext('2d');
+ c.setTransform(1,0,0,1,0,0);c.clearRect(0,0,W,H);
  c.save();c.imageSmoothingEnabled=false;
  drawMasonry(c,s,p);
  drawRug(c,s,p);
@@ -433,9 +438,7 @@ function drawRoom(c,s,now){
  shadow.addColorStop(0,'#00000000');shadow.addColorStop(1,'#080e206d');
  c.fillStyle=shadow;c.fillRect(0,0,W,H);
  c.restore();
- if(!tileCache){tileCache=document.createElement('canvas');tileCache.width=W;tileCache.height=H}
- const cache=tileCache.getContext('2d');cache.clearRect(0,0,W,H);
- cache.drawImage(c.canvas,0,0);tileKey=key;tileLast=now;
+ tileKey=key;tileLast=now;destination.drawImage(tileCache,0,0);
 }
 // Original individually outlined sprite artwork (54×78 at native 16-bit
 // resolution). All hero states share exact foot anchoring and face directions.
