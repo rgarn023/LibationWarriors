@@ -37,6 +37,13 @@ jobs:
           npm install --prefix /tmp/libation-overworld --no-save --ignore-scripts --no-audit --no-fund maplibre-gl@5.8.0
           cp /tmp/libation-overworld/node_modules/maplibre-gl/dist/maplibre-gl.js web/overworld/vendor/maplibre-gl.js
           cp /tmp/libation-overworld/node_modules/maplibre-gl/dist/maplibre-gl.css web/overworld/vendor/maplibre-gl.css
+          # Expose the game's existing real authored class sprite sheets to
+          # the web dungeon. These already exist in the main Godot project.
+          mkdir -p web/overworld/assets/warriors
+          cp assets/sprites/*_sheet.png web/overworld/assets/warriors/
+          cp assets/sprites/libation_warriors/pirate/pirate_phase1_poses_strip_x4.png web/overworld/assets/warriors/pirate_poses.png
+          test -s web/overworld/assets/warriors/pirate_sheet.png
+          test -s web/overworld/assets/warriors/red_mage_sheet.png
           test -s web/overworld/vendor/maplibre-gl.js
           test -s web/overworld/vendor/maplibre-gl.css
           python - <<'PY'
@@ -77,6 +84,7 @@ jobs:
             /tmp/libation-dungeon-room.png
             /tmp/libation-dungeon-new-enemies.png
             /tmp/libation-dungeon-pirate-animation.png
+            /tmp/libation-existing-warrior-sprites.png
             /tmp/libation-dungeon-sword-impact.png
             /tmp/libation-dungeon-four-heroes-snes.png
             /tmp/libation-dungeon-theme-cellar.png

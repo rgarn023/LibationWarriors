@@ -872,6 +872,17 @@ const fs=require('fs');
  await page.locator('#devPortalClear').click();
  if((await page.locator('.pixel-marker.demo.maplibregl-marker').count())!==0)
   throw Error('Developer portals not cleared');
+ const artPage=await context.newPage();
+ await artPage.goto('http://127.0.0.1:8123/sprite-audit.html',{waitUntil:'networkidle'});
+ const classSheets=await artPage.locator('#grid .item').evaluateAll(els=>els.map(el=>({
+  name:el.querySelector('small')?.textContent,
+  loaded:el.querySelector('img')?.naturalWidth>0
+ })));
+ if(classSheets.length!==16||classSheets.some(x=>!x.loaded))
+  throw Error('Author-created class sprite assets not present in the web build: '+JSON.stringify(classSheets));
+ await artPage.screenshot({path:'/tmp/libation-existing-warrior-sprites.png',fullPage:true});
+ await artPage.close();
+ console.log('EXISTING CLASS SHEETS AVAILABLE:',JSON.stringify(classSheets));
  console.log('PLAYABLE PROCEDURAL DUNGEON TEST:',JSON.stringify({layouts,first,positionBefore,positionAfter,progress,rupture,defeated,afterDungeonRestart}));
  console.log('V15 STABLE GPS WORLD AUDIT:',JSON.stringify(inspect),
   'BROWSER ERRORS:',JSON.stringify(errors.slice(0,8)));
