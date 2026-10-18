@@ -734,9 +734,9 @@ function tick(){
   if(specialEnemyAI(e,s,now,distance))continue;
   if(distance===1){
    if(e.windup&&now>=e.windup){
-    e.windup=0;e.nextSwing=now+(e.boss?1200:950);
+    e.windup=0;e.nextSwing=now+(e.boss?1450:950);
     if(now>=s.invulnUntil){
-     hurtPlayer(s,e.boss?3:s.kind==='challenge'?2:1,now);
+     hurtPlayer(s,e.boss?2:s.kind==='challenge'?2:1,now);
     }
    }else if(!e.windup&&now>=e.nextSwing){
     e.windup=now+(e.boss?530:e.kind==='bat'?280:420);
