@@ -466,6 +466,8 @@ function heroAtlas(v){
  heroCache.set(key,atlas);return atlas;
 }
 function previewWarrior(v,dir='down',action='idle',frame=0){
+ if(window.LibationSpriteStudio?.previewHero)
+  return window.LibationSpriteStudio.previewHero(v,dir,action,frame);
  if(window.LibationDungeonSNES?.previewHero)
   return window.LibationDungeonSNES.previewHero(v,dir,action,frame);
  if(window.LibationDungeonArt?.previewHero)
@@ -518,13 +520,16 @@ function drawMap(){
 }
 function render(now){
  if(!state||root.hidden)return;
- const s=state;ctx.imageSmoothingEnabled=true;
+ const s=state;
+ resolveStrike(now);
+ ctx.imageSmoothingEnabled=true;
  const art=window.LibationDungeonArt,snes=window.LibationDungeonSNES;
  if(snes){
   snes.drawRoom(ctx,s,now);
   for(const e of s.enemies)snes.drawEnemy(ctx,e,now,s.kind);
   snes.drawEffects(ctx,s,now);
   snes.drawHero(ctx,{...s,animation:heroAnimation(now)},now);
+  window.LibationSpriteStudio?.drawSlash(ctx,s,now);
   if(s.previewParty){
    // Developer-only four-person scale preview; not connected players.
    for(let i=1;i<4;i++){
@@ -542,10 +547,14 @@ function render(now){
  }
  for(const fx of s.sparks){
   if(fx.until<=now)continue;
-  const f=(fx.until-now)/270,x=fx.x*T+16,y=fx.y*T+15;
-  rect('#ffedb2',x-10*f,y-9*f,5,5);
-  rect('#b2f1ef',x+8*f,y-6*f,4,6);
-  rect('#edaa8a',x,y+9*f,3,4);
+  const f=Math.max(0,(fx.until-now)/360),x=fx.x*T+16,y=fx.y*T+15;
+  const r=fx.large?23:14;
+  ctx.save();ctx.globalAlpha=f;
+  ctx.strokeStyle=fx.parried?'#bcacf5':'#efffc6';ctx.lineWidth=5;
+  ctx.beginPath();ctx.arc(x,y-24,r*(1-f*.38),0,Math.PI*2);ctx.stroke();
+  rect('#ffedb2',x-14*f,y-26-8*f,7,7);
+  rect('#b2f1ef',x+11*f,y-28+3*f,5,8);
+  rect('#edaa8a',x+4*f,y-10+11*f,6,6);ctx.restore();
  }
  s.sparks=s.sparks.filter(fx=>fx.until>now);
  if(now<s.hurtUntil)rect('rgba(255,75,72,.10)',0,0,X,Y);
@@ -580,41 +589,60 @@ function step(dir){
  }
  return true;
 }
+// Animation and damage share a single strike timeline. A press starts a
+// wind-up; collision resolves only when the eight-frame sword is at contact.
 function attack(){
  const s=state,now=performance.now();
  if(!s||s.completed||s.defeated||now<s.nextAttack)return false;
- s.nextAttack=now+325;s.attackUntil=now+205;
- const [dx,dy]=DIR[s.face],front=loc(s.player.x+dx,s.player.y+dy);
- let hit=false;
+ s.nextAttack=now+365;
+ s.attackStart=now;s.attackUntil=now+416;
+ s.attackCombo=(s.attackCombo+1)%2;
+ s.pendingStrike=true;
+ announce(s.attackCombo?'SWORD COMBO · follow through':'SWORD WIND-UP · strike');
+ return true;
+}
+function resolveStrike(now){
+ const s=state;if(!s||!s.pendingStrike||now<s.attackStart+122)return;
+ s.pendingStrike=false;
+ const [dx,dy]=DIR[s.face];
+ let hit=false, parry=false;
  for(const e of [...s.enemies]){
-  // A narrow 3-tile forward arc. No sideways or behind-the-back hits.
   const forward=(e.x-s.player.x)*dx+(e.y-s.player.y)*dy;
   const side=Math.abs((e.x-s.player.x)*dy-(e.y-s.player.y)*dx);
-  if(forward!==1||side>1)continue;
+  if(forward<1||forward>2||(forward>1?side>0:side>1))continue;
   hit=true;
-  const parried=['skeleton','acolyte'].includes(e.kind)&&e.blocking&&e.hp>2;
+  const guarded=['skeleton','acolyte'].includes(e.kind)&&e.blocking&&e.hp>2;
   const shielded=e.kind==='mage'&&now<e.shieldUntil;
-  e.hp-=shielded?0:parried?1:2;
+  const dmg=shielded?0:guarded?1:2;
+  parry=parry||guarded||shielded;
+  e.hp-=dmg;
   e.blocking=false;e.awake=true;
-  e.hitUntil=now+200;e.stunnedUntil=now+(e.boss?230:320);
-  e.windup=0;s.sparks.push({x:e.x,y:e.y,until:now+270});
+  e.hitUntil=now+290;
+  e.stunnedUntil=now+(e.boss?280:410);
+  e.windup=0;
+  // One impact effect follows the actual target position, not the click.
+  s.sparks.push({x:e.x,y:e.y,until:now+360,large:!shielded,parried:guarded});
   if(e.hp<=0){
    s.enemies.splice(s.enemies.indexOf(e),1);
    s.gold+=e.boss?40:4;s.kills++;
-  }else if(!e.boss){
+  }else if(!e.boss&&dmg){
    const xx=e.x+dx,yy=e.y+dy;
    if(!blocked(xx,yy)&&!(xx===s.player.x&&yy===s.player.y)&&
-     !s.enemies.some(other=>other!==e&&other.x===xx&&other.y===yy)){
+      !s.enemies.some(other=>other!==e&&other.x===xx&&other.y===yy)){
     e.x=xx;e.y=yy;
    }
   }
  }
+ if(hit){
+  s.hitStopUntil=now+64;s.lastImpactAt=now;
+  announce(parry?'GUARDED · find an opening':'IMPACT! · STRIKE CONNECTED');
+ }
  if(!s.enemies.length&&!s.roomClear){
   s.projectiles=[];s.warnings=[];
   s.roomClear=true;s.current.cleared=true;
-  announce(s.current.type==='boss'?'GUARDIAN DEFEATED · claim the central seal':'CHAMBER CLEARED · doors unlocked');
- }else if(hit)announce('SWORD STRIKE!');
- return hit;
+  announce(s.current.type==='boss'?'GUARDIAN DEFEATED · claim the central seal':
+   'CHAMBER CLEARED · doors unlocked');
+ }
 }
 function chase(enemy){
  const s=state,seen=new Set([enemy.x+','+enemy.y]),queue=[{x:enemy.x,y:enemy.y,first:null}];
@@ -892,7 +920,9 @@ function start({venue,warrior}={}){
   nodeIndex:0,visited:new Set(),hp:kind==='challenge'?14:18,
   maxHP:kind==='challenge'?14:18,player:loc(2,9),walls:new Set(),props:[],partySpawnSlots:[],
   enemies:[],projectiles:[],warnings:[],face:'right',gold:0,kills:0,nextAttack:0,nextDodge:0,
-  attackUntil:0,invulnUntil:0,hurtUntil:0,lastStep:0,walkUntil:0,walkFrame:0,sparks:[],
+  attackUntil:0,attackStart:0,attackCombo:0,pendingStrike:false,
+  hitStopUntil:0,lastImpactAt:0,
+  invulnUntil:0,hurtUntil:0,lastStep:0,walkUntil:0,walkFrame:0,sparks:[],
   completed:false,defeated:false,roomClear:false,message:''};
  root.hidden=false;document.body.classList.add('in-dungeon');$('lwDResult').hidden=true;
  makeRoom();timer=setInterval(tick,100);
@@ -911,6 +941,10 @@ function snapshot(){
   completed:s.completed,defeated:s.defeated,kind:s.kind,
   player:{...s.player},face:s.face,warrior:{...s.warrior},animation:heroAnimation(performance.now()),gold:s.gold,kills:s.kills,
   bossHP:s.enemies.find(e=>e.boss)?.hp??null,
+  strikePending:!!s.pendingStrike,
+  attackFrame:s.attackStart&&performance.now()<s.attackUntil?
+   Math.min(7,Math.floor((performance.now()-s.attackStart)/52)):null,
+  lastImpactAt:s.lastImpactAt,
   node:s.nodeIndex,roomType:s.current.type,template:s.current.template,
   enemyTypes:s.enemies.map(e=>e.kind),projectiles:s.projectiles.length,
   warnings:s.warnings.length,bossPhase:s.enemies.find(e=>e.boss)?.phase??null,
@@ -941,6 +975,7 @@ function debugCombatEncounter(){
  s.enemies=[{x,y,hp:2,maxHP:2,kind:'slime',boss:false,lastMove:0,
   nextSwing:performance.now()+1200,windup:0,hitUntil:0,stunnedUntil:0}];
  s.roomClear=false;s.current.cleared=false;s.nextAttack=0;
+ s.attackUntil=0;s.pendingStrike=false;
  announce('DEV COMBAT CHECK: strike the enemy in front');return true;
 }
 function debugEnemyEncounter(kind){
@@ -992,7 +1027,8 @@ function debugBossEncounter(){
   windup:0,hitUntil:0,stunnedUntil:0,phase:1,awake:true}];
  s.projectiles=[];s.warnings=[];
  s.roomClear=false;s.current.cleared=false;
- s.hp=s.maxHP;s.hurtUntil=0;s.nextAttack=0;s.invulnUntil=performance.now()+700;
+ s.hp=s.maxHP;s.hurtUntil=0;s.nextAttack=0;s.attackUntil=0;s.pendingStrike=false;
+ s.invulnUntil=performance.now()+700;
  announce('DEV BOSS CHECK: fight a full-health guardian');
  return true;
 }

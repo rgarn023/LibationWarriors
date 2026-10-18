@@ -563,6 +563,9 @@ function previewHero(who,dir='down',action='idle',frame=0){
  return canvas.toDataURL('image/png');
 }
 function drawHero(c,s,now){
+ if(window.LibationSpriteStudio){
+  window.LibationSpriteStudio.drawHero(c,s,now);return;
+ }
  const action=s.animation||'idle',frame=action==='walk'?s.walkFrame%4:
   action==='attack'?Math.max(0,Math.min(3,Math.floor((205-(s.attackUntil-now))/55))):
   action==='hurt'?Math.floor(now/95)%4:action==='defeat'?3:Math.floor(now/600)%2;
@@ -594,6 +597,9 @@ function enemyImage(e,now,theme){
  return res;
 }
 function drawEnemy(c,e,now,theme){
+ if(window.LibationSpriteStudio){
+  window.LibationSpriteStudio.drawEnemy(c,e,now);return;
+ }
  const image=enemyImage(e,now,theme);if(!image)return;
  const x=e.x*TILE+16,y=e.y*TILE+16;
  c.save();c.imageSmoothingEnabled=false;
@@ -610,6 +616,6 @@ function drawEffects(c,s,now){
 }
 window.LibationDungeonSNES=Object.freeze({
  width:GRID_W,height:GRID_H,tile:TILE,canvasWidth:W,canvasHeight:H,
- partyCapacity:4,artVersion:'authored-16bit-v3',drawRoom,drawEnemy,drawHero,drawEffects,previewHero
+ partyCapacity:4,artVersion:'mana-inspired-sprite-v4',drawRoom,drawEnemy,drawHero,drawEffects,previewHero
 });
 })();
