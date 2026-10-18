@@ -654,6 +654,15 @@ const fs=require('fs');
    artVersion:studio.artVersion};
  });
  console.log('REAL AUTHOR-REFERENCED PIRATE SPRITE ATLAS:',JSON.stringify(pirateAnimation));
+ const cameraProof=await page.evaluate(()=>{
+  const d=window.LibationDungeon;
+  if(!d.debugWarriorArtPreview())throw Error('Pirate art check unavailable');
+  const s=d.snapshot();
+  if(s.cameraZoom<1.15)throw Error('Mobile arena camera lacks gameplay zoom');
+  return {zoom:s.cameraZoom,warrior:s.warrior};
+ });
+ console.log('ILLUSTRATED PIRATE WITH MOBILE FOLLOW CAMERA:',JSON.stringify(cameraProof));
+ await page.waitForTimeout(160);
  await page.screenshot({path:'/tmp/libation-dungeon-pirate-animation.png',fullPage:false});
  const authoredArt=await page.evaluate(()=>{
   const studio=window.LibationSpriteStudio,d=window.LibationDungeon;
