@@ -1,0 +1,104 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/auth_gate.gd" id="1"]
+
+[node name="AuthGate" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1")
+
+[node name="BG" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0.055, 0.04, 0.03, 1)
+
+[node name="SafeRoot" type="Control" parent="."]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+
+[node name="Margin" type="MarginContainer" parent="SafeRoot"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+theme_override_constants/margin_left = 28
+theme_override_constants/margin_top = 28
+theme_override_constants/margin_right = 28
+theme_override_constants/margin_bottom = 28
+
+[node name="Center" type="CenterContainer" parent="SafeRoot/Margin"]
+layout_mode = 2
+
+[node name="Form" type="VBoxContainer" parent="SafeRoot/Margin/Center"]
+custom_minimum_size = Vector2(320, 0)
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="Title" type="Label" parent="SafeRoot/Margin/Center/Form"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.94, 0.7, 0.28, 1)
+theme_override_font_sizes/font_size = 32
+text = "LIBATION WARRIORS"
+horizontal_alignment = 1
+
+[node name="Subtitle" type="Label" parent="SafeRoot/Margin/Center/Form"]
+layout_mode = 2
+text = "Sign in to summon, collect, and restore your warriors."
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="Email" type="LineEdit" parent="SafeRoot/Margin/Center/Form"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 54)
+layout_mode = 2
+placeholder_text = "Email"
+keyboard_type = 3
+
+[node name="Password" type="LineEdit" parent="SafeRoot/Margin/Center/Form"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 54)
+layout_mode = 2
+placeholder_text = "Password"
+secret = true
+
+[node name="SignIn" type="Button" parent="SafeRoot/Margin/Center/Form"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 58)
+layout_mode = 2
+text = "Sign In"
+
+[node name="Create" type="Button" parent="SafeRoot/Margin/Center/Form"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 54)
+layout_mode = 2
+text = "Create Account"
+
+[node name="Reset" type="Button" parent="SafeRoot/Margin/Center/Form"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+text = "Reset Password"
+
+[node name="OfflineDev" type="Button" parent="SafeRoot/Margin/Center/Form"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+text = "Continue Offline (DEV)"
+visible = false
+
+[node name="Status" type="Label" parent="SafeRoot/Margin/Center/Form"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.78, 0.73, 0.66, 1)
+text = ""
+horizontal_alignment = 1
+autowrap_mode = 3

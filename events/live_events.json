@@ -1,0 +1,35 @@
+{
+	"version": 1,
+	"updated_at": "2026-07-29T00:00:00Z",
+	"events": [
+		{
+			"id": "launch_moonwell",
+			"title": "Moonwell Vigil",
+			"description": "A limited vigil dungeon and a rare event barcode for early players.",
+			"enabled": true,
+			"starts_at": "2026-07-01T00:00:00Z",
+			"ends_at": "2026-12-31T23:59:59Z",
+			"special_dungeon": {
+				"name": "Moonwell Sanctum",
+				"boss": "Lunar Cantor",
+				"enemy_label": "Moonshade",
+				"floor": [0.12, 0.14, 0.22, 1],
+				"wall": [0.22, 0.26, 0.4, 1],
+				"accent": [0.7, 0.8, 0.95, 1],
+				"enemy_factions": ["white_mage", "druid", "paladin"]
+			},
+			"special_barcodes": [
+				{
+					"barcode": "EVENT-MOONWELL-001",
+					"name": "Vigilant Moonpour",
+					"category": 9,
+					"rarity": "legendary",
+					"palette_name": "Moonwell Silver",
+					"tint_primary": [0.75, 0.85, 0.95, 1],
+					"tint_secondary": [0.25, 0.3, 0.45, 1],
+					"tint_accent": [0.95, 0.9, 0.55, 1]
+				}
+			]
+		}
+	]
+}
