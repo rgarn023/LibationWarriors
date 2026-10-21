@@ -74,13 +74,15 @@ function generateLayout(value,count){
  const shrine=nodes.find(n=>n.id!==0&&n.id!==boss&&n.id!==treasure&&depth[n.id]>=2)?.id;
  const requiredThemes=new Map(nodes.filter(n=>n.id!==boss).slice(0,3)
   .map((n,i)=>[n.id,['cellar','flooded','fracture'][i]]));
+ const requiredStructures=new Map(nodes.filter(n=>n.id!==boss).slice(0,4)
+  .map((n,i)=>[n.id,CHAMBER_PLANS[i]]));
  for(const n of nodes){
   if(n.id===boss)n.type='boss';
   else if(n.id===treasure)n.type='treasure';
   else if(n.id===shrine)n.type='shrine';
   n.depth=depth[n.id];
   n.template=n.type==='boss'?'sanctum':(requiredThemes.get(n.id)||randomItem(r,THEMES));
-  n.structure=n.type==='boss'?'four-corners':randomItem(r,CHAMBER_PLANS);
+  n.structure=n.type==='boss'?'four-corners':(requiredStructures.get(n.id)||randomItem(r,CHAMBER_PLANS));
   n.cleared=false;n.collected=false;
  }
  return {seed:String(value),count,boss,treasure,shrine,nodes};
@@ -181,13 +183,14 @@ function makeRoom(entry='left'){
  s.partyRoutes=RALLY_SLOTS.map(goal=>{
   // Real BFS over walkable cells, treating walls as blocking, not a drawn path.
   const start=s.partySpawnSlots[RALLY_SLOTS.indexOf(goal)];
-  const todo=[start],seen=new Set([start.x+','+start.y]);
+  const todo=[{...start,steps:0}],seen=new Set([start.x+','+start.y]);
   for(let i=0;i<todo.length;i++){
-   const p=todo[i];if(p.x===goal.x&&p.y===goal.y)return {reachable:true,length:i,goal:{...goal}};
+   const p=todo[i];
+   if(p.x===goal.x&&p.y===goal.y)return {reachable:true,length:p.steps,goal:{...goal}};
    for(const [dx,dy] of Object.values(DIR)){
     const x=p.x+dx,y=p.y+dy,key=x+','+y;
     if(x<1||x>=W-1||y<1||y>=H-1||s.walls.has(key)||seen.has(key))continue;
-    seen.add(key);todo.push({x,y});
+    seen.add(key);todo.push({x,y,steps:p.steps+1});
    }
   }
   return {reachable:false,goal:{...goal}};
@@ -1131,6 +1134,13 @@ function debugEnemyGallery(){
  s.warnings=[];s.projectiles=[];s.roomClear=false;s.current.cleared=false;
  announce('DEV ART GALLERY · eight original enemy archetypes');return true;
 }
+function debugArchitecturePreview(structure){
+ if(!state||!devAllowed()||!CHAMBER_PLANS.includes(structure))return false;
+ const s=state;s.current.structure=structure;makeRoom();
+ if(s.current.type!=='boss')debugClearRoom();
+ announce('DEV ROOM STRUCTURE · '+structure.toUpperCase());
+ return true;
+}
 function debugThemePreview(template){
  if(!state||!devAllowed()||!THEMES.includes(template))return false;
  const s=state;s.current.template=template;makeRoom();
@@ -1155,5 +1165,5 @@ function debugBossEncounter(){
 window.LibationDungeon=Object.freeze({start,stop,snapshot,move:step,attack,dodge,
  previewWarrior,inspectLayout,debugClearRoom,debugCombatEncounter,
  debugEnemyEncounter,debugEnemyGallery,debugWarriorArtPreview,
- debugPartyPreview,debugThemePreview,debugBossEncounter});
+ debugPartyPreview,debugThemePreview,debugArchitecturePreview,debugBossEncounter});
 })();
