@@ -52,15 +52,17 @@ function colorConfig(w){
  };
 }
 function heroFrame(w,dir,act,n){
- const phase=n%8,who=colorConfig(w),key=['hero',String(w?.id||'basic'),dir,act,phase,
+ const phase=act==='walk'?n%12:n%8,who=colorConfig(w),
+  key=['hero',String(w?.id||'basic'),dir,act,phase,
   w?.gender||'male',w?.faction||'Pirate'].join(':');
  if(cache.has(key))return cache.get(key);
  const cvs=document.createElement('canvas');cvs.width=64;cvs.height=96;
  const c=cvs.getContext('2d');c.imageSmoothingEnabled=false;
  const isMove=act==='walk',isAtk=act==='attack',back=dir==='up',side=dir==='left'||dir==='right';
- const cyc=Math.sin(phase*Math.PI/4),foot1=isMove?Math.round(cyc*6):0,foot2=-foot1;
+ const cyc=Math.sin(phase*Math.PI/(isMove?6:4)),
+  foot1=isMove?Math.round(cyc*6):0,foot2=-foot1;
  const bob=isMove?Math.round(Math.abs(cyc)*3):act==='idle'?(phase%4===0?1:0):0;
- const flow=isMove?Math.round(Math.cos(phase*Math.PI/4)*4):n%2?1:0;
+ const flow=isMove?Math.round(Math.cos(phase*Math.PI/6)*4):n%2?1:0;
  c.save();if(dir==='left'){c.translate(64,0);c.scale(-1,1)}
  if(act==='defeat'){c.translate(11,77);c.rotate(-.99);c.translate(-11,-77)}
  oval(c,32,89,23,6,'#10223789');
@@ -314,7 +316,7 @@ function drawHero(c,s,now){
  const t=now<s.hitStopUntil?s.lastImpactAt:now;
  let frame=0;
  if(action==='attack')frame=Math.min(7,Math.max(0,Math.floor((t-s.attackStart)/52)));
- else if(action==='walk')frame=Math.floor(t/73)%8;
+ else if(action==='walk')frame=Math.floor(t/65)%12;
  else if(action==='hurt')frame=Math.floor(t/82)%8;
  else if(action==='idle')frame=Math.floor(t/450)%4;
  else frame=7;

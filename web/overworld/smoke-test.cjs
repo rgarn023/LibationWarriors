@@ -601,7 +601,9 @@ const fs=require('fs');
     const must=['cellar','flooded','fracture'];
     if(must.some(name=>!p.nodes.some(n=>n.template===name)))
       throw Error('One of the new themed environments is absent: '+kind);
-    signatures.add(p.nodes.map(n=>n.gx+','+n.gy+':'+n.template).join(';'));
+    const structuralVariety=new Set(p.nodes.map(n=>n.structure));
+    if(structuralVariety.size<3)throw Error('Not enough distinct room plans '+kind);
+    signatures.add(p.nodes.map(n=>n.gx+','+n.gy+':'+n.template+':'+n.structure).join(';'));
    }
    if(signatures.size<70)throw Error('Generator not diverse enough: '+kind);
    variants[kind]={count:expected,generated:90,unique:signatures.size};
@@ -619,7 +621,7 @@ const fs=require('fs');
   if(slots.some(p=>p.x<=0||p.x>=g.width-1||p.y<=0||p.y>=g.height-1||s.walls.includes(p.x+','+p.y)))
    throw Error('One or more party entry positions are obstructed');
   const clearance=s.partyClearance||[];
-  if(s.arenaWalkable<300||clearance.length!==4||
+  if(s.arenaWalkable<300||clearance.length!==8||
      clearance.some(p=>!p.free||p.nearby<3))
    throw Error('Four players do not have clear combat lanes: '+JSON.stringify({
     free:s.arenaWalkable,clearance}));
@@ -627,9 +629,17 @@ const fs=require('fs');
    const distance=Math.abs(slots[i].x-slots[j].x)+Math.abs(slots[i].y-slots[j].y);
    if(distance<5)throw Error('Party entry positions are too close to move independently');
   }
+  const rally=s.partyRallySlots||[],routes=s.partyRoutes||[];
+  if(rally.length!==4||routes.length!==4||routes.some(r=>!r.reachable))
+   throw Error('Four independent paths into center battlefield unavailable');
+  if(rally.some(p=>s.walls.includes(p.x+','+p.y)))
+   throw Error('One or more party rally cells are obstructed');
+  for(let i=0;i<rally.length;i++)for(let j=i+1;j<rally.length;j++)
+   if(Math.abs(rally[i].x-rally[j].x)+Math.abs(rally[i].y-rally[j].y)<5)
+    throw Error('Center arena cannot accommodate four fighting positions');
   if(!d.debugPartyPreview(true))throw Error('Four-character scale preview unavailable');
-  return {dimensions:g,slots,partyCapacity:s.partyCapacity,
-   openFloor:s.arenaWalkable,clearance};
+  return {dimensions:g,slots,rally,routes,partyCapacity:s.partyCapacity,
+   structure:s.chamberStructure,openFloor:s.arenaWalkable,clearance};
  });
  console.log('FOUR-HERO DUNGEON ROOM CAPACITY:',JSON.stringify(capacity));
  await page.screenshot({path:'/tmp/libation-dungeon-four-heroes-snes.png',fullPage:false});
@@ -672,7 +682,9 @@ const fs=require('fs');
   const attacks=new Set(Array.from({length:8},(_,i)=>studio.previewHero(example,'right','attack',i)));
   const walks=new Set(Array.from({length:8},(_,i)=>studio.previewHero(example,'down','walk',i)));
   const facings=new Set(['up','down','left','right'].map(dir=>studio.previewHero(example,dir,'idle',0)));
-  if(attacks.size<7||walks.size<5||facings.size!==4)
+  const twelveWalks=new Set(Array.from({length:12},(_,i)=>
+   studio.previewHero(example,'down','walk',i)));
+  if(attacks.size<7||walks.size<5||twelveWalks.size<9||facings.size!==4)
    throw Error('Character pose frames are repeated or do not face correctly');
   return {attackFrames:attacks.size,walkFrames:walks.size,directions:facings.size,
    archetypes:studio.archetypes.length,artVersion:studio.artVersion};
