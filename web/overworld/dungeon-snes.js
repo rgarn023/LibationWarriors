@@ -341,12 +341,83 @@ function drawRoomThemes(c,s,p,now){
   }
  }
 }
+// Hand-composed, contiguous fortress walls replace the field of repeated
+// pillars. Wall pixels and collision tiles derive from the same source.
+function wallStone(c,x,y,s,p){
+ const px=x*TILE,py=y*TILE,has=(dx,dy)=>s.walls.has((x+dx)+','+(y+dy));
+ const top=has(0,-1),left=has(-1,0),right=has(1,0);
+ color(c,px+1,py+12,31,28,'#111b2ba8');
+ color(c,px+1,py-9,30,37,p.dark);
+ color(c,px+3,py-11,26,14,p.mid);
+ color(c,px+3,py-11,26,4,p.rim);
+ color(c,px+3,py+7,26,17,p.stone);
+ if(!left)color(c,px+3,py-8,4,31,p.rim);
+ if(!right)color(c,px+27,py-8,4,30,p.deep);
+ if(top){
+  color(c,px+3,py-10,26,5,p.mid);
+  color(c,px+3,py-4,26,3,p.deep);
+ }
+ if((x+y)%3===0){
+  color(c,px+6,py+11,18,3,p.mid);
+  color(c,px+7,py+17,10,2,p.deep);
+  color(c,px+9,py-7,7,2,'#e0c6a680');
+ }
+ if(!left&&!right){color(c,px+8,py-7,15,8,p.rim);color(c,px+13,py+3,6,18,p.deep)}
+}
+function drawArchitecture(c,s,p){
+ const st=s.current.structure;
+ const bands=st==='cloister'?[114,480]:st==='split'?[174,425]:
+  st==='bastion'?[142,466]:st==='arcade'?[115,490]:[152,448];
+ // Recessed floor courses create recognizable paths and depth per variant.
+ for(const y of bands){
+  color(c,119,y,562,21,p.dark);
+  color(c,120,y+2,559,11,p.mid);
+  color(c,120,y+2,558,3,p.rim);
+  for(let x=144;x<655;x+=76){
+   color(c,x,y+14,39,3,p.deep);
+   color(c,x+17,y+5,22,2,'#f9e4b74f');
+  }
+ }
+ if(st==='cloister'){
+  for(const x of [190,607])for(const y of [153,447]){
+   c.strokeStyle=p.rim;c.lineWidth=4;
+   c.beginPath();c.arc(x,y,34,0,Math.PI*2);c.stroke();
+   color(c,x-4,y-4,9,9,p.gold);
+  }
+ }else if(st==='split'){
+  for(const x of [108,645]){
+   color(c,x,186,47,219,p.deep);
+   color(c,x+5,191,37,207,p.mid);
+   for(let y=210;y<388;y+=43){color(c,x+8,y,30,5,p.rim)}
+  }
+ }else if(st==='four-corners'){
+  for(const x of [169,633])for(const y of [164,421]){
+   color(c,x-33,y-18,66,39,p.deep);
+   color(c,x-29,y-18,58,9,p.rim);
+   color(c,x-23,y-4,47,17,p.mid);
+  }
+ }else if(st==='bastion'){
+  for(let y=194;y<438;y+=70){
+   color(c,101,y,62,19,p.deep);
+   color(c,637,y,62,19,p.deep);
+   color(c,102,y,50,5,p.rim);color(c,647,y,50,5,p.rim);
+  }
+ }else if(st==='arcade'){
+  for(let x=178;x<657;x+=106){
+   color(c,x,104,20,57,p.deep);
+   color(c,x+4,107,12,46,p.stone);
+   color(c,x,450,20,55,p.deep);
+   color(c,x+4,453,12,44,p.stone);
+  }
+ }
+}
 function drawStructure(c,s,p){
- // Collision columns are taller than floor markers; fronts overlap floor edge.
+ const pillars=new Set(s.props.filter(o=>o.kind==='pillar').map(o=>o.x+','+o.y));
  for(const pos of s.walls){
   const [x,y]=pos.split(',').map(Number);
   if(x<2||y<2||x>22||y>16)continue;
-  column(c,x,y,p);
+  if(pillars.has(pos))column(c,x,y,p);
+  else wallStone(c,x,y,s,p);
  }
  for(const prop of s.props)if(prop.kind==='coffin'){
   const x=prop.x*TILE,y=prop.y*TILE;
@@ -415,7 +486,7 @@ function centralFocus(c,s,p,now){
 let tileCache=null,tileKey='',tileLast=0;
 function drawRoom(destination,s,now){
  const node=s.current,p=palette(s);
- const key=s.plan.seed+':'+s.nodeIndex+':'+node.template+':'+s.roomClear;
+ const key=s.plan.seed+':'+s.nodeIndex+':'+node.template+':'+node.structure+':'+s.roomClear;
  if(tileCache&&tileKey===key&&now-tileLast<105){
   destination.drawImage(tileCache,0,0);return;
  }
@@ -428,6 +499,7 @@ function drawRoom(destination,s,now){
  drawMasonry(c,s,p);
  drawRug(c,s,p);
  drawRoomThemes(c,s,p,now);
+ drawArchitecture(c,s,p);
  drawStructure(c,s,p);
  edgeDecor(c,s,p,now);
  centralFocus(c,s,p,now);
