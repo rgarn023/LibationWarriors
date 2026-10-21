@@ -76,7 +76,14 @@ function heroFrame(w,dir,act,n){
   rect(c,x-5,86+k,10,2,'#c6a16a');
   rect(c,x-6,89+k,15,2,'#393946');
  }
- c.translate(0,-bob);
+ // Full-torso recoil, anticipation and forward commitment. Boots are drawn
+ // independently so attack frames do not appear as a rigid translated doll.
+ const lunges=[0,-2,-4,2,8,5,1,0],heights=[0,-1,-4,-6,-3,1,0,0],
+  twists=[0,-.025,-.09,.08,.17,.08,0,0];
+ if(isAtk){
+  c.translate(lunges[phase],-bob+heights[phase]);
+  c.rotate(twists[phase]);
+ }else c.translate(0,-bob);
  // Floating mantle, cape trim, shoulder flaps.
  poly(c,[[18,35],[44,35],[54,59],[52+flow,81],[43+flow,88],
   [19+flow,85],[12+flow,78],[10,51]],who.cape,ink,3);
@@ -358,29 +365,51 @@ function drawEnemy(c,e,now){
  c.restore();
 }
 function drawSlash(c,s,now){
- // The authored pirate frame already includes its own blade and energy arc.
+ // The illustrated pirate sheet already contains an individually drawn blade.
  if(sheetPose(s.warrior,s.face,'attack',0))return;
  if(!s.attackStart||now>=s.attackUntil)return;
  const t=now<s.hitStopUntil?s.lastImpactAt:now;
- const p=Math.min(1,(t-s.attackStart)/416);
- if(p<.17||p>.76)return;
+ const p=Math.min(1,Math.max(0,(t-s.attackStart)/416));
+ if(p<.21||p>.8)return;
+ const frame=Math.max(0,Math.min(7,Math.floor(p*8)));
  const x=s.player.x*32+16,y=s.player.y*32+16;
- // Melee contact is at 0.32 of the full eight-frame animation.
- const phase=(p-.17)/.59, angle=phase*Math.PI*.92,dir=s.face;
- c.save();c.translate(x,y-37);
- const rot={right:0,down:Math.PI*.5,left:Math.PI,up:-Math.PI*.5}[dir]||0;
- c.rotate(rot);
- if(s.attackCombo===0)c.scale(1,-1);
- c.globalAlpha=Math.min(1,phase*7,(1-phase)*7);
- const rx=36;
- c.strokeStyle='#5bbbd3';c.lineWidth=13;c.beginPath();
- c.ellipse(24,0,rx,34,0,-1.15+angle*.85,-.25+angle*.85);c.stroke();
- c.strokeStyle='#d7ffff';c.lineWidth=7;c.beginPath();
- c.ellipse(24,0,rx,34,0,-1.15+angle*.85,-.25+angle*.85);c.stroke();
- c.strokeStyle='#ffffff';c.lineWidth=2;c.beginPath();
- c.ellipse(24,0,rx,34,0,-1.15+angle*.85,-.25+angle*.85);c.stroke();
- const a=-.25+angle*.85;
- oval(c,24+rx*Math.cos(a),34*Math.sin(a),4,4,'#ffffff');
+ // A tapered sword-sweep silhouette with layered palette bands; no
+ // generic outline-only ellipse or stationary floating attack circle.
+ const rot={right:0,down:Math.PI*.5,left:Math.PI,up:-Math.PI*.5}[s.face]||0,
+  motion=(p-.21)/.59,base=-1.48+motion*1.55,
+  side=s.attackCombo===0?-1:1;
+ c.save();c.translate(x,y-35);c.rotate(rot);c.scale(1,side);
+ c.globalAlpha=Math.min(1,(p-.21)*11,(.8-p)*12);
+ const band=(inner,outer,a,b,tint)=>{
+  c.beginPath();
+  for(let k=0;k<=12;k++){
+   const v=a+(b-a)*k/12,r=outer*(.84+.16*Math.sin(k/12*Math.PI));
+   const xx=16+Math.cos(v)*r,yy=Math.sin(v)*r*.81;
+   if(k===0)c.moveTo(xx,yy);else c.lineTo(xx,yy);
+  }
+  for(let k=12;k>=0;k--){
+   const v=a+(b-a)*k/12;
+   c.lineTo(16+Math.cos(v)*inner,Math.sin(v)*inner*.81);
+  }
+  c.closePath();c.fillStyle=tint;c.fill();
+ };
+ band(23,62,base,base+.74,'#2b6b9fac');
+ band(31,56,base+.08,base+.70,'#4fdbe8ca');
+ band(38,53,base+.16,base+.63,'#e5ffffed');
+ const end=base+.74,tx=16+Math.cos(end)*60,ty=Math.sin(end)*48;
+ c.fillStyle='#ffffff';c.beginPath();
+ c.moveTo(tx-5,ty);c.lineTo(tx+3,ty-7);c.lineTo(tx+9,ty);
+ c.lineTo(tx+3,ty+7);c.closePath();c.fill();
+ if(frame>=3&&frame<=5){
+  // Distinct short-lived contact frame: angular metal sparks, not circles.
+  for(let k=0;k<5;k++){
+   const a=end+(.3+k*.41),len=10+(k%3)*5;
+   c.strokeStyle=k%2?'#fff5ca':'#b9fcff';c.lineWidth=k%2?2:3;
+   c.beginPath();c.moveTo(tx+Math.cos(a)*4,ty+Math.sin(a)*4);
+   c.lineTo(tx+Math.cos(a)*len,ty+Math.sin(a)*len);
+   c.stroke();
+  }
+ }
  c.restore();
 }
 window.LibationSpriteStudio=Object.freeze({
@@ -388,7 +417,7 @@ window.LibationSpriteStudio=Object.freeze({
  frameCount:8,walkingFrames:12,attackFrames:8,enemyPoseFrames:8,
  authoredAnimationRows:6,
  sheetAvailable:()=>pirateSheetReady,
- artVersion:'authored-pirate-atlas-plus-mana-fallback-v2',
+ artVersion:'authored-pirate-atlas-plus-mana-fallback-v3',
  archetypes:['slime','skeleton','bat','sentinel','specter','thornbound','mimic',
   'archer','brute','wisp','spider','mage','acolyte','leech','shaman','guardian']
 });
