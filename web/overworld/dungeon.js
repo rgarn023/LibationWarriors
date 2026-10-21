@@ -19,6 +19,8 @@ const SPAWNS={
  down:[{x:12,y:16},{x:5,y:13},{x:19,y:13},{x:12,y:8}]
 };
 const THEMES=['pillars','crypt','gallery','arcade','sanctum','ruins','vault','cellar','flooded','fracture'];
+const CHAMBER_PLANS=['bastion','cloister','split','four-corners','arcade'];
+const RALLY_SLOTS=[{x:9,y:6},{x:15,y:6},{x:9,y:12},{x:15,y:12}];
 const ENEMIES=['slime','skeleton','bat','sentinel','specter','thornbound','mimic','archer','brute','wisp','spider','mage','acolyte','leech','shaman'];
 const ENEMY_HP={slime:3,skeleton:5,bat:3,sentinel:7,specter:4,thornbound:5,mimic:5,archer:4,brute:10,wisp:4,spider:4,mage:6,acolyte:9,leech:5,shaman:6};
 let state=null,root=null,canvas=null,ctx=null,raf=0,timer=0,held=null,heldAt=0;
@@ -78,6 +80,7 @@ function generateLayout(value,count){
   else if(n.id===shrine)n.type='shrine';
   n.depth=depth[n.id];
   n.template=n.type==='boss'?'sanctum':(requiredThemes.get(n.id)||randomItem(r,THEMES));
+  n.structure=n.type==='boss'?'four-corners':randomItem(r,CHAMBER_PLANS);
   n.cleared=false;n.collected=false;
  }
  return {seed:String(value),count,boss,treasure,shrine,nodes};
@@ -122,13 +125,39 @@ function makeRoom(entry='left'){
  }else if(n.template==='fracture'){
   for(const x of [5,19])for(const y of [4,14])pillar(x,y);
  }
+ // Dungeon architecture comes from a second seeded generator. These are
+ // traversable handcrafted patterns, not random disconnected wall clutter.
+ // Wide passages, four rally areas and doorway routes are carved afterward.
+ if(n.structure==='bastion'){
+  for(const y of [3,4,14,15])for(const x of [3,4,20,21])wall(x,y);
+  for(let x=5;x<=8;x++){wall(x,5);wall(x,13)}
+  for(let x=16;x<=19;x++){wall(x,5);wall(x,13)}
+ }else if(n.structure==='cloister'){
+  for(const x of [6,18])for(const y of [4,14]){
+   for(let dx=-1;dx<=1;dx++)for(let dy=-1;dy<=1;dy++)
+    if(dx===0||dy===0)wall(x+dx,y+dy);
+  }
+ }else if(n.structure==='split'){
+  for(let x=3;x<=8;x++){wall(x,6);wall(x,12)}
+  for(let x=16;x<=21;x++){wall(x,6);wall(x,12)}
+  for(const y of [4,5,13,14]){wall(8,y);wall(16,y)}
+ }else if(n.structure==='four-corners'){
+  for(const x of [5,19])for(const y of [5,13]){
+   wall(x,y);wall(x+1,y);wall(x,y+1);
+  }
+ }else if(n.structure==='arcade'){
+  for(const x of [6,18])for(const y of [4,5,13,14]){
+   wall(x,y);wall(x+1,y);
+  }
+ }
  // Carved passages guarantee unobstructed travel among every connected door.
  // Decoration may vary, but a room must never be unsolvable by construction.
  for(let x=1;x<=23;x++)for(let y=7;y<=11;y++)s.walls.delete(x+','+y);
  for(let x=10;x<=14;x++)for(let y=1;y<=17;y++)s.walls.delete(x+','+y);
- // Spawn clearance accounts for the real 80+ pixel character silhouette.
- // Reserve 3×3 walkable landing pads, plus five-wide cross corridors.
- for(const p of s.partySpawnSlots){
+ // Each future co-op fighter has a separate landing and a rally footprint
+ // with a full 3×3 clear collision area. Not network multiplayer yet.
+ s.partyRallySlots=RALLY_SLOTS.map(p=>({...p}));
+ for(const p of [...s.partySpawnSlots,...s.partyRallySlots]){
   for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
    const x=p.x+dx,y=p.y+dy;
    if(x>1&&x<W-2&&y>1&&y<H-2)s.walls.delete(x+','+y);
@@ -142,13 +171,27 @@ function makeRoom(entry='left'){
    if(x>1&&x<W-2&&y>1&&y<H-2)s.walls.delete(x+','+y);
  }
  s.props=s.props.filter(p=>s.walls.has(p.x+','+p.y));
- s.partyClearance=s.partySpawnSlots.map(p=>({
+ s.partyClearance=[...s.partySpawnSlots,...s.partyRallySlots].map(p=>({
   ...p,free:s.walls.has(p.x+','+p.y)?false:true,
   nearby:DIR&&Object.values(DIR).filter(([dx,dy])=>
    p.x+dx>0&&p.x+dx<W-1&&p.y+dy>0&&p.y+dy<H-1&&
    !s.walls.has((p.x+dx)+','+(p.y+dy))).length
  }));
  s.arenaWalkable=(W-2)*(H-2)-s.walls.size;
+ s.partyRoutes=RALLY_SLOTS.map(goal=>{
+  // Real BFS over walkable cells, treating walls as blocking, not a drawn path.
+  const start=s.partySpawnSlots[RALLY_SLOTS.indexOf(goal)];
+  const todo=[start],seen=new Set([start.x+','+start.y]);
+  for(let i=0;i<todo.length;i++){
+   const p=todo[i];if(p.x===goal.x&&p.y===goal.y)return {reachable:true,length:i,goal:{...goal}};
+   for(const [dx,dy] of Object.values(DIR)){
+    const x=p.x+dx,y=p.y+dy,key=x+','+y;
+    if(x<1||x>=W-1||y<1||y>=H-1||s.walls.has(key)||seen.has(key))continue;
+    seen.add(key);todo.push({x,y});
+   }
+  }
+  return {reachable:false,goal:{...goal}};
+ });
  s.visited.add(n.id);
  if(n.type==='treasure'&&!n.collected){
   n.collected=true;s.gold+=12;s.hp=Math.min(s.maxHP,s.hp+3);
@@ -163,7 +206,7 @@ function makeRoom(entry='left'){
   for(let y=3;y<=15;y++)for(let x=4;x<=21;x++){
    if(s.walls.has(x+','+y)||dist({x,y},s.player)<5||
      Math.abs(x-12)<2&&Math.abs(y-9)<2||
-     s.partySpawnSlots.some(p=>dist({x,y},p)<3))continue;
+     [...s.partySpawnSlots,...s.partyRallySlots].some(p=>dist({x,y},p)<3))continue;
    spots.push({x,y});
   }
   for(let i=0;i<amount&&spots.length;i++){
@@ -573,7 +616,7 @@ function render(now){
   if(s.previewParty){
    // Developer-only four-person scale preview; not connected players.
    for(let i=1;i<4;i++){
-    const pos=s.partySpawnSlots[i];
+    const pos=s.partyRallySlots?.[i]||s.partySpawnSlots[i];
     drawables.push({y:pos.y,draw:()=>{
       ctx.save();
       ctx.filter=i===1?'hue-rotate(35deg)':i===2?'hue-rotate(155deg)':'hue-rotate(240deg)';
@@ -1014,6 +1057,8 @@ function snapshot(){
   warnings:s.warnings.length,bossPhase:s.enemies.find(e=>e.boss)?.phase??null,
   geometry:{width:W,height:H,tile:T,pixelWidth:X,pixelHeight:Y},
   partyCapacity:4,partySpawnSlots:s.partySpawnSlots.map(p=>({...p})),
+  partyRallySlots:s.partyRallySlots.map(p=>({...p})),
+  partyRoutes:s.partyRoutes.map(p=>({...p})),chamberStructure:s.current.structure,
   partyClearance:s.partyClearance?.map(p=>({...p}))||[],
   arenaWalkable:s.arenaWalkable,
   partyPreview:!!s.previewParty,
@@ -1028,7 +1073,7 @@ function inspectLayout(value,kind='rupture'){
  const plan=generateLayout(value,kind==='challenge'?14:10);
  return {seed:plan.seed,count:plan.count,boss:plan.boss,treasure:plan.treasure,
   nodes:plan.nodes.map(n=>({id:n.id,gx:n.gx,gy:n.gy,edges:{...n.edges},
-    depth:n.depth,type:n.type,template:n.template}))};
+    depth:n.depth,type:n.type,template:n.template,structure:n.structure}))};
 }
 function devAllowed(){return new URLSearchParams(location.search).has('dev')||window.LibationDeveloper?.enabled()}
 function debugClearRoom(){
