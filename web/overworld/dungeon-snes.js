@@ -223,12 +223,125 @@ function drawMasonry(c,s,p){
   color(c,x+3,H-20,53,8,p.stone);
  }
 }
+
+// Additional hand-authored 16-bit masonry. Decorative geometry does not
+// alter pathfinding, doorway clearance, collision or spawn coordinates.
+function craftFloor(c,s,p){
+ const id=s.current.id,type=s.current.template;
+ for(let i=0;i<3;i++){
+  c.strokeStyle=i===0?p.deep:i===1?p.rim:'#192437b0';
+  c.lineWidth=i===1?3:5;
+  c.strokeRect(86+i*6,85+i*6,628-i*12,436-i*12);
+ }
+ for(let y=114;y<500;y+=58)for(const x of [95,689]){
+  const v=HASH(id*34+y*29+x);
+  color(c,x-7,y,22,38,p.dark);
+  color(c,x-3,y+3,16,30,v>.45?p.mid:p.stone);
+  color(c,x-2,y+3,14,3,p.rim);
+  color(c,x+8,y+7,2,22,'#101c2f85');
+ }
+ // Deterministic fissures, edge wear, chisel chips and sparse highlights.
+ for(let i=0;i<190;i++){
+  const v=HASH(id*1409+i*193),
+   x=97+Math.floor(HASH(id*39+i*53)*604),
+   y=91+Math.floor(HASH(id*21+i*419)*426);
+  if(!isSafeFloor(s,Math.floor(x/32),Math.floor(y/32)))continue;
+  const len=3+Math.floor(v*12);
+  pixelLine(c,x,y,len,v>.8?2:0,v>.67?'#e3cfa365':'#1621356e',v>.8?2:1);
+  if(v>.64)pixelLine(c,x+len,y+2,-3,6,'#1522379e',1);
+  if(v>.87){color(c,x+4,y+7,3,2,p.rim);color(c,x+10,y+8,3,2,p.dark)}
+ }
+ for(const [x,y,dx,dy] of [[111,111,1,1],[689,111,-1,1],[111,497,1,-1],[689,497,-1,-1]]){
+  color(c,x-6,y-6,13,13,p.dark);color(c,x-4,y-4,9,9,p.rim);
+  color(c,x-2,y-2,5,5,p.dark);
+  for(let k=0;k<4;k++){
+   color(c,x+dx*(13+k*8)-2,y+dy*4,5,2,p.rim);
+   color(c,x+dx*4-1,y+dy*(13+k*8)-2,2,5,p.rim);
+  }
+ }
+ if(type==='flooded'){
+  for(let j=0;j<22;j++){
+   const x=128+Math.floor(HASH(id*79+j*123)*538),
+    y=132+Math.floor(HASH(j*99+id*11)*340);
+   if(!isSafeFloor(s,Math.floor(x/32),Math.floor(y/32)))continue;
+   color(c,x-17,y+5,44,4,'#20475b96');color(c,x-10,y+1,27,3,'#75d0c9a6');
+   color(c,x+4,y+10,23,2,'#bce9d599');
+  }
+ }else if(type==='fracture'){
+  for(let j=0;j<12;j++){
+   const x=138+Math.floor(HASH(j*73+id*19)*515),
+    y=149+Math.floor(HASH(id*67+j*111)*302);
+   if(!isSafeFloor(s,Math.floor(x/32),Math.floor(y/32)))continue;
+   pixelLine(c,x-10,y-13,16,20,'#292345',6);
+   pixelLine(c,x-10,y-13,16,20,'#b49cf3',3);
+   pixelLine(c,x+6,y+7,16,-7,'#8069c9',3);color(c,x+8,y-2,5,5,'#e2d9ff');
+  }
+ }else if(type==='ruins'){
+  for(let j=0;j<32;j++){
+   const x=123+Math.floor(HASH(id*63+j*233)*552),
+    y=125+Math.floor(HASH(id*77+j*43)*363);
+   if(!isSafeFloor(s,Math.floor(x/32),Math.floor(y/32)))continue;
+   color(c,x,y,12,3,'#304d39b0');color(c,x+2,y-3,3,8,'#89a4779c');
+   if(j%3===0){color(c,x-4,y-2,3,3,p.rim);color(c,x+11,y+2,2,4,'#aacb80')}
+  }
+ }else if(type==='crypt'){
+  for(const [x,y] of [[177,157],[617,157],[177,447],[617,447]]){
+   c.strokeStyle='#a38b8a8c';c.lineWidth=3;
+   c.beginPath();c.moveTo(x-19,y+16);c.lineTo(x-19,y-7);
+   c.quadraticCurveTo(x,y-37,x+19,y-7);c.lineTo(x+19,y+16);c.stroke();
+   color(c,x-7,y-1,14,3,p.dark);color(c,x-2,y-9,4,19,p.dark);
+  }
+ }
+}
+function carvedVaults(c,s,p){
+ const fracture=s.current.template==='fracture';
+ // Stepped Gothic voussoirs at the top elevation and sculpted wall niches.
+ color(c,43,60,712,12,'#0a1425d0');
+ for(const x of [116,257,398,539,680]){
+  color(c,x-45,19,90,48,'#111b2d');color(c,x-39,23,78,39,p.mid);
+  for(let k=0;k<4;k++){
+   const w=76-k*12;color(c,x-w/2,21+k*6,w,5,k%2?p.stone:p.rim);
+  }
+  color(c,x-20,42,40,23,p.dark);color(c,x-16,43,32,3,'#111929');
+  color(c,x-2,42,5,15,fracture?'#9a8ed7':p.rim);
+  color(c,x-8,47,16,4,fracture?'#b9a6fb':p.rim);
+  color(c,x-2,44,4,10,p.dark);
+  for(const dx of [-46,38]){
+   color(c,x+dx,18,8,49,p.deep);color(c,x+dx+1,20,5,42,p.stone);
+   color(c,x+dx-2,60,12,4,p.rim);
+  }
+ }
+ for(const x of [39,760])for(const y of [170,312,452]){
+  color(c,x-23,y-33,46,70,'#0e1728');color(c,x-18,y-31,36,60,p.mid);
+  color(c,x-18,y-31,36,8,p.rim);color(c,x-16,y-17,32,37,p.dark);
+  color(c,x-8,y-11,16,28,p.stone);color(c,x-14,y+17,28,6,p.rim);
+  color(c,x-23,y+26,46,7,p.deep);color(c,x-5,y-6,9,3,p.rim);
+  color(c,x-1,y-15,2,24,p.dark);
+ }
+ color(c,72,75,656,8,p.deep);color(c,75,76,650,3,p.rim);
+ color(c,82,81,636,7,'#111827a3');
+}
+function torchLight(c,s,now){
+ c.save();c.globalCompositeOperation='screen';
+ for(const x of [76,724])for(const y of [111,495]){
+  const r=123*(.97+.04*Math.sin(now/170+x));
+  const g=c.createRadialGradient(x,y,6,x,y,r);
+  const purple=s.current.template==='fracture';
+  g.addColorStop(0,purple?'#9a74c354':'#ffd08a4d');
+  g.addColorStop(.31,purple?'#7358ac20':'#e69d4629');
+  g.addColorStop(1,'#00000000');
+  c.fillStyle=g;c.fillRect(x-r,y-r,2*r,2*r);
+ }
+ c.restore();
+}
+
 function drawRug(c,s,p){
  const type=s.current.template;
  if(type==='cellar'){
   // Distinctive hand-laid wine-cellar medallion replaces the empty carpet.
   const cx=400,cy=311;
-  color(c,cx-139,cy-124,278,248,'#1523354d');
+   c.save();c.translate(cx,cy);c.scale(.8,.8);c.translate(-cx,-cy);
+   color(c,cx-139,cy-124,278,248,'#1523354d');
   c.fillStyle='#6e6058';c.beginPath();c.ellipse(cx,cy,117,105,0,0,TAU);c.fill();
   c.strokeStyle='#d8b47d';c.lineWidth=7;
   c.beginPath();c.ellipse(cx,cy,115,102,0,0,TAU);c.stroke();
@@ -254,7 +367,7 @@ function drawRug(c,s,p){
   color(c,cx-12,cy-12,25,24,'#ac6754');
   color(c,cx-7,cy-7,15,14,'#e4c48c');
   pixelLine(c,cx-36,cy+35,22,-16,'#edcb89',3);
-  return;
+   c.restore();return;
  }
  if(!['crypt','gallery','sanctum','vault'].includes(type))return;
  // Worn ceremonial carpet is one uninterrupted area with fringe and trim.
@@ -497,13 +610,16 @@ function drawRoom(destination,s,now){
  c.setTransform(1,0,0,1,0,0);c.clearRect(0,0,W,H);
  c.save();c.imageSmoothingEnabled=false;
  drawMasonry(c,s,p);
- drawRug(c,s,p);
+  craftFloor(c,s,p);
+  carvedVaults(c,s,p);
+  drawRug(c,s,p);
  drawRoomThemes(c,s,p,now);
  drawArchitecture(c,s,p);
  drawStructure(c,s,p);
  edgeDecor(c,s,p,now);
  centralFocus(c,s,p,now);
- for(const side of ['up','down','left','right'])if(node.edges[side]!==undefined)
+  torchLight(c,s,now);
+  for(const side of ['up','down','left','right'])if(node.edges[side]!==undefined)
   door(c,DOORS[side],s.roomClear,p,now);
  // Architectural shadows pull attention to the four-player combat space.
  const shadow=c.createRadialGradient(400,285,96,400,285,470);
@@ -691,6 +807,6 @@ function drawEffects(c,s,now){
 }
 window.LibationDungeonSNES=Object.freeze({
  width:GRID_W,height:GRID_H,tile:TILE,canvasWidth:W,canvasHeight:H,
- partyCapacity:4,artVersion:'mana-inspired-sprite-v4',drawRoom,drawEnemy,drawHero,drawEffects,previewHero
+ partyCapacity:4,artVersion:'carved-vaults-v5',drawRoom,drawEnemy,drawHero,drawEffects,previewHero
 });
 })();
