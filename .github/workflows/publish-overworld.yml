@@ -90,6 +90,11 @@ jobs:
             /tmp/libation-dungeon-theme-cellar.png
             /tmp/libation-dungeon-theme-flooded.png
             /tmp/libation-dungeon-theme-fracture.png
+            /tmp/libation-chamber-bastion.png
+            /tmp/libation-chamber-cloister.png
+            /tmp/libation-chamber-split.png
+            /tmp/libation-chamber-four-corners.png
+            /tmp/libation-chamber-arcade.png
             /tmp/libation-dungeon-new-rupture.png
             /tmp/libation-warrior-selection.png
             /tmp/libation-dungeon-boss.png

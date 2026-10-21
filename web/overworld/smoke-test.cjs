@@ -725,6 +725,21 @@ const fs=require('fs');
   await page.screenshot({path:'/tmp/libation-dungeon-theme-'+template+'.png',fullPage:false});
  }
  await page.evaluate(()=>window.LibationDungeon.debugThemePreview('cellar'));
+ // Screenshot every structural layout with real collision + rally-route checks.
+ for(const structure of ['bastion','cloister','split','four-corners','arcade']){
+  const details=await page.evaluate(name=>{
+   const d=window.LibationDungeon;
+   if(!d.debugArchitecturePreview(name))throw Error('Cannot render architecture '+name);
+   const s=d.snapshot();
+   if(s.chamberStructure!==name||s.partyRoutes.some(route=>!route.reachable))
+    throw Error('Rally route blocked by '+name);
+   if(s.arenaWalkable<300)throw Error('Too little combat space in '+name);
+   return {structure:s.chamberStructure,freeTiles:s.arenaWalkable,
+    pathLengths:s.partyRoutes.map(route=>route.length)};
+  },structure);
+  console.log('FOUR-PLAYER ARCHITECTURE PREVIEW:',JSON.stringify(details));
+  await page.screenshot({path:'/tmp/libation-chamber-'+structure+'.png',fullPage:false});
+ }
  const first=await page.evaluate(()=>window.LibationDungeon.snapshot());
  if(first.kind!=='challenge'||first.rooms!==14||first.node!==0||
     first.roomType!=='entrance'||first.room!==1)
